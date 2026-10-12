@@ -4,7 +4,7 @@ const hq = process.argv[2] === 'hq', extra = process.argv[3] ?? '';
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 const poses = [['living', -0.6, -2.2, 75], ['kitchen', 0.2, -2.5, 300], ['garden', 1, 13, 185], ['front', 0, -11.5, 0], ['primary', -4, 2.4, 0]];
-await page.goto(`http://127.0.0.1:8780/index.html?x=0&y=0&h=0${hq ? '' : '&fast=1'}${extra}`, { waitUntil: 'load' });
+await page.goto(`http://127.0.0.1:8780/index.html?fps=0&x=0&y=0&h=0${hq ? '' : '&fast=1'}${extra}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
 await page.waitForTimeout(1500);
 const glob = await page.evaluate(() => {

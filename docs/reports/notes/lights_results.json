@@ -1,0 +1,664 @@
+{
+  "inventory": {
+    "count": 40,
+    "materials": 44,
+    "unbound": 0
+  },
+  "results": [
+    {
+      "i": 0,
+      "dusk": false,
+      "label": "关灯 · Turn off · 壁龛筒灯 / Alcove recessed can",
+      "name": "开灯 · Turn on · 壁龛筒灯 / Alcove recessed can",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 1,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 2,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 3,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 4,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 5,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 6,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 7,
+      "dusk": false,
+      "label": "关灯 · Turn off · 抽油烟机灯 1 / Range hood lamp 1",
+      "name": "开灯 · Turn on · 抽油烟机灯 1 / Range hood lamp 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 8,
+      "dusk": false,
+      "label": "关灯 · Turn off · 抽油烟机灯 2 / Range hood lamp 2",
+      "name": "开灯 · Turn on · 抽油烟机灯 2 / Range hood lamp 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 9,
+      "dusk": false,
+      "label": "关灯 · Turn off · 橡木吊灯 / Oak pendant",
+      "name": "开灯 · Turn on · 橡木吊灯 / Oak pendant",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 10,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 11,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 12,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 13,
+      "dusk": false,
+      "label": "关灯 · Turn off · 纸灯笼 / Paper lantern",
+      "name": "开灯 · Turn on · 纸灯笼 / Paper lantern",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 14,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 15,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 16,
+      "dusk": false,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 17,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 18,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 19,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 20,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 21,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 22,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 23,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 24,
+      "dusk": false,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 25,
+      "dusk": false,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 26,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 27,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 28,
+      "dusk": false,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 29,
+      "dusk": false,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 30,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 31,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 32,
+      "dusk": false,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 33,
+      "dusk": false,
+      "label": "关灯 · Turn off · 车库开门机灯 / Garage opener lamp",
+      "name": "开灯 · Turn on · 车库开门机灯 / Garage opener lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 34,
+      "dusk": false,
+      "label": "关灯 · Turn off · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "name": "开灯 · Turn on · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 35,
+      "dusk": false,
+      "label": "关灯 · Turn off · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "name": "开灯 · Turn on · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 36,
+      "dusk": false,
+      "label": "开灯 · Turn on · 门廊壁灯 / Porch wall sconce (black, perforated)",
+      "name": "开灯 · Turn on · 门廊壁灯 / Porch wall sconce (black, perforated)",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 37,
+      "dusk": false,
+      "label": "关灯 · Turn off · 藤编蛋形台灯 / Woven rattan egg lamp",
+      "name": "开灯 · Turn on · 藤编蛋形台灯 / Woven rattan egg lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 38,
+      "dusk": false,
+      "label": "关灯 · Turn off · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "name": "开灯 · Turn on · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 39,
+      "dusk": false,
+      "label": "关灯 · Turn off · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "name": "开灯 · Turn on · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 0,
+      "dusk": true,
+      "label": "关灯 · Turn off · 壁龛筒灯 / Alcove recessed can",
+      "name": "开灯 · Turn on · 壁龛筒灯 / Alcove recessed can",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 1,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 2,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 3,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 4,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 5,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 6,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 7,
+      "dusk": true,
+      "label": "关灯 · Turn off · 抽油烟机灯 1 / Range hood lamp 1",
+      "name": "开灯 · Turn on · 抽油烟机灯 1 / Range hood lamp 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 8,
+      "dusk": true,
+      "label": "关灯 · Turn off · 抽油烟机灯 2 / Range hood lamp 2",
+      "name": "开灯 · Turn on · 抽油烟机灯 2 / Range hood lamp 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 9,
+      "dusk": true,
+      "label": "关灯 · Turn off · 橡木吊灯 / Oak pendant",
+      "name": "开灯 · Turn on · 橡木吊灯 / Oak pendant",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 10,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 11,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 12,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 13,
+      "dusk": true,
+      "label": "关灯 · Turn off · 纸灯笼 / Paper lantern",
+      "name": "开灯 · Turn on · 纸灯笼 / Paper lantern",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 14,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 1 / Track light 1",
+      "name": "开灯 · Turn on · 轨道射灯 1 / Track light 1",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 15,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 2 / Track light 2",
+      "name": "开灯 · Turn on · 轨道射灯 2 / Track light 2",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 16,
+      "dusk": true,
+      "label": "关灯 · Turn off · 轨道射灯 3 / Track light 3",
+      "name": "开灯 · Turn on · 轨道射灯 3 / Track light 3",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 17,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 18,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 19,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 20,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 21,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 22,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 23,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 24,
+      "dusk": true,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 25,
+      "dusk": true,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 26,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 27,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 28,
+      "dusk": true,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 29,
+      "dusk": true,
+      "label": "关灯 · Turn off · 藤编床头灯 / Rattan bedside lamp",
+      "name": "开灯 · Turn on · 藤编床头灯 / Rattan bedside lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 30,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 1,
+      "offOn": true
+    },
+    {
+      "i": 31,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 32,
+      "dusk": true,
+      "label": "关灯 · Turn off · 筒灯 / Recessed can light",
+      "name": "开灯 · Turn on · 筒灯 / Recessed can light",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 33,
+      "dusk": true,
+      "label": "关灯 · Turn off · 车库开门机灯 / Garage opener lamp",
+      "name": "开灯 · Turn on · 车库开门机灯 / Garage opener lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 34,
+      "dusk": true,
+      "label": "关灯 · Turn off · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "name": "开灯 · Turn on · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 35,
+      "dusk": true,
+      "label": "关灯 · Turn off · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "name": "开灯 · Turn on · LED 条形吸顶灯 / LED linear shop light 1.2 m",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 36,
+      "dusk": true,
+      "label": "关灯 · Turn off · 门廊壁灯 / Porch wall sconce (black, perforated)",
+      "name": "开灯 · Turn on · 门廊壁灯 / Porch wall sconce (black, perforated)",
+      "lightCount": 2,
+      "offOn": true
+    },
+    {
+      "i": 37,
+      "dusk": true,
+      "label": "关灯 · Turn off · 藤编蛋形台灯 / Woven rattan egg lamp",
+      "name": "开灯 · Turn on · 藤编蛋形台灯 / Woven rattan egg lamp",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 38,
+      "dusk": true,
+      "label": "关灯 · Turn off · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "name": "开灯 · Turn on · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "lightCount": 0,
+      "offOn": true
+    },
+    {
+      "i": 39,
+      "dusk": true,
+      "label": "关灯 · Turn off · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "name": "开灯 · Turn on · 陶瓷亚麻台灯 / Stoneware lamp with glowing linen shade",
+      "lightCount": 0,
+      "offOn": true
+    }
+  ],
+  "timings": {
+    "times": [
+      21.19999998807907,
+      22.100000023841858,
+      23.099999964237213,
+      22.299999952316284,
+      24.400000035762787,
+      22.899999976158142
+    ],
+    "programsBefore": 210,
+    "programsAfter": 210,
+    "stableLights": true,
+    "manualReset": true
+  },
+  "errors": []
+}

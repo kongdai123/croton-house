@@ -4,6 +4,9 @@ web/dist/
 web/build/
 # commercial album track; not published
 web/assets/audio/brush-i.m4a
-compare/*_3d.png
 .DS_Store
 __pycache__/
+# screenshots and comparison sheets (large; kept locally, linked from docs/reports)
+docs/evidence/
+# fidelity-check and pet test output (regenerate with web/tools/compare.py and the pet tools)
+compare/

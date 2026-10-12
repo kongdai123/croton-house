@@ -243,8 +243,9 @@ function buildAnnex(g, house) {
   g.add(box(gd1 - gd0 + 0.18, 0.09, 0.025, trim, { x: (gd0 + gd1) / 2, y: gdh + 0.045, z: -(yo - SK - 0.012) }));
   // porch-side wall (the garage's east face, under the main roof) + skin
   W(GARAGE.x1, xe, yo, PORCH.y1, 0, CEIL, dark); W(xe, xe + SK, yo, PORCH.y1, 0, HX, st);
-  // chocolate paint over the kitchen wall's garage face, stopping at the door casing
-  W(GARAGE.x1 - 0.016, GARAGE.x1, PORCH.y1, -1.423, 0, CEIL, dark, false);
+  // chocolate paint over the kitchen wall's garage face, from the front wall to the door casing (the porch-side stretch
+  // too: that wall's centre is under the porch, so on its own it would take the exterior lighting)
+  W(GARAGE.x1 - 0.016, GARAGE.x1, GARAGE.y0, -1.423, 0, CEIL, dark, false);
   // ...and over the header above the casing, up to the linen closet's south wall
   W(GARAGE.x1 - 0.016, GARAGE.x1, -1.423, LINEN.y0 - 0.118, house.doorHeight + 0.07, CEIL, dark, false);
 

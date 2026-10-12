@@ -1,0 +1,79 @@
+[
+  {
+    "name": "decor-curtain-sheer",
+    "hover": "Open curtain",
+    "clickedBothWays": true,
+    "animationValueAfterClick": 0.0010942764905775178,
+    "quality": "hq"
+  },
+  {
+    "name": "toggle gestures",
+    "longPressIgnored": true,
+    "dragIgnored": true,
+    "rightClickMenu": true,
+    "chineseLabel": true
+  },
+  {
+    "name": "outdoor-umbrella",
+    "hover": "Open umbrella",
+    "clickedBothWays": true,
+    "animationValueAfterClick": 0,
+    "quality": "hq"
+  },
+  {
+    "name": "umbrella shadow",
+    "refreshes": 133,
+    "castShadow": true
+  },
+  {
+    "name": "decor-cellular-shade",
+    "hover": "Raise shade",
+    "clickedBothWays": true,
+    "animationValueAfterClick": 0.0009023089409767938,
+    "quality": "hq"
+  },
+  {
+    "name": "outdoor-fire-pit",
+    "hover": "Light fire pit",
+    "clickedBothWays": true,
+    "animationValueAfterClick": 0,
+    "quality": "hq"
+  },
+  {
+    "name": "fire day/dusk",
+    "day": {
+      "id": 12356,
+      "visible": true,
+      "intensity": 0
+    },
+    "dusk": {
+      "id": 12356,
+      "visible": true,
+      "intensity": 2.2106833915429895
+    },
+    "manualDuskExtinguish": true
+  },
+  {
+    "name": "chair sit",
+    "seated": true
+  },
+  {
+    "name": "chair drag and return",
+    "distance": 0.5367465621528091,
+    "menu": [
+      "Put everything back (1)"
+    ],
+    "returned": true
+  },
+  {
+    "name": "door click",
+    "kind": "french",
+    "before": 0,
+    "after": 1
+  },
+  {
+    "name": "runtime",
+    "errors": [],
+    "batchingEnabled": true
+  }
+]

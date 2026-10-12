@@ -1,0 +1,80 @@
+[
+  {
+    "slug": "68f9b07600",
+    "clearance": 0.7499999976158143,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "6ab9bb8a00",
+    "clearance": 0.27999999761581407,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "68ac5a3b00",
+    "clearance": 0.3245,
+    "nearest": "wall",
+    "pass": true
+  },
+  {
+    "slug": "69e6b9b100",
+    "clearance": 0.18027756377319884,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "6acbf22b00",
+    "clearance": 0.24499995231628413,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "6ab7b98000",
+    "clearance": 0.6200000000000001,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "69ec158300",
+    "clearance": 0.45809999999999995,
+    "nearest": "wall",
+    "pass": true
+  },
+  {
+    "slug": "6a4b314b00",
+    "clearance": 0.2682429058070149,
+    "nearest": "movable",
+    "pass": true
+  },
+  {
+    "slug": "69fd344f00",
+    "clearance": 0.2682429058070149,
+    "nearest": "movable",
+    "pass": true
+  },
+  {
+    "slug": "69d2af8a00",
+    "clearance": 0.6140975618362425,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "6a02916b00",
+    "clearance": 0.6000000000000001,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "69ef572200",
+    "clearance": 0.21500000298023214,
+    "nearest": "furn",
+    "pass": true
+  },
+  {
+    "slug": "6ac5704700",
+    "clearance": 0.6000000000000001,
+    "nearest": "furn",
+    "pass": true
+  }
+]

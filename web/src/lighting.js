@@ -52,7 +52,7 @@ function bounceEnvironment(pmrem, warm = false) {
   return target;
 }
 
-export function createLighting(renderer, scene, camera, house) {
+export function createLighting(renderer, scene, camera, house, preset) {
   renderer.shadowMap.enabled = true;
   // r183 converts PCFSoft to PCF on first render; use that effective mode now
   // so shadow setup does not invalidate the programs compiled during loading.
@@ -62,12 +62,13 @@ export function createLighting(renderer, scene, camera, house) {
   RectAreaLightUniformsLib.init();
   const pmrem = new THREE.PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
-  const roomTarget = bounceEnvironment(pmrem);
-  const warmRoomTarget = bounceEnvironment(pmrem, true);
-  const blendTarget = roomTarget.clone(); blendTarget.depthBuffer = false;
+  // Day and blue-hour room bounce are convolved only when that time of day is first needed.
+  const rooms = new Map();
+  const roomFor = isDusk => { if (!rooms.has(isDusk)) rooms.set(isDusk, bounceEnvironment(pmrem, isDusk)); return rooms.get(isDusk); };
+  let blendTarget = null;
   const blendMaterial = new THREE.ShaderMaterial({
     depthTest: false, depthWrite: false,
-    uniforms: { room: { value: roomTarget.texture }, sky: { value: roomTarget.texture }, skyMix: { value: 0 } },
+    uniforms: { room: { value: null }, sky: { value: null }, skyMix: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: 'uniform sampler2D room; uniform sampler2D sky; uniform float skyMix; varying vec2 vUv; void main() { gl_FragColor = mix(texture2D(room, vUv), texture2D(sky, vUv), skyMix); }',
   });
@@ -85,7 +86,8 @@ export function createLighting(renderer, scene, camera, house) {
 
   const sun = new THREE.DirectionalLight(0xfff7eb, 3.2);
   sun.name = 'Florida sun'; sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  const shadowSize = p => Math.min(p.shadowMap, renderer.capabilities.maxTextureSize);
+  sun.shadow.mapSize.set(shadowSize(preset), shadowSize(preset));
   sun.shadow.bias = -0.00006; sun.shadow.normalBias = 0.018;
   sun.shadow.radius = 2;
   sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
@@ -141,10 +143,11 @@ export function createLighting(renderer, scene, camera, house) {
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 3, radiusExponent: 1, rings: 2, samples: 16 });
   gtao.blendIntensity = 0.9;
   composer.addPass(gtao);
-  const hqEffects = createHQ(renderer, composer, gtao);
+  const hqEffects = createHQ(renderer, composer, gtao, preset);
   const smaa = new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio());
   // SMAA needs display-referred input; apply tone mapping / output conversion first.
   composer.addPass(new OutputPass()); composer.addPass(smaa);
+  smaa.enabled = preset.smaa;
 
   async function loadSky(isDusk = false) {
     const name = isDusk ? DUSK : DAY;
@@ -206,8 +209,9 @@ export function createLighting(renderer, scene, camera, house) {
       const assign = material => {
         if (material) hqEffects.collect(material);
         if (!material?.isMeshStandardMaterial) return material;
-        // The outer skin sits centimetres inside the opening tolerance.
-        const materialRegion = exteriorFinishes.has(material) ? exteriorMaterials : region;
+        // The outer skin sits centimetres inside the opening tolerance. Moving street faces (garage door sections, built in
+        // their open pose under the ceiling) opt in with userData.exteriorFinish.
+        const materialRegion = exteriorFinishes.has(material) || material.userData.exteriorFinish ? exteriorMaterials : region;
         let uses = groups.get(material);
         if (!uses) { uses = new Map(); uses.compile = material.onBeforeCompile; uses.key = material.customProgramCacheKey(); groups.set(material, uses); }
         let local = uses.get(materialRegion);
@@ -266,7 +270,9 @@ export function createLighting(renderer, scene, camera, house) {
     scene.backgroundIntensity = dusk ? 0.6 : 0.9;
     scene.environment = sky.target.texture;
     scene.environmentIntensity = dusk ? 0.3 : 0.8;
-    blendMaterial.uniforms.room.value = dusk ? warmRoomTarget.texture : roomTarget.texture;
+    const room = roomFor(dusk);
+    if (!blendTarget) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
+    blendMaterial.uniforms.room.value = room.texture;
     blendMaterial.uniforms.sky.value = sky.target.texture; lastSkyMix = -1;
     setLightingEnvironment(blendTarget.texture, dusk ? 0.5 : 0.68, interiorMaterials);
     setLightingEnvironment(sky.target.texture, dusk ? 0.3 : 0.8, exteriorMaterials);
@@ -319,7 +325,7 @@ export function createLighting(renderer, scene, camera, house) {
     const intensity = dusk ? mix(0.5, 0.55, indoor) : mix(0.62, 0.68, indoor);
     for (const material of interiorMaterials) material.envMapIntensity = intensity;
     const skyMix = (dusk ? 0.08 : 0.35) * (1 - indoor);
-    if (lastSkyMix < 0 || Math.abs(skyMix - lastSkyMix) > 0.002) {
+    if (blendTarget && (lastSkyMix < 0 || Math.abs(skyMix - lastSkyMix) > 0.002)) {
       blendMaterial.uniforms.skyMix.value = skyMix;
       const saved = renderer.getRenderTarget();
       renderer.setRenderTarget(blendTarget); blendQuad.render(renderer); renderer.setRenderTarget(saved);
@@ -331,7 +337,16 @@ export function createLighting(renderer, scene, camera, house) {
     wasMoving = moving;
   }
 
-  function setQuality(hq) { hqEffects.setQuality(hq); smaa.enabled = hq; }
+  function setQuality(next) {
+    hqEffects.setQuality(next); smaa.enabled = next.smaa;
+    const size = shadowSize(next);
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.map?.dispose(); sun.shadow.map = null;
+      sun.shadow.mapSize.set(size, size); sun.shadow.needsUpdate = true;
+    }
+  }
+  // Download and convolve a sky (plus its room bounce) without showing it: the other time of day, after loading.
+  async function prepareTime(isDusk) { await loadSky(isDusk); roomFor(isDusk); }
   // Pets are created after collectMaterials, so they miss the room/sky split. Each one
   // carries its own indoor flag: room bounce and the daylight volume inside, the sky outside.
   function attachPet(material) {
@@ -356,12 +371,12 @@ export function createLighting(renderer, scene, camera, house) {
     place.in.value = indoorPet && !dusk ? 1 : 0;
     place.out.value = indoorPet ? 0 : 1;
     const sky = readySkies.get(dusk ? DUSK : DAY);
-    const map = indoorPet ? (dusk ? warmRoomTarget : roomTarget).texture : sky?.target.texture;
+    const map = indoorPet ? roomFor(dusk).texture : sky?.target.texture;
     if (!map) return;
     const intensity = indoorPet ? (dusk ? 0.55 : 0.66) : (dusk ? 0.3 : 0.75);
     if (material.envMap !== map) material.envMap = map;
     material.envMapIntensity = intensity;
     material.envMapRotation.y = indoorPet ? 0 : envRotation;
   }
-  return { fixtures, composer, gtao, hqEffects, loadSky, collectMaterials, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  return { fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

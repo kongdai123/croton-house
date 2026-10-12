@@ -72,8 +72,9 @@ export class Pets {
     this.box = new THREE.Box3(); this.ray = new THREE.Raycaster(); this.v = new THREE.Vector3();
     this.sig = this.signature(); this.sigSeen = this.sig; this.sigTimer = 0; this.rebuild();
     this.perches = null; this.agents = [];
-    this.add('cat', createCat, [3.1, -2.0], { indoor: 0.6, perch: true, rest: 1.5, near: 5, modes: [['sit', 0.35], ['lie', 0.3], ['idle', 0.35]] });
-    this.add('dog', createDog, [2.6, 6.6], { indoor: 0.38, follow: true, modes: [['idle', 0.4], ['sit', 0.35], ['lie', 0.25]] });
+    // Cat starts in the study. Dog starts on the patio, just outside the centre back doors (opening 161782cdfa).
+    this.add('cat', createCat, [-1.2, 4.45], { indoor: 0.6, perch: true, rest: 1.5, near: 5, modes: [['sit', 0.35], ['lie', 0.3], ['idle', 0.35]] });
+    this.add('dog', createDog, [0.4, 6.35], { indoor: 0.38, follow: true, modes: [['idle', 0.4], ['sit', 0.35], ['lie', 0.25]] });
     for (const a of this.agents) a.other = this.agents.find(b => b !== a) ?? null;
     this.hearts = makeHearts(scene);
   }

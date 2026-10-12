@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -13,35 +13,35 @@
   <div class="lc">
     <header class="lc-head">
       <span class="lc-studio">Studio Hu Dwelling</span>
-      <span class="lc-place" data-i18n="place">萨拉索塔 · 佛罗里达</span>
+      <span class="lc-place" data-i18n="place">Sarasota, Florida</span>
       <span class="lc-lang"><button data-lang="zh">中</button><button data-lang="en">EN</button></span>
     </header>
     <section class="lc-hero">
       <h1>Dwelling</h1>
       <div class="lc-intro">
         <div class="lc-addr">No. 2513 Croton Ave</div>
-        <p class="lc-lede" data-i18n="lede">以原有建筑为基础，不大拆大建：重组空间，重塑室内与室外的关系，让一座老住宅拥有新的生活。</p>
+        <p class="lc-lede" data-i18n="lede">Built on the house that was already there. Nothing torn down for its own sake: rooms reorganised, inside and outside reconnected, an old house given a new way of living.</p>
       </div>
     </section>
     <figure class="lc-window">
       <i class="lc-plane lc-blue"></i><i class="lc-plane lc-ochre"></i>
       <img src="assets/landing/ribbon.jpg" alt="">
-      <figcaption><span data-i18n="figure">书房 · 向庭院敞开的玻璃门</span></figcaption>
+      <figcaption><span data-i18n="figure">The office, glass doors open to the courtyard</span></figcaption>
     </figure>
     <section class="lc-points">
-      <div class="lc-point"><em>01</em><h3 data-i18n="p1t">光与白</h3><p data-i18n="p1">白色、自然光、细格栅，与通透的空间界面。</p></div>
-      <div class="lc-point"><em>02</em><h3 data-i18n="p2t">花园</h3><p data-i18n="p2">庭院、露台与室内相连，花园成为生活的一部分。</p></div>
-      <div class="lc-point"><em>03</em><h3 data-i18n="p3t">克制</h3><p data-i18n="p3">有限的投入，更有辨识度的空间品质。</p></div>
-      <figure class="lc-plan"><svg id="lcPlan" aria-hidden="true" preserveAspectRatio="xMinYMid meet"></svg><figcaption><span data-i18n="plan">平面</span></figcaption></figure>
+      <div class="lc-point"><em>01</em><h3 data-i18n="p1t">Light & white</h3><p data-i18n="p1">White walls, daylight, fine mullions and open thresholds.</p></div>
+      <div class="lc-point"><em>02</em><h3 data-i18n="p2t">Garden</h3><p data-i18n="p2">Courtyard and terrace open from the rooms; the garden becomes part of the house.</p></div>
+      <div class="lc-point"><em>03</em><h3 data-i18n="p3t">Restraint</h3><p data-i18n="p3">Modest means, a distinct quality of space.</p></div>
+      <figure class="lc-plan"><svg id="lcPlan" aria-hidden="true" preserveAspectRatio="xMinYMid meet"></svg><figcaption><span data-i18n="plan">Plan</span></figcaption></figure>
     </section>
     <footer class="lc-foot">
-      <button id="enter" class="primary" data-i18n="enter">进入住宅</button>
+      <button id="enter" class="primary" data-i18n="enter" disabled>Enter the house</button>
       <div class="lc-status">
-        <div class="loading"><div id="loadbar"></div><span id="loadtext">loading…</span></div>
-        <div class="hint" data-i18n="hint">鼠标看 · WASD 走 · 空格跳跃 · 点击互动 · ? 教程</div>
+        <div class="loading"><div id="loadbar"></div><span id="loadtext">Loading…</span></div>
+        <div class="hint" data-i18n="hint">Mouse to look · WASD to walk · Space to jump · click to interact · ? tutorial</div>
       </div>
-      <div class="lc-credit" data-i18n="credit">由王天夫和朋友们制作</div>
-      <div class="lc-measure" aria-hidden="true" title="2.44 · 2.06 · 0.95 · 0.76 · 0.45 m"><span style="--h:244"></span><span style="--h:206" class="r"></span><span style="--h:95"></span><span style="--h:76"></span><span style="--h:45"></span><small data-i18n="measure">住宅尺度</small></div>
+      <div class="lc-credit" data-i18n="credit">Made by Tianfu Wang and friends</div>
+      <div class="lc-measure" aria-hidden="true" title="2.44 · 2.06 · 0.95 · 0.76 · 0.45 m"><span style="--h:244"></span><span style="--h:206" class="r"></span><span style="--h:95"></span><span style="--h:76"></span><span style="--h:45"></span><small data-i18n="measure">Measures of the house</small></div>
     </footer>
   </div>
 </div>
@@ -50,41 +50,41 @@
     <div class="brand"><b>2513</b> Croton Ave</div>
     <div class="spacer"></div>
     <div id="legends">
-      <button class="chip" id="btn-legends" aria-expanded="false" aria-controls="legendsPanel"><span data-i18n="mapLegends">地图图例</span><span class="caret" aria-hidden="true">▾</span></button>
+      <button class="chip" id="btn-legends" aria-expanded="false" aria-controls="legendsPanel"><span data-i18n="mapLegends">Map legends</span><span class="caret" aria-hidden="true">▾</span></button>
       <div id="legendsPanel" class="hidden" role="group" aria-labelledby="btn-legends">
-        <button class="legend-row" id="btn-views" aria-pressed="false"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">小红书</span><span class="legend-state" data-i18n="hidden">隐藏</span></button>
-        <button class="legend-row" id="btn-panos" aria-pressed="false"><i class="dot pano" aria-hidden="true"></i><span data-i18n="panos">全景</span><span class="legend-state" data-i18n="hidden">隐藏</span></button>
-        <button class="legend-row" id="btn-photos" aria-pressed="false"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">照片</span><span class="legend-state" data-i18n="hidden">隐藏</span></button>
-        <div class="legend-actions"><button id="legends-show" data-i18n="showAll">全部显示</button><button id="legends-hide" data-i18n="hideAll">全部隐藏</button></div>
+        <button class="legend-row" id="btn-views" aria-pressed="false"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span><span class="legend-state" data-i18n="hidden">Off</span></button>
+        <button class="legend-row" id="btn-panos" aria-pressed="false"><i class="dot pano" aria-hidden="true"></i><span data-i18n="panos">Panoramas</span><span class="legend-state" data-i18n="hidden">Off</span></button>
+        <button class="legend-row" id="btn-photos" aria-pressed="false"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">Photos</span><span class="legend-state" data-i18n="hidden">Off</span></button>
+        <div class="legend-actions"><button id="legends-show" data-i18n="showAll">Show all</button><button id="legends-hide" data-i18n="hideAll">Hide all</button></div>
         <div class="legend-touch">
-          <button class="legend-row" id="legend-dusk" aria-pressed="false"><span data-i18n="dusk">黄昏</span><span class="legend-state" data-i18n="off">关闭</span></button>
-          <button class="legend-row" id="legend-quality" aria-pressed="true"><span data-i18n="highQuality">高画质</span><span class="legend-state" data-i18n="on">开启</span></button>
+          <button class="legend-row" id="legend-dusk" aria-pressed="false"><span data-i18n="dusk">Dusk</span><span class="legend-state" data-i18n="off">Off</span></button>
+          <button class="legend-row" id="legend-quality" aria-pressed="true"><span data-i18n="highQuality">High quality</span><span class="legend-state" data-i18n="on">On</span></button>
         </div>
       </div>
     </div>
-    <button class="chip pin-chip" id="btn-rednote"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">小红书</span></button>
-    <button class="chip pin-chip" id="btn-zillow"><i class="dot pano" aria-hidden="true"></i><span data-i18n="viewpointsTitle">全景</span></button>
-    <button class="chip pin-chip" id="btn-photolist"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">照片</span></button>
-    <button class="chip" id="btn-tour" data-i18n="tour">导览</button>
-    <button class="chip pet-chip" id="btn-calldog" aria-keyshortcuts="G"><span data-i18n="callDog">叫狗狗</span><kbd>G</kbd></button>
-    <button class="chip pet-chip" id="btn-callcat" aria-keyshortcuts="K"><span data-i18n="callCat">叫猫咪</span><kbd>K</kbd></button>
-    <button class="chip" id="btn-dusk" data-i18n="dusk" aria-pressed="false">黄昏</button>
-    <button class="chip" id="btn-music" aria-label="音乐 / Music" aria-pressed="false" title="音乐">♪</button>
-    <button class="chip" id="btn-help" data-i18n="controlsTitle" aria-label="教程 / Tutorial" aria-keyshortcuts="? /" aria-pressed="false">教程</button>
-    <button class="chip" id="btn-lang">EN</button>
+    <button class="chip pin-chip" id="btn-rednote"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span></button>
+    <button class="chip pin-chip" id="btn-zillow"><i class="dot pano" aria-hidden="true"></i><span data-i18n="viewpointsTitle">Pano</span></button>
+    <button class="chip pin-chip" id="btn-photolist"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">Photos</span></button>
+    <button class="chip" id="btn-tour" data-i18n="tour">Tour</button>
+    <button class="chip pet-chip" id="btn-calldog" aria-keyshortcuts="G"><span data-i18n="callDog">Call the dog</span><kbd>G</kbd></button>
+    <button class="chip pet-chip" id="btn-callcat" aria-keyshortcuts="K"><span data-i18n="callCat">Call the cat</span><kbd>K</kbd></button>
+    <button class="chip" id="btn-dusk" data-i18n="dusk" aria-pressed="false">Dusk</button>
+    <button class="chip" id="btn-music" aria-label="Music" aria-pressed="false" title="Music">♪</button>
+    <button class="chip" id="btn-help" data-i18n="controlsTitle" aria-label="Tutorial" aria-keyshortcuts="? /" aria-pressed="false">Tutorial</button>
+    <button class="chip" id="btn-lang">中文</button>
   </div>
   <audio id="bgm" preload="none"></audio>
   <div id="crosshair"></div>
   <div id="label"></div>
   <div id="toast"></div>
   <canvas id="minimap" width="220" height="220"></canvas>
-  <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">点击任意蓝/绿/红点传送 · M 关闭</div></div>
+  <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">Click any blue/green/red dot to go there · M to close</div></div>
   <aside id="panel" class="hidden"><div id="panelHead"><span id="panelTitle"></span><button id="panelClose">×</button></div><div id="panelBody"></div></aside>
-  <div id="compare" class="hidden"><img id="compareImg" alt=""><input id="compareSlider" type="range" min="0" max="100" value="55"><div id="compareHint" data-i18n="comparehint">拖动滑块对比实拍 · C 切换 · Q 退出</div></div>
-  <div id="viewExit" class="hidden"><span class="vx-pano" data-i18n="panoExit">全景 · 按 Q 退出</span><span class="vx-compare" data-i18n="compareExit">实拍对比 · 按 Q 退出</span><button id="viewExitBtn"><kbd>Q</kbd><span data-i18n="quit">退出</span></button></div>
-  <aside id="controls" class="hidden" aria-labelledby="controlsTitle"><div class="controls-head"><b id="controlsTitle" data-i18n="controlsTitle">教程</b><button id="controlsClose" aria-label="关闭 / Close">×</button></div><div id="controlsBody"></div><div class="controls-foot" data-i18n="controlsFoot">? / / 显示或收起 · Esc 关闭</div></aside>
+  <div id="compare" class="hidden"><img id="compareImg" alt=""><input id="compareSlider" type="range" min="0" max="100" value="55"><div id="compareHint" data-i18n="comparehint">Drag to compare with the photo · C to toggle · Q to exit</div></div>
+  <div id="viewExit" class="hidden"><span class="vx-pano" data-i18n="panoExit">Panorama · press Q to exit</span><span class="vx-compare" data-i18n="compareExit">Photo comparison · press Q to exit</span><button id="viewExitBtn"><kbd>Q</kbd><span data-i18n="quit">Exit</span></button></div>
+  <aside id="controls" class="hidden" aria-labelledby="controlsTitle"><div class="controls-head"><b id="controlsTitle" data-i18n="controlsTitle">Tutorial</b><button id="controlsClose" aria-label="Close">×</button></div><div id="controlsBody"></div><div class="controls-foot" data-i18n="controlsFoot">? or / to show or hide · Esc to close</div></aside>
   <div id="caption" class="hidden"></div>
-  <div id="touch"><div id="stick"><div id="knob"></div></div><div id="lookpad"></div><button id="touchJump" data-i18n="jump">跳跃</button><button id="touchAct" data-i18n="act">互动</button></div>
+  <div id="touch"><div id="stick"><div id="knob"></div></div><div id="lookpad"></div><button id="touchJump" data-i18n="jump">Jump</button><button id="touchAct" data-i18n="act">Use</button></div>
 </div>
 <script type="module" src="dist/app.js"></script>
 </body>

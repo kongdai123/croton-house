@@ -13,28 +13,32 @@ const shadowChunk = THREE.ShaderChunk.shadowmap_pars_fragment.replace(/shadow = 
     shadow = ( ${shadowTaps} ) / 12.0;
   } else { ${original} }`);
 
-export function createHQ(renderer, composer, gtao) {
-  const shadow = { value: 1 }, textures = new Map();
-  const anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
-  gtao.updateGtaoMaterial({ radius: 0.28, samples: 16, thickness: 0.35 });
+export function createHQ(renderer, composer, gtao, preset) {
+  const shadow = { value: +preset.hqShadow }, textures = new Set();
+  const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  let anisotropy = Math.min(preset.anisotropy, maxAnisotropy);
+  gtao.updateGtaoMaterial({ radius: 0.28, thickness: 0.35 });
   gtao.updatePdMaterial({ radius: 3.5 });
   gtao.blendIntensity = 1;
   function collect(material) {
     for (const v of Object.values(material)) if (v?.isTexture && !v.isRenderTargetTexture && !textures.has(v)) {
-      textures.set(v, v.anisotropy); v.anisotropy = shadow.value ? anisotropy : v.anisotropy;
+      textures.add(v); v.anisotropy = anisotropy;
     }
   }
   function patch(shader) {
     shader.uniforms.uHQShadow = shadow;
     shader.fragmentShader = 'uniform float uHQShadow;\n' + shader.fragmentShader.replace('#include <shadowmap_pars_fragment>', shadowChunk);
   }
-  function setQuality(hq) {
-    shadow.value = +hq; gtao.enabled = hq;
-    for (const [texture, original] of textures) {
-      const value = hq ? anisotropy : original;
-      if (texture.anisotropy !== value) { texture.anisotropy = value; texture.needsUpdate = true; }
+  // A tier preset: the 12-tap sun shadow filter, GTAO sample counts (null = off) and texture anisotropy.
+  function setQuality(next) {
+    shadow.value = +next.hqShadow; gtao.enabled = !!next.gtao;
+    if (next.gtao) { gtao.updateGtaoMaterial({ samples: next.gtao.samples }); gtao.updatePdMaterial({ samples: next.gtao.pd }); }
+    anisotropy = Math.min(next.anisotropy, maxAnisotropy);
+    for (const texture of textures) {
+      if (texture.anisotropy !== anisotropy) { texture.anisotropy = anisotropy; texture.needsUpdate = true; }
     }
   }
+  setQuality(preset);
   return { shadow, collect, patch, setQuality };
 }
 

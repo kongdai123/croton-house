@@ -284,6 +284,7 @@ const DOOR_TYPES = {
 };
 // Hinge jamb + swing side (plan compass) and resting state. Unlisted doors keep the scan default.
 const DOOR_SPEC = {
+  ca2bb42b5a: { hinge: 'W', swing: 'S', open: true },   // front door, open onto the porch for the first view
   d8425baf7a: { white: true, swing: 'S', open: false },    // front bedroom: white louvers fold into the room
   '2e2d4a125a': { hinge: 'S', swing: 'W', open: false },   // kitchen -> garage, into the garage (closed in g12)
   '40c340903a': { hinge: 'N', swing: 'E', open: true },    // vestibule -> kitchen, back against the kitchen wall so the vestibule stays clear

@@ -387,22 +387,29 @@ function cordyline(seed = 1) {
 function arecaClump(seed = 1, dense = false) {
   const r = lcg(seed * 197 + 3), root = new THREE.Group(), sw = [], stems = new Batch(), leaves = new Batch();
   const pinna = cardGeo(dense ? .085 : .055, dense ? .64 : .47, { sx: 1, sy: 5, bend: .5, fold: .12 });
-  for (let j = 0; j < (dense ? 7 : 5); j++) {
-    const a = j * GOLD, h = rr(r, dense ? .65 : .45, dense ? 1.35 : 1.1), C = [Math.sin(a) * .22, h, Math.cos(a) * .22];
-    stems.add(stemGeo([[C[0] * .6, 0, C[2] * .6], [C[0], h * .55, C[2]], C], [.022, .014], { seg: 5, radial: 6 }), { tint: lin('#a19f46') });
-    for (let f = 0; f < (dense ? 8 : 6); f++) {
-      const yaw = a + f * GOLD, L = rr(r, f < 2 ? .65 : 1.05, f < 2 ? .95 : 1.48), rise = rr(r, f < 2 ? 1.3 : .6, f < 2 ? 1.6 : 1.0);
+  // Street-band clumps: cane count, spread, frond length, pinna count and colour vary per seed so neighbours aren't clones.
+  const canes = dense ? 5 + Math.floor(r() * 4) : 5, spread = dense ? rr(r, .14, .3) : .22;
+  const greens = ['#5d8a3a', '#67913f', '#739a44', '#7f9f45'], olds = ['#8da94b', '#9cab52', '#a7ad5a'];
+  for (let j = 0; j < (dense ? canes : 5); j++) {
+    const a = j * GOLD + (dense ? rr(r, -.35, .35) : 0), h = rr(r, dense ? .55 : .45, dense ? 1.35 : 1.1), cr = dense ? spread * rr(r, .5, 1.25) : .22, C = [Math.sin(a) * cr, h, Math.cos(a) * cr];
+    stems.add(stemGeo([[C[0] * .6, 0, C[2] * .6], [C[0], h * .55, C[2]], C], [.022, .014], { seg: 5, radial: 6 }), { tint: lin(dense ? (j % 2 ? '#5f6b30' : '#6e7435') : '#a19f46') });
+    const fronds = dense ? 6 + Math.floor(r() * 3) : 6;
+    for (let f = 0; f < (dense ? fronds : 6); f++) {
+      const yaw = a + f * GOLD + (dense ? rr(r, -.3, .3) : 0), L = rr(r, f < 2 ? .65 : 1.05, f < 2 ? .95 : 1.48) * (dense ? rr(r, .8, 1.05) : 1), rise = rr(r, f < 2 ? 1.3 : .6, f < 2 ? 1.6 : 1.0);
+      const arch = dense ? rr(r, .62, .85) : .72, nk = dense ? 17 + Math.floor(r() * 7) : 21, droop = dense ? rr(r, -.15, .3) : 0;
+      const green = dense && lin(greens[Math.floor(r() * 4) % 4]), old = dense && lin(olds[Math.floor(r() * 3) % 3]), yellow = dense && f >= 5 && r() < .5;
       const F = f === 5 ? [C[0], .16, C[2]] : C;
-      const at = t => add3(F, [Math.sin(yaw) * L * t, rise * Math.sin(t * Math.PI * .72), Math.cos(yaw) * L * t]);
-      stems.add(stemGeo([0, .25, .5, .75, 1].map(at), [.009, .002], { seg: 12, radial: 4 }), { tint: lin('#9d9d43') });
-      for (let k = 1; k <= 21; k++) for (const side of [-1, 1]) {
-        const t = k / 22, len = (.45 + .5 * Math.sin(t * Math.PI)) * rr(r, .9, 1.1);
-        leaves.add(pinna, { pos: at(t), q: orient(yaw + side * 1.12, 1.0 + t * .65, side * .2), s: [1, len, 1], tint: lin(dense ? (k % 4 ? '#67913f' : '#8da94b') : (k % 4 ? '#95a64c' : '#b0b459')) });
+      const at = t => add3(F, [Math.sin(yaw) * L * t, rise * Math.sin(t * Math.PI * arch), Math.cos(yaw) * L * t]);
+      stems.add(stemGeo([0, .25, .5, .75, 1].map(at), [.009, .002], { seg: 12, radial: 4 }), { tint: lin(dense ? '#6d7a36' : '#9d9d43') });
+      for (let k = 1; k <= nk; k++) for (const side of [-1, 1]) {
+        const t = k / (nk + 1), len = (.45 + .5 * Math.sin(t * Math.PI)) * rr(r, .9, 1.1);
+        const col = dense ? (yellow || r() < .18 ? old : green) : lin(k % 4 ? '#95a64c' : '#b0b459');
+        leaves.add(pinna, { pos: at(t), q: orient(yaw + side * 1.12, 1.0 + t * .65 + droop, side * .2), s: [1, len, 1], tint: col });
       }
     }
   }
   const [pv, inn] = pivotAt(root, [0, .1, 0]); inn.add(stems.mesh(plainMat('frontPalmStem', 0xffffff, { rough: .78 })), leaves.mesh(leafMat('frontPalmPinna', texStrap('frontPalmPinna', '#769641', '#b3bc63', '#6a8e36'), { rough: .65 }))); addSway(sw, pv, seed, .012, .6);
-  if (dense) root.scale.set(.76, 1, .76);
+  if (dense) { const w = rr(r, .68, .86); root.scale.set(w, 1, w); }
   setCollider(root, { w: .45, d: .45, h: 2.2 });
   return finish(root, sw, { id: 'plants-areca', name: 'Clumping feathery palm', zh: '散尾葵' });
 }

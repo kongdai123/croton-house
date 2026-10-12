@@ -1,18 +1,72 @@
-// Material library: scanned PBR sets from Poly Haven (CC0) in assets/tex, plus procedural canvas textures (proc.js).
+// Material library: scanned PBR sets from Poly Haven (CC0) in assets/tex/<set>, plus procedural canvas textures (proc.js).
 // Every material is created once and shared. Units are metres; `repeat` = texture tiles per metre.
 import * as THREE from 'three';
 import * as proc from './proc.js';
 
-const loader = new THREE.TextureLoader();
+const loader = new THREE.ImageLoader();
 const cache = new Map();
 export const MAX_ANISO = 8;
 export let anisotropy = MAX_ANISO;
 export function setAnisotropy(v) { anisotropy = v; }
+// Scanned texture sets: 1k and 512 are WebP builds of the 2k JPEG library (tools/tex_sets.sh). Only the chosen set is requested.
+// There is no 4k master: ?tex=4k loads assets/tex/4k/ when tools/build.mjs finds that directory, otherwise the 2k JPEGs.
+const TEX_4K = globalThis.CROTON_TEX_4K;
+const TEX_SETS = { 512: ['assets/tex/512/', 'webp'], '1k': ['assets/tex/1k/', 'webp'], '2k': ['assets/tex/', 'jpg'], '4k': TEX_4K ? ['assets/tex/4k/', TEX_4K] : ['assets/tex/', 'jpg'] };
+let [texDir, texExt] = TEX_SETS['1k'];
+export function setTextureSet(name) { [texDir, texExt] = TEX_SETS[name] ?? TEX_SETS['1k']; }
+// Longest texture edge the device tier keeps (laptop: the 4k scans drop to 2k; mobile: everything to 1k).
+let textureCap = Infinity;
+export function setTextureCap(v) { textureCap = v; }
+// Chromium decodes (and downsizes) the scans off the main thread, so the first draw only uploads pixels.
+// Elsewhere the image is used as loaded and drawn into a smaller canvas only when it exceeds the cap.
+const offThread = !!(navigator.userAgentData && window.createImageBitmap);
+// Each scanned texture counts as pending until it has downloaded and decoded (or failed); the loading bar follows the count.
+const pending = new Set();
+let requested = 0, settled = 0;
+export function texturesDecoded(onProgress, timeout = 30000) {
+  const tick = setInterval(() => onProgress?.(requested ? settled / requested : 1), 200);
+  return Promise.race([Promise.allSettled([...pending]), new Promise(r => setTimeout(r, timeout))]).finally(() => clearInterval(tick));
+}
+// Resolves to the image a texture should hold and whether it still needs flipping on upload.
+function capImage(img) {
+  const size = Math.max(img?.width || 0, img?.height || 0), k = Math.min(1, textureCap / size);
+  if (!size) return { image: img, flipY: true };
+  if (offThread) {
+    const options = { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' };
+    if (k < 1) Object.assign(options, { resizeWidth: Math.round(img.width * k), resizeHeight: Math.round(img.height * k), resizeQuality: 'high' });
+    return createImageBitmap(img, options).then(bitmap => ({ image: bitmap, flipY: false }), () => ({ image: k < 1 ? shrink(img, k) : img, flipY: true }));
+  }
+  return { image: k < 1 ? shrink(img, k) : img, flipY: true };
+}
+function shrink(img, k) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+
+// One request per file: textures that differ only in repeat / rotation share its Source (one download, one GPU upload).
+const sources = new Map();
+function source(url) {
+  if (sources.has(url)) return sources.get(url);
+  const s = { source: new THREE.Source(), users: [], flipY: true, loaded: false };
+  sources.set(url, s);
+  let done;
+  const job = new Promise(r => { done = r; }).finally(() => { settled++; pending.delete(job); });
+  pending.add(job); requested++;
+  loader.load(url, img => Promise.resolve(capImage(img)).then(({ image, flipY }) => {
+    Object.assign(s, { flipY, loaded: true }); s.source.data = image; s.source.needsUpdate = true;
+    for (const t of s.users) { t.flipY = flipY; t.needsUpdate = true; }
+  }).finally(done), undefined, done);
+  return s;
+}
 
 function tex(file, { srgb = false, repeat = 1, rotation = 0 } = {}) {
   const key = `${file}|${srgb}|${repeat}|${rotation}`;
   if (cache.has(key)) return cache.get(key);
-  const t = loader.load(`assets/tex/${file}`);
+  const s = source(`${texDir}${file}.${texExt}`), t = new THREE.Texture();
+  t.source = s.source; t.flipY = s.flipY; s.users.push(t);
+  if (s.loaded) t.needsUpdate = true;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat, repeat);
   t.rotation = rotation;
@@ -22,15 +76,15 @@ function tex(file, { srgb = false, repeat = 1, rotation = 0 } = {}) {
   return t;
 }
 
-// Scanned set: <name>_diff / _nor / _rough / _ao (2k jpg). `scale` = metres covered by one tile.
+// Scanned set: <name>_diff / _nor / _rough / _ao, from the visit's texture set. `scale` = metres covered by one tile.
 export function pbr(name, { scale = 1, color = 0xffffff, roughness = 1, normalScale = 1, rotation = 0, ao = true, ...rest } = {}) {
   const repeat = 1 / scale;
   const m = new THREE.MeshStandardMaterial({
     color, roughness, metalness: 0,
-    map: tex(`${name}_diff.jpg`, { srgb: true, repeat, rotation }),
-    normalMap: tex(`${name}_nor.jpg`, { repeat, rotation }),
-    roughnessMap: tex(`${name}_rough.jpg`, { repeat, rotation }),
-    aoMap: ao ? tex(`${name}_ao.jpg`, { repeat, rotation }) : null,
+    map: tex(`${name}_diff`, { srgb: true, repeat, rotation }),
+    normalMap: tex(`${name}_nor`, { repeat, rotation }),
+    roughnessMap: tex(`${name}_rough`, { repeat, rotation }),
+    aoMap: ao ? tex(`${name}_ao`, { repeat, rotation }) : null,
     normalScale: new THREE.Vector2(normalScale, normalScale),
     ...rest,
   });
@@ -164,7 +218,7 @@ function macroNoise() {   // smooth tileable value noise
 Object.assign(M, {
   turf: once(() => {
     const rep = 1 / 1.1, map = turfAlbedo(); map.repeat.set(rep, rep);
-    const m = new THREE.MeshStandardMaterial({ map, normalMap: tex('leafy_grass_nor.jpg', { repeat: rep }), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95, metalness: 0 });
+    const m = new THREE.MeshStandardMaterial({ map, normalMap: tex('leafy_grass_nor', { repeat: rep }), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95, metalness: 0 });
     const uMacro = { value: macroNoise() };
     m.onBeforeCompile = (s) => {
       s.uniforms.uMacro = uMacro;

@@ -217,7 +217,10 @@ for (const p of STYLING_LIVING) {
 
 // Front garden: overlapping tall/mid/low layers. Static infill shares materials and merges into 8 m cells.
 const frontRnd = lcg(2513);
-const frontPlant = (i, x, y, scale = 1, zone = 'foundation', m = 'plants', h = 0) => PLACEMENTS.push({ m, i, x, y, h, scale, seed: 500 + PLACEMENTS.length, ry: frontRnd() * Math.PI * 2, zone: 'frontDense', gardenZone: zone });
+// Street-side palm band: per-plant height (sy) gives the row a skyline. bandRnd adds jitter without shifting frontRnd,
+// so the plants seeded after the band (west strip, lot edges) keep their draws.
+const bandRnd = lcg(3125);
+const frontPlant = (i, x, y, scale = 1, zone = 'foundation', m = 'plants', h = 0, sy = 0) => PLACEMENTS.push({ m, i, x, y, h, scale, seed: 500 + PLACEMENTS.length, ry: frontRnd() * Math.PI * 2, zone: 'frontDense', gardenZone: zone, ...(sy && { sy }) });
 for (const [x, y, s] of [[-4.4,-8.3,.8],[-2.65,-6.35,.7],[-1.6,-6.4,.65],[1.65,-6.55,1.1],[2.7,-6.6,1.2],[3.7,-6.55,1.35],[4.25,-6.6,1.3],[5.25,-6.6,1.4],[6.3,-6.55,1.45],[7.4,-6.6,1.5],[8.45,-6.8,1.35]]) frontPlant('shrubGreen',x,y,s);
 for (const [x, y, s] of [[-3.35,-8.2,.75],[-1.65,-8.3,.7],[3.35,-8.25,.7],[6.15,-7.4,.65]]) frontPlant('birdPaddle',x,y,s,'foundation','plants',y < -7.85 && x < 4.45 ? .22 : 0);
 for (const [x, y] of [[-4.3,-7.85],[-1.2,-8.2],[1.3,-7.9],[5.65,-7.45],[7.7,-7.5],[8.7,-6.4]]) frontPlant('cordyline',x,y,.7 + frontRnd() * .35,'foundation','plants',x > -4.05 && x < 4.45 && y < -7.85 ? .22 : 0);
@@ -233,14 +236,15 @@ for (const [a, b] of [[-3.8,-1.1],[1.25,4.15]]) for (let x = a; x < b; x += .55)
   if (Math.round(x * 10) % 2) frontPlant('frontFern',x,-8.3,.8,'foundation','props_garden',.22);
 }
 for (let x = -4.3; x < -1.4; x += .6) frontPlant('frontCover',x,-6.4,.75);
-// Two staggered palm rows; the centre is filled further down so the band screens the front door from the street.
-for (const [x, y, s] of [[-3.1,-11.45,1.12],[-1.9,-11.9,1.03],[-3.6,-12.3,1.08],[1.9,-11.55,1.16],[3.3,-11.4,1.13],[4.65,-11.8,1.2],[6.05,-11.25,1.07],[6.5,-12.45,.95],[7.65,-11.7,1.05],[8.5,-12.4,.9],[9.85,-12.3,.85]]) frontPlant('frontAreca',x,y,s,'palmBand');
+// Palm band: clumps of mixed size and height in a loose double row, tall ones at the back, muhly low in front.
+// The centre is filled further down so the band screens the front door from the street.
+for (const [x, y, s, sy] of [[-3.35,-11.4,1.15,.95],[-2.15,-12.05,.9,.75],[-3.9,-12.6,.8,.7],[1.75,-11.35,1.12,.9],[2.7,-12.4,.85,.72],[3.7,-11.65,1,.82],[4.95,-11.9,1.22,.92],[5.95,-12.8,.8,.66],[6.7,-11.45,.95,.8],[7.95,-12.15,1.1,.88],[9.6,-12.55,.8,.7]]) frontPlant('frontAreca',x,y,s,'palmBand','plants',0,sy);
 frontPlant('frontQueen',-1.1,-8.22,1,'foundation','plants',.22);
 frontPlant('frontQueen',7.1,-10.05,1.02,'palmBand');
-for (const [x, y, s] of [[-3.55,-13.05,1.35],[-1.95,-13,1.35],[1.8,-13,1.5],[3.8,-13,1.45],[5.5,-12.9,1.35],[7.25,-13,1.15],[9,-13.05,.9]]) frontPlant('muhlyFront',x,y,s,'palmBand');
+for (const [x, y, s, sy] of [[-3.55,-13.1,1.2,.72],[-2.3,-13.35,.9,.58],[1.45,-13.05,1.15,.68],[2.95,-13.35,.95,.55],[4.55,-13.1,1.25,.75],[6.6,-13.3,1,.6],[8.55,-12.95,.85,.62]]) frontPlant('muhlyFront',x,y,s,'palmBand','plants',0,sy);
 for (const [a, b] of [[-4.1,-1.25],[1.25,7.7]]) for (let x = a; x < b; x += .65) for (const y of [-11.3,-12.3,-13.3]) {
-  frontPlant('frontCover',x + (frontRnd() - .5) * .2,y + frontRnd() * .15,.9 + frontRnd() * .25,'palmBand');
-  if (y === -11.3) frontPlant('frontFern',x,y,.85 + frontRnd() * .25,'palmBand','props_garden');
+  frontPlant('frontCover',x + (frontRnd() - .5) * .2 + (bandRnd() - .5) * .3,y + frontRnd() * .15 - bandRnd() * .2,.9 + frontRnd() * .25,'palmBand','plants',0,.75 + bandRnd() * .45);
+  if (y === -11.3) frontPlant('frontFern',x + (bandRnd() - .5) * .45,y - bandRnd() * .7,.85 + frontRnd() * .25,'palmBand','props_garden',0,.7 + bandRnd() * .5);
 }
 for (const [x,y] of [[-3.75,-11.3],[2.8,-11.1],[5.4,-11.45],[7.7,-12.25]]) frontPlant('croton',x,y,.8,'palmBand');
 // West shell remains visible between the fuller grass drifts.
@@ -255,11 +259,11 @@ for (const x of [-13.05,13.05]) for (let y = -6.1; y < -.9; y += .88) {
   frontPlant('frontCover',x,y - .3,.9,'lotEdges');
 }
 // Palm band centre, in front of the door: no opening to the street; the terrace is reached from the drive and the east lawn.
-for (const [x, y, s] of [[-0.55,-11.45,1.18],[0.75,-11.95,1.12],[-0.15,-12.75,1.05]]) frontPlant('frontAreca',x,y,s,'palmBand');
-frontPlant('muhlyFront',0.15,-13.1,1.45,'palmBand');
+for (const [x, y, s, sy] of [[-0.6,-11.5,1.15,.88],[0.6,-12.05,1.08,.85],[-0.05,-12.85,.88,.8]]) frontPlant('frontAreca',x,y,s,'palmBand','plants',0,sy);
+frontPlant('muhlyFront',0.2,-13.2,1.2,'palmBand','plants',0,.66);
 for (let x = -1.0; x < 1.3; x += .65) for (const y of [-11.3,-12.3,-13.3]) {
-  frontPlant('frontCover',x + (frontRnd() - .5) * .2,y + frontRnd() * .15,.9 + frontRnd() * .25,'palmBand');
-  if (y === -11.3) frontPlant('frontFern',x,y,.85 + frontRnd() * .25,'palmBand','props_garden');
+  frontPlant('frontCover',x + (frontRnd() - .5) * .2 + (bandRnd() - .5) * .3,y + frontRnd() * .15 - bandRnd() * .2,.9 + frontRnd() * .25,'palmBand','plants',0,.75 + bandRnd() * .45);
+  if (y === -11.3) frontPlant('frontFern',x + (bandRnd() - .5) * .45,y - bandRnd() * .7,.85 + frontRnd() * .25,'palmBand','props_garden',0,.7 + bandRnd() * .5);
 }
 frontPlant('croton',0.35,-11.15,.85,'palmBand');
 frontPlant('cordyline',-0.95,-11.2,1.1,'palmBand');
@@ -384,7 +388,7 @@ export class Layout {
       let obj;
       try { obj = p.seed !== undefined ? builder(p.seed) : builder(); } catch (e) { console.error('build failed', p.m, p.i, e); continue; }
       if (p.zone === 'frontDense' && obj.userData.animate) { obj.userData.animate(0); delete obj.userData.animate; }
-      obj.position.set(p.x, p.h || 0, -p.y); obj.rotation.y = p.ry || 0; if (p.sx) obj.scale.x = p.sx; if (p.sz) obj.scale.z = p.sz; if (p.scale) obj.scale.multiplyScalar(p.scale);
+      obj.position.set(p.x, p.h || 0, -p.y); obj.rotation.y = p.ry || 0; if (p.sx) obj.scale.x = p.sx; if (p.sy) obj.scale.y *= p.sy; if (p.sz) obj.scale.z = p.sz; if (p.scale) obj.scale.multiplyScalar(p.scale);
       frontBounds(obj, p);
       if (generated.has(p)) plantClearance(obj, p);
       obj.userData.placement = p; if (p.zh) obj.userData.zh = p.zh; if (p.n) obj.userData.name = p.n;

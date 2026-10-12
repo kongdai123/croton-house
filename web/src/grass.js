@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { LOT, FRONT_BED, WEST_SHELL, FRONT_WALK, ISLAND_BEDS, GARDEN, WEST_FENCE_Y, pointInPoly } from './house.js';
 import { BEDS, PAVED, SHELL, PLACEMENTS, FOOT, edgeDist, plantClear, generatePlanting } from './layout.js';
 
-const QUALITY = { hq: { turf: 1, cover: 1, tuft: 1, shadow: true }, fast: { turf: 0.3, cover: 0.6, tuft: 0.7, shadow: false } };
+const QUALITY = { hq: { turf: 1, cover: 1, tuft: 1, shadow: true }, laptop: { turf: 0.6, cover: 0.8, tuft: 0.85, shadow: true }, fast: { turf: 0.3, cover: 0.6, tuft: 0.7, shadow: false } };
 const TAU = Math.PI * 2;
 const TILE = { turf: 4, bed: 7 };
 

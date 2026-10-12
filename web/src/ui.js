@@ -17,7 +17,7 @@ const DICT = {
     sit: 'Sit', stand: 'Move or press Space to stand', grab: 'Drag', open: 'Open', close: 'Close', door: 'Door', pano: 'Panorama', photo: 'Photo', rnpost: 'RedNote post', goto: 'Go to this viewpoint', loading: 'Loading', ready: 'Ready', tourOn: 'Tour running · T or move to stop', tourOff: 'Tour ended', duskOn: 'Dusk · lights on', dayOn: 'Daylight', locked: 'Click to look around', fly: 'Flying…', viewpointsTitle: 'Pano', rednoteTitle: 'Studio Hu Dwelling on RedNote', seatHint: 'Seated height · look out of the window',
     callDog: 'Call the dog', callCat: 'Call the cat', petDog: 'Pet the dog', petCat: 'Pet the cat', dogNoReach: "The dog can't reach you from there", catNoReach: "The cat can't reach you from there", dogNoReachDoor: "The dog can't reach you — a door is closed", catNoReachDoor: "The cat can't reach you — a door is closed" },
 };
-let lang = localStorage.getItem('croton-lang') || 'zh';
+let lang = localStorage.getItem('croton-lang') || 'en';
 export const getLang = () => lang;
 export const t = (k) => DICT[lang][k] ?? DICT.en[k] ?? k;
 export function setLang(l) { lang = l; localStorage.setItem('croton-lang', l); document.documentElement.lang = l; for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n); document.getElementById('btn-lang').textContent = l === 'zh' ? 'EN' : '中文'; for (const b of document.querySelectorAll('[data-lang]')) b.classList.toggle('on', b.dataset.lang === l); dispatchEvent(new Event('langchange')); }
@@ -59,8 +59,20 @@ export class UI {
     document.getElementById('panelClose').onclick = () => this.closePanel();
     this.toastTimer = 0;
   }
-  progress(p) { document.getElementById('loadbar').style.width = `${Math.round(p * 100)}%`; document.getElementById('loadtext').textContent = `${t('loading')} · ${Math.round(p * 100)}%`; }
-  ready() { this.enterBtn.disabled = false; document.getElementById('loadtext').textContent = t('ready'); }
+  // The bar only moves forward and stops at 99% while loading; 100% belongs to ready(), the same moment Enter turns on.
+  progress(p) {
+    if (this.isReady) return;
+    const pct = Math.min(99, Math.max(this.pct ?? 0, Math.floor(p * 100)));
+    if (pct === this.pct) return;
+    this.pct = pct;
+    document.getElementById('loadbar').style.width = `${pct}%`; document.getElementById('loadtext').textContent = `${t('loading')} · ${pct}%`;
+  }
+  ready() {
+    const bar = document.getElementById('loadbar');
+    this.isReady = true; this.pct = 100;
+    bar.style.transition = 'none'; bar.style.width = '100%'; document.getElementById('loadtext').textContent = t('ready');
+    this.enterBtn.disabled = false;
+  }
   bind({ player, viewpoints, rednote, markers, tour, minimap, pets, toggleDusk, toggleQuality }) {
     this.player = player; this.viewpoints = viewpoints; this.rednote = rednote; this.markers = markers; this.toggleDusk = toggleDusk; this.toggleQuality = toggleQuality;
     const coarse = matchMedia('(pointer:coarse)').matches;
@@ -119,7 +131,7 @@ export class UI {
     for (const [kind, id] of [['rn', 'btn-views'], ['pano', 'btn-panos'], ['photo', 'btn-photos']]) this.legendState(id, this.markers.enabled[kind], 'shown', 'hidden');
     this.legendState('legend-dusk', this.state.dusk);
     const duskBtn = document.getElementById('btn-dusk'); duskBtn.classList.toggle('on', !!this.state.dusk); duskBtn.setAttribute('aria-pressed', String(!!this.state.dusk));
-    this.legendState('legend-quality', this.state.quality === 'hq');
+    this.legendState('legend-quality', this.state.quality === (this.state.qualityHigh ?? 'hq'));
   }
   legendState(id, on, yes = 'on', no = 'off') {
     const b = document.getElementById(id), s = b.querySelector('.legend-state');

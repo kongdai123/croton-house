@@ -3,6 +3,8 @@
 // Units metres; origin on the floor at the footprint centre; +Z = front. Materials and small sub-assemblies: garage_parts.js.
 import { THREE, M, cyl, lathe, extrude, tube, plane, at, autoCollider, describe, sphere, torus, group } from '../kit.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { animatedToggle, ss } from './outdoor_parts.js';
+import { addAABB, getColliders } from '../house.js';
 import { G, PI, box, bake, rod, merged, retile, rng, rrect, sweepX, slotted, perforated, bat, batCase, can, bandsPile, crate, ballHeap, gypsophila } from './garage_parts.js';
 
 // ribbed PVC slip nut around a vertical pipe
@@ -165,10 +167,11 @@ function dryFlowersVase() {
 }
 
 // =====================================================================================================
-// 8' × 7' white steel sectional garage door, OPEN (g04). Frame: origin on the floor at the centre of the opening, +Z = out to
-// the street, the garage is −Z. Four ribbed pan sections ride 2" rollers in galvanised tracks: vertical tracks on the jambs,
+// 8' × 7' white steel sectional garage door, built OPEN as in g04; a click runs it closed and back. Frame: origin on the floor
+// at the centre of the opening, +Z = out to the street, the garage is −Z. Four ribbed pan sections ride 2" rollers in galvanised tracks: vertical tracks on the jambs,
 // 12" radius curves, horizontal tracks under the ceiling with rear hangers. Torsion shaft with two springs + cable drums above
 // the opening; chain-drive opener rail to a motor at z ≈ −3.3 hung from the ceiling (2.44) on two perforated angles.
+// Toggle value 1 = open (rest pose), 0 = closed; while the bottom edge still blocks the opening a collider spans it.
 function garageDoorOpen() {
   const root = new THREE.Group(), GV = G.galv(), GD = G.galvD(), WH = G.doorWhite(), WS = G.doorWhiteS();
   const W = 2.46, H = 2.13, NS = 4, SH = H / NS, T = 0.035, off = 0.024, CEIL = 2.44;
@@ -181,7 +184,6 @@ function garageDoorOpen() {
     for (let it = 0; it < 48; it++) { const m = (lo + hi) / 2, q = path(m); if (Math.hypot(q[0] - p[0], q[1] - p[1]) > SH) lo = m; else hi = m; }
     Sv.push((lo + hi) / 2);
   }
-  const P = Sv.map(path);
   // ---- one section in its closed frame: x across, y up 0..SH, exterior face z = 0, interior z = −T ----
   const groove = (g) => [[g - 0.01, 0], [g - 0.004, -0.0055], [g + 0.004, -0.0055], [g + 0.01, 0]];
   const prof = [[0.014, -T], [0.002, -T], [0, -T + 0.003], [0, -0.011], [0.004, -0.004], [0.009, 0], ...groove(SH * 0.25), ...groove(SH * 0.5), ...groove(SH * 0.75),
@@ -195,9 +197,27 @@ function garageDoorOpen() {
     return g;
   };
   const leaf = (x, y) => box(0.05, 0.075, 0.0025, GV, { r: 0.001, x, y, z: -T - 0.0013 });
+  // Street skin (bevel to bevel) is an exterior finish: sky and full bounce, like the stucco round the opening. The sections
+  // are built open under the ceiling, so the region test alone would light it as a room. Its indirect light eases to garage
+  // level with the skin's depth behind the opening plane (uOpening = root +Z in world), so a rolling section never swaps shader.
+  // The pans are hollow: the back of the skin (sweep back faces) is the inside face and keeps garage-level fill.
+  const opening = { value: new THREE.Vector4(0, 0, 1, 0) }, skin = WH.clone();
+  skin.userData.exteriorFinish = true;
+  skin.onBeforeCompile = (shader) => {
+    shader.uniforms.uOpening = opening;
+    shader.vertexShader = 'varying vec3 vSkinWorld;\n' + shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tvSkinWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = 'uniform vec4 uOpening;\nvarying vec3 vSkinWorld;\n' + shader.fragmentShader.replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+      float skinOut = gl_FrontFacing ? mix(0.3, 1.0, smoothstep(-0.6, -0.05, dot(uOpening.xyz, vSkinWorld) + uOpening.w)) : 0.3;
+      irradiance *= skinOut; iblIrradiance *= skinOut;
+      #if defined( RE_IndirectSpecular )
+        radiance *= skinOut;
+      #endif`);
+  };
+  skin.customProgramCacheKey = () => 'garage-door-skin';
   function section(k) {
     const g = new THREE.Group();
-    g.add(sweepX(prof, -W / 2 + 0.0015, W / 2 - 0.0015, WH));
+    g.add(sweepX(prof.slice(3, 20), -W / 2 + 0.0015, W / 2 - 0.0015, skin));
+    for (const part of [prof.slice(0, 4), prof.slice(19)]) g.add(sweepX(part, -W / 2 + 0.0015, W / 2 - 0.0015, WH));
     for (const s of [-1, 1]) {
       g.add(box(0.075, SH - 0.004, T - 0.007, WS, { x: s * (W / 2 - 0.0375), y: 0.002, z: -(T + 0.007) / 2, bottom: true }));
       g.add(box(0.0015, SH - 0.002, T, WS, { x: s * (W / 2 - 0.00075), y: 0.001, z: -T / 2, bottom: true }));
@@ -209,8 +229,9 @@ function garageDoorOpen() {
       for (const s of [-1, 1]) g.add(roller(s, 0));
     }
     if (k > 0) for (const x of hx) g.add(leaf(x, SH - 0.0375));
-    if (k === 0) {      // top section: top roller brackets, strut, opener bracket
-      for (const s of [-1, 1]) { g.add(box(0.06, 0.11, 0.003, GV, { r: 0.001, x: s * (W / 2 - 0.04), y: SH - 0.055, z: -T - 0.0015 })); g.add(roller(s, SH)); }
+    if (k === 0) {      // top section: top roller brackets (rollers kept apart: they slide in slotted fixtures), strut, opener bracket
+      g.userData.top = new THREE.Group();
+      for (const s of [-1, 1]) { g.add(box(0.06, 0.11, 0.003, GV, { r: 0.001, x: s * (W / 2 - 0.04), y: SH - 0.055, z: -T - 0.0015 })); g.userData.top.add(roller(s, SH)); }
       const ys = SH * 0.58;
       g.add(box(W - 0.24, 0.075, 0.0016, GV, { y: ys, z: -T - 0.032 }));
       for (const dy of [-0.0375, 0.0375]) g.add(box(W - 0.24, 0.0016, 0.032, GV, { y: ys + dy, z: -T - 0.016 }));
@@ -225,12 +246,11 @@ function garageDoorOpen() {
     }
     return g;
   }
-  const secs = [];
-  for (let k = 0; k < NS; k++) {
-    const [ya, za] = P[k + 1], [yb, zb] = P[k], uy = (yb - ya) / SH, uz = (zb - za) / SH;
-    const sec = section(k); sec.rotation.x = Math.atan2(uz, uy); sec.position.set(0, ya - uz * (T + off), za + uy * (T + off));
-    sec.updateMatrix(); root.add(sec); secs.push(sec);
-  }
+  // each section is baked on its own so it can move; the top rollers and their slotted fixture plates stay separate again
+  const secs = [], slides = [];
+  for (let k = 0; k < NS; k++) { const sec = bake(section(k)); root.add(sec); secs.push(sec); }
+  const top = bake(secs[0].userData.top); delete secs[0].userData.top; secs[0].add(top);
+  for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.004, 0.04, 1), GV); m.position.x = s * (W / 2 - 0.03); m.castShadow = m.receiveShadow = true; secs[0].add(m); slides.push(m); }
   // ---- tracks, flag brackets, hangers (both sides) ----
   const gap = 0.028, fw = 0.038;
   for (const s of [-1, 1]) {
@@ -271,7 +291,7 @@ function garageDoorOpen() {
     root.add(rod([s * 1.29, 0.17, zt - 0.03], [s * 1.29, Lv - 0.3, zt - 0.03], 0.002, M.plasticWhite(), 4));
   }
   // ---- torsion assembly above the opening ----
-  const ys = 2.3, zs = -0.085;
+  const ys = 2.3, zs = -0.085, cables = [];
   root.add(cyl(0.0127, 0.0127, 2.7, GV, { y: ys, z: zs, rz: PI / 2, seg: 14 }));
   for (const s of [-1, 1]) {
     root.add(box(0.003, 0.15, 0.12, GV, { x: s * 1.335, y: ys, z: -0.06 }));
@@ -282,9 +302,8 @@ function garageDoorOpen() {
     const sp = cyl(0.028, 0.028, 0.665, G.spring(), { x: s * (0.035 + 0.3325), y: ys, z: zs, rz: PI / 2, seg: 20, open: true }); root.add(sp);
     const wc = lathe([[0.0135, 0], [0.031, 0], [0.031, 0.012], [0.027, 0.034], [0.0135, 0.042]], G.castAlu(), { seg: 20 }); wc.rotation.z = -s * PI / 2; wc.position.set(s * 0.7, ys, zs); root.add(wc);
     const sc = lathe([[0.0135, 0], [0.031, 0], [0.031, 0.01], [0.022, 0.02], [0.0135, 0.022]], G.castAlu(), { seg: 20 }); sc.rotation.z = s * PI / 2; sc.position.set(s * 0.035, ys, zs); root.add(sc);
-    // lift cable from the drum to the bottom bracket
-    const bb = new THREE.Vector3(s * (W / 2 - 0.015), 0.03, -T - 0.004).applyMatrix4(secs[NS - 1].matrix);
-    root.add(rod([s * 1.3, ys - 0.01, zs - 0.05], bb.toArray(), 0.0018, M.steel(), 5));
+    // lift cable from the drum to the bottom bracket (stretched in pose)
+    const c = cyl(0.0018, 0.0018, 1, M.steel(), { seg: 5 }); c.userData.s = s; root.add(c); cables.push(c);
   }
   root.add(box(0.004, 0.11, 0.1, GV, { y: ys, z: -0.05 }));
   root.add(box(0.13, 0.11, 0.004, GV, { y: ys, z: -0.002 }));
@@ -295,14 +314,15 @@ function garageDoorOpen() {
   root.add(box(0.04, 0.03, zr0 - zr1, GV, { r: 0.002, y: yr, z: (zr0 + zr1) / 2 }));
   root.add(box(0.012, 0.004, zr0 - zr1 - 0.1, G.chain(), { y: yr + 0.017, z: (zr0 + zr1) / 2 - 0.02 }));
   root.add(box(0.008, 0.002, zr0 - zr1 - 0.02, G.rubber(), { y: yr - 0.0151, z: (zr0 + zr1) / 2 }));
-  const zTr = zTop - 0.12;
-  root.add(box(0.058, 0.05, 0.13, G.castAlu(), { r: 0.006, y: yr - 0.006, z: zTr }));
-  root.add(box(0.012, 0.03, 0.06, G.releaseRed(), { r: 0.004, y: yr - 0.04, z: zTr + 0.03 }));
-  root.add(rod([0, yr - 0.05, zTr + 0.05], [0, 1.86, zTr + 0.05], 0.0022, G.releaseRed(), 5));
-  root.add(cyl(0.012, 0.012, 0.09, G.releaseRed(), { y: 1.85, z: zTr + 0.05, rz: PI / 2, seg: 12 }));
-  const B = new THREE.Vector3(0, SH - 0.07, -T - 0.052).applyMatrix4(secs[0].matrix);
-  root.add(tube([[0, yr - 0.03, zTr], [0, yr - 0.1, zTr + 0.004], [0, B.y - 0.02, zTop - 0.05], [0, B.y - 0.012, zTop + 0.005], [0, B.y, B.z]], 0.0065, GV, { seg: 32, radial: 8 }));
-  root.add(cyl(0.006, 0.006, 0.04, M.steel(), { y: B.y, z: B.z, rz: PI / 2, seg: 10 }));
+  // trolley (its frame origin rides the rail) + door arm: a rigid curved link LA long from the trolley pin to the door bracket
+  const yp = yr - 0.03, LA = 0.4, trolley = new THREE.Group(), arm = new THREE.Group();
+  trolley.add(box(0.058, 0.05, 0.13, G.castAlu(), { r: 0.006, y: yr - 0.006 }));
+  trolley.add(box(0.012, 0.03, 0.06, G.releaseRed(), { r: 0.004, y: yr - 0.04, z: 0.03 }));
+  trolley.add(rod([0, yr - 0.05, 0.05], [0, 1.86, 0.05], 0.0022, G.releaseRed(), 5));
+  trolley.add(cyl(0.012, 0.012, 0.09, G.releaseRed(), { y: 1.85, z: 0.05, rz: PI / 2, seg: 12 }));
+  arm.add(tube([[0, 0, 0], [0, -0.03, 0.06], [0, -0.055, 0.17], [0, -0.052, 0.29], [0, -0.025, LA - 0.03], [0, 0, LA]], 0.0065, GV, { seg: 32, radial: 8 }));
+  arm.add(cyl(0.006, 0.006, 0.04, M.steel(), { z: LA, rz: PI / 2, seg: 10 }));
+  root.add(bake(trolley), bake(arm));
   // motor unit
   root.add(box(mw, mh, ml, G.openerBody(), { r: 0.025, seg: 4, y: my0, z: mz, bottom: true }));
   root.add(box(mw - 0.03, 0.022, ml - 0.05, G.openerGrey(), { r: 0.01, y: my0 + mh - 0.008, z: mz, bottom: true }));
@@ -326,8 +346,62 @@ function garageDoorOpen() {
   // power cord up to a ceiling outlet box
   root.add(cyl(0.05, 0.05, 0.012, M.plasticWhite(), { x: 0.12, y: CEIL - 0.006, z: mz - 0.36, seg: 24 }));
   root.add(tube([[0.1, my0 + mh - 0.01, mz - 0.18], [0.11, my0 + mh + 0.03, mz - 0.25], [0.12, CEIL - 0.06, mz - 0.33], [0.12, CEIL - 0.014, mz - 0.36]], 0.003, G.cord(), { seg: 24, radial: 5 }));
-  root.remove(lamp); bake(root); root.add(lamp);
-  return describe(root, { id: 'garage-garageDoorOpen', name: 'Sectional garage door (open) with opener', zh: '分节式车库门（开启）及开门机' });
+  const live = [...secs, ...cables, trolley, arm, lamp];
+  root.remove(...live); bake(root); root.add(...live);
+
+  // ---- motion: the sections are a chain on the track. The bottom roller sits at station v·Sv[NS] and every hinge roller
+  // above it is one section-height chord further along, so the top section leads onto the curve and the bottom one
+  // arrives last. Closed, the top section stands plumb with its top rollers set back on the curve in their slotted
+  // fixtures; it settles onto the chord within the first 0.35 m of lift (value 1 reproduces the open pose above).
+  const chord = (s0) => {
+    const p = path(s0); let lo = s0, hi = s0 + SH * 1.7;
+    for (let it = 0; it < 48; it++) { const m = (lo + hi) / 2, q = path(m); if (Math.hypot(q[0] - p[0], q[1] - p[1]) < SH) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  };
+  const sOpen = Sv[NS], up = new THREE.Vector3(0, 1, 0), va = new THREE.Vector3(), vb = new THREE.Vector3();
+  function pose(v) {
+    const S = [v * sOpen]; for (let k = 0; k < NS; k++) S.push(chord(S[k]));
+    const Q = S.reverse().map(path);
+    for (let k = 0; k < NS; k++) {
+      const [ya, za] = Q[k + 1], [yb, zb] = Q[k]; let uy = (yb - ya) / SH, uz = (zb - za) / SH;
+      if (k === 0) { const a = ss(0, 0.35, S[NS]); uy = 1 + (uy - 1) * a; uz *= a; const n = Math.hypot(uy, uz); uy /= n; uz /= n; }
+      secs[k].rotation.x = Math.atan2(uz, uy); secs[k].position.set(0, ya - uz * (T + off), za + uy * (T + off)); secs[k].updateMatrix();
+    }
+    // top rollers onto their track point, in the top section's frame; the fixture plate spans section back → roller
+    const s0 = secs[0], c = Math.cos(s0.rotation.x), sn = Math.sin(s0.rotation.x), dy = Q[0][0] - s0.position.y, dz = Q[0][1] - s0.position.z;
+    const oy = dy * c + dz * sn - SH, oz = -dy * sn + dz * c + T + off;
+    top.position.set(0, oy, oz);
+    for (const m of slides) { m.position.y = SH + oy; m.position.z = (-T - T - off + oz) / 2; m.scale.z = Math.max(0.01, off - oz); }
+    // lift cables, drum → bottom bracket
+    for (const m of cables) {
+      va.set(m.userData.s * 1.3, ys - 0.01, zs - 0.05); vb.set(m.userData.s * (W / 2 - 0.015), 0.03, -T - 0.004).applyMatrix4(secs[NS - 1].matrix);
+      m.position.copy(va).add(vb).multiplyScalar(0.5); m.scale.y = va.distanceTo(vb); m.quaternion.setFromUnitVectors(up, vb.sub(va).normalize());
+    }
+    // opener: the trolley sits where the arm just reaches the door bracket
+    const B = va.set(0, SH - 0.07, -T - 0.052).applyMatrix4(s0.matrix), h = B.y - yp, zp = B.z - Math.sqrt(Math.max(0, LA * LA - h * h));
+    trolley.position.z = zp; arm.position.set(0, yp, zp); arm.rotation.x = Math.atan2(-h, B.z - zp);
+  }
+  // collider across the opening while the door blocks it (bottom edge below ~1.1 m); none on the overhead tracks
+  let blocked = null, posed = null;
+  function syncCollider(v) {
+    if (!root.parent || (v < 0.5) === blocked) return;
+    blocked = v < 0.5;
+    const cols = getColliders(), i = cols.findIndex(c => c.tag === 'garagedoor'); if (i >= 0) cols.splice(i, 1);
+    if (!blocked) return;
+    root.updateWorldMatrix(true, false); const b = new THREE.Box3();
+    for (const [x, z] of [[-1.24, -0.075], [1.24, -0.075], [-1.24, 0.05], [1.24, 0.05]]) b.expandByPoint(va.set(x, 0, z).applyMatrix4(root.matrixWorld));
+    addAABB(b.min.x, b.max.x, b.min.z, b.max.z, 'garagedoor');
+  }
+  const toggle = animatedToggle(root, {
+    label: { en: 'Garage door · Open', zh: '车库门 · 打开' }, labelOn: { en: 'Garage door · Close', zh: '车库门 · 关上' }, duration: 3,
+    apply(v) {
+      if (v !== posed) { posed = v; pose(v); }
+      syncCollider(v);
+      if (root.parent) { const e = root.matrixWorld.elements, n = va.set(e[8], e[9], e[10]).normalize(); opening.value.set(n.x, n.y, n.z, -(n.x * e[12] + n.y * e[13] + n.z * e[14])); }
+    },
+  });
+  toggle.set(true, true);
+  return describe(root, { id: 'garage-garageDoorOpen', name: 'Sectional garage door with opener', zh: '分节式车库门及开门机' });
 }
 
 // =====================================================================================================

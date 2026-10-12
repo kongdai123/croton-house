@@ -106,8 +106,20 @@ body.touring #crosshair, body.touring #label { display:none }
 #viewExitBtn:hover { background:rgba(255,255,255,.3) }
 #viewExit kbd { display:inline-grid; place-items:center; min-width:22px; height:22px; border-radius:5px; background:#fff; color:var(--ink); font:600 12px/1 -apple-system, system-ui, sans-serif; text-shadow:none }
 @media (pointer:coarse) { #viewExit { padding-left:6px } #viewExit > span, #viewExit kbd { display:none } }
-#caption { position:absolute; left:50%; bottom:40px; transform:translateX(-50%); width:max-content; max-width:min(820px, 92vw); font-family:var(--serif); font-size:26px; line-height:1.45; text-align:center; text-shadow:0 2px 8px rgba(0,0,0,.8); padding:14px 24px; border-radius:14px; background:rgba(22,20,18,.56); backdrop-filter:blur(8px); text-wrap:pretty }
-#caption small { display:block; font-family:var(--font); font-size:15px; opacity:.8; margin-top:6px }
+/* Tour caption: lives in the free strip between the minimap's corner (--cap-l) and the right-hand clearance (--cap-r).
+   Centered on the viewport when that keeps it clear of the map, otherwise pushed right to --cap-l; type scales with the strip. */
+#hud { --cap-l:calc(16px + 220px + 12px); --cap-r:16px; --cap-free:calc(100vw - var(--cap-l) - var(--cap-r)) }
+#caption { position:absolute; left:50%; bottom:40px; transform:translateX(max(-50%, calc(var(--cap-l) - 50vw))); width:max-content; max-width:min(820px, var(--cap-free)); font-family:var(--serif); font-size:clamp(16px, var(--cap-free) / 20, 26px); line-height:1.4; text-align:center; text-shadow:0 2px 8px rgba(0,0,0,.8); padding:.5em .9em; border-radius:14px; background:rgba(22,20,18,.56); backdrop-filter:blur(8px); text-wrap:pretty }
+#caption small { display:block; font-family:var(--font); font-size:max(12px, .58em); opacity:.8; margin-top:.25em }
+/* Too narrow beside the map: go above it. */
+@media (max-width:580px) { #hud { --cap-l:16px } #caption { bottom:calc(16px + 220px + 12px) } }
+/* Touch: smaller map, and the Jump/Use buttons take the bottom-right corner. */
+@media (pointer:coarse) { #hud { --cap-l:calc(16px + 150px + 10px); --cap-r:calc(22px + 80px + 14px) } #caption { bottom:calc(24px + env(safe-area-inset-bottom)) } }
+/* Portrait phone: the stick sits above the map, so the only clear full-width strip is under the top bar. */
+@media (pointer:coarse) and (max-width:600px) { #hud { --cap-l:16px; --cap-r:16px } #caption { top:calc(var(--bar-h, 58px) + 10px); bottom:auto } }
+/* A toast during the tour moves out of the caption's way: under the top bar, or on a portrait phone (caption on top) just above the map and Jump. */
+#hud:has(> #caption:not(.hidden)) #toast { top:calc(var(--bar-h, 58px) + 12px); bottom:auto }
+@media (pointer:coarse) and (max-width:600px) { #hud:has(> #caption:not(.hidden)) #toast { top:auto; bottom:calc(16px + 150px + 16px) } }
 #touch { display:none }
 @media (pointer:coarse) { #touch { display:block; position:absolute; inset:0; pointer-events:none } #stick { position:absolute; left:26px; bottom:250px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3); pointer-events:auto } #knob { position:absolute; left:40px; top:40px; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.7) } #lookpad { position:absolute; right:0; top:60px; bottom:0; width:55%; pointer-events:auto } #touchAct { position:absolute; right:22px; bottom:40px; font:inherit; font-size:15px; padding:16px 22px; border-radius:40px; border:0; background:var(--accent); color:#fff; pointer-events:auto } #minimap { width:150px; height:150px } #crosshair { display:none } }
 
@@ -135,7 +147,7 @@ body.touring #crosshair, body.touring #label { display:none }
 .legend-actions button { flex:1; padding:10px 5px }
 .legend-touch { display:none; border-top:1px solid rgba(255,255,255,.16); margin-top:4px; padding-top:4px }
 @media (pointer:coarse) { .legend-touch { display:block } .pet-chip kbd { display:none } }
-@media (max-width:600px) { #caption { font-size:20px; padding:10px 14px; bottom:calc(24px + env(safe-area-inset-bottom)) } #caption small { font-size:13px } #label { font-size:16px; padding:7px 12px } }
+@media (max-width:600px) { #label { font-size:16px; padding:7px 12px } }
 #controls { position:absolute; top:66px; left:50%; transform:translateX(-50%); width:min(560px, calc(100vw - 28px)); max-height:calc(100dvh - 90px); overflow:auto; pointer-events:auto; padding:16px 20px; color:var(--ink); background:rgba(246,242,234,.97); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.5); z-index:5 }
 .controls-head { display:flex; align-items:center; justify-content:space-between; font-family:var(--serif); font-size:23px; padding-bottom:8px; border-bottom:1px solid rgba(0,0,0,.1) }
 #controlsClose { font:inherit; font-size:26px; color:var(--muted); background:none; border:0; cursor:pointer; padding:0 4px }

@@ -20,8 +20,8 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
   name ??= root.userData.name || root.name; zh ??= root.userData.zh || name;
   const toggle = {
     on: true, value: 1, manual: false, moving: false, dusk: false, glows, lights,
-    label: `开灯 · Turn on · ${zh} / ${name}`,
-    labelOn: `关灯 · Turn off · ${zh} / ${name}`,
+    label: { zh: `开灯 · ${zh}`, en: `Turn on · ${name}` },
+    labelOn: { zh: `关灯 · ${zh}`, en: `Turn off · ${name}` },
     set(on) {
       this.manual = true; this.on = !!on; this.from = this.value; this.t = 0; this.moving = true;
       for (const g of glows) g.from = g.material[g.wash ? 'opacity' : 'emissiveIntensity'];

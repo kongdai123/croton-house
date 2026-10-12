@@ -16,10 +16,19 @@ import { UI, t, setLang, getLang } from './ui.js';
 import { Human } from './human.js';
 import { batchStatic, updateSwayLod, updateRoomVisibility } from './batch.js';
 import { Pets } from './pets/roam.js';
+import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
+import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
 
+// ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
+const Q = new URLSearchParams(location.search);
+const detected = detectTier();
+const preset = TIERS[detected.tier];
+const texSet = detectTexSet(detected.tier);
+setAnisotropy(Math.min(8, preset.anisotropy)); setTextureCap(preset.textureCap); setTextureSet(texSet);
+const pixelRatio = p => Math.min(devicePixelRatio, p.pixelRatio);
 const canvas = document.getElementById('gl');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: detected.tier === 'hq', powerPreference: 'high-performance', preserveDrawingBuffer: true });
+renderer.setPixelRatio(pixelRatio(preset));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 300);
 scene.add(camera);
@@ -36,7 +45,7 @@ new ResizeObserver(fitView).observe(canvas);
 addEventListener('resize', fitView);
 visualViewport?.addEventListener('resize', fitView);
 
-const state = { dusk: false, quality: 'hq', ready: false, loaded: 0, total: 1, mode: 'walk', onLock: null };
+const state = { dusk: Q.has('dusk'), tier: detected.tier, texSet, gpu: detected.gpu, tierSource: detected.source, quality: detected.tier, qualityHigh: qualityPair(detected.tier).find(q => q !== 'mobile') ?? 'mobile', ready: false, loaded: 0, total: 1, mode: 'walk', onLock: null };
 const ui = new UI(state);
 const house = await (await fetch('data/house.json')).json();
 const points = await (await fetch('data/floorplan_points.json')).json();
@@ -45,7 +54,7 @@ const posts = await (await fetch('data/rednote_posts.json')).json();
 const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json() : []).catch(() => []);
 
 // ---- Lighting: daylight openings, practical fixtures and separate room / sky reflections.
-const lighting = createLighting(renderer, scene, camera, house);
+const lighting = createLighting(renderer, scene, camera, house, preset);
 const { fixtures, composer, gtao } = lighting;
 post = composer; fitView();
 async function applyTime() {
@@ -56,27 +65,36 @@ async function applyTime() {
 }
 
 // ---- Build ----
+// Each step yields a painted frame so the bar and its percentage actually move.
+const step = (p, msg) => { ui.progress(p, msg); return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0))); };
+// Long awaits (texture downloads, shader compile) keep the percentage moving: it eases from `from` toward `to`, never past
+// the real fraction done when one is reported, and lands on `to` once the work settles.
+async function during(from, to, msg, work) {
+  let shown = from, real = 0;
+  ui.progress(from, msg);
+  const timer = setInterval(() => { shown += (to - shown) * 0.04; ui.progress(Math.max(shown, from + (to - from) * real), msg); }, 250);
+  try { return await work((f) => { real = Math.min(1, f); }); } finally { clearInterval(timer); ui.progress(to, msg); }
+}
 ui.progress(0.05, 'sky');
-await lighting.loadSky();
+// Only the sky the scene opens in; the other one is convolved after the bar reaches 100%.
+await lighting.loadSky(state.dusk);
 ui.progress(0.15, 'house');
 const houseRoot = buildHouse(house);
 scene.add(houseRoot);
 ui.progress(0.25, 'garden');
-const garden = buildGarden({ quality: state.quality, camera });
+const garden = buildGarden({ quality: preset.grass, camera });
 scene.add(garden.group);
 ui.progress(0.3, 'furniture');
 const layout = new Layout(scene, fixtures, house, points);
 await layout.build((p, msg) => ui.progress(0.3 + p * 0.55, msg));
+await step(0.86, 'materials');
 lighting.collectMaterials(scene);
-// Prepare both HDRs/PMREMs while the loading screen still covers the scene.
-const lightingPreload = Promise.all([lighting.loadSky(false), lighting.loadSky(true)]);
-ui.progress(0.9, 'finishing');
-const Q0 = new URLSearchParams(location.search);
-const batch = Q0.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+await step(0.9, 'finishing');
+const batch = Q.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+await step(0.92, 'controls');
 
 // ---- Player, interaction, UI systems ----
 const player = new Player(camera, canvas, state);
-const Q = new URLSearchParams(location.search);
 player.teleport(+(Q.get('x') ?? 0.0), -(+(Q.get('y') ?? -6.9)), +(Q.get('h') ?? 0), +(Q.get('p') ?? 0));   // default: the front walk, looking at the house
 const human = new Human(scene, player);
 const interact = new Interact(scene, camera, player, layout, ui, human);
@@ -96,39 +114,56 @@ minimap.setExtra(rednote.blips());
 function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kind && p.target.id === target.id); if (pin) markers.activate({ pin }); else viewpoints.goTo(target); }
 ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
 
-// ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA. H toggles quality.
+// ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA, per tier preset. J toggles quality.
 function toggleDusk() { state.dusk = !state.dusk; ui.syncLegends(); applyTime(); }
-function toggleQuality() { state.quality = state.quality === 'hq' ? 'fast' : 'hq'; garden.setQuality(state.quality); lighting.setQuality(state.quality === 'hq'); renderer.setPixelRatio(state.quality === 'hq' ? Math.min(devicePixelRatio, 2) : 1); composer.setPixelRatio(renderer.getPixelRatio()); fitView(); ui.syncLegends(); }
-ui.syncLegends();
-// phones/tablets start in fast mode; desktops always start in HQ (H toggles)
-if (matchMedia('(pointer:coarse)').matches) toggleQuality();
-
-if (Q.has('dusk')) state.dusk = true;
-if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
-if (Q.has('fast')) toggleQuality();
-await lightingPreload;
-layout.prepareMirrors();
-const initialDusk = state.dusk;
-const warmupStart = performance.now();
-for (const warmDusk of [!initialDusk, initialDusk]) {
-  state.dusk = warmDusk;
-  await applyTime();
-  await renderer.compileAsync(scene, camera);
-  // Include background conversion, shadow materials, mirrors and HQ post passes.
-  // The loading screen covers these frames; the final frame restores the start time.
-  layout.updateMirrors(camera, state.quality === 'hq', renderer);
-  composer.render();
-  layout.warmMirrors(renderer);
-  await new Promise(resolve => requestAnimationFrame(resolve));
+// Mirror reflections exist only in the hq preset; their proxy scenes are built the first time it is used.
+let mirrorsReady = false;
+const mirrorsOn = () => TIERS[state.quality].mirrors;
+function setQuality(name) {
+  const p = TIERS[name]; state.quality = name;
+  garden.setQuality(p.grass); lighting.setQuality(p);
+  renderer.setPixelRatio(pixelRatio(p)); composer.setPixelRatio(renderer.getPixelRatio()); fitView();
+  if (p.mirrors && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
+  ui.syncLegends();
 }
+// The detected tier is the starting point; J switches to its pair (hq/laptop <-> mobile, mobile <-> laptop) and back.
+function toggleQuality() { const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
+ui.syncLegends();
+
+if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
+if (Q.has('fast')) setQuality('mobile');
+if (mirrorsOn()) { layout.prepareMirrors(); mirrorsReady = true; }
+await step(0.93, 'textures');
+await during(0.93, 0.955, 'textures', texturesDecoded);
+// One time of day, one compile, one warm draw (shadow map, post passes, mirrors when on) under the loading screen.
+await step(0.955, 'lighting');
+const warmupStart = performance.now(), warmup = state.warmupSteps = {};
+const lap = (k, t) => { warmup[k] = Math.round(performance.now() - t); return performance.now(); };
+let lapStart = warmupStart;
+await applyTime(); lapStart = lap('time', lapStart);
+await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
+await during(0.96, 0.98, 'shaders', () => renderer.compileAsync(scene, camera)); lapStart = lap('compile', lapStart);
+await step(0.985, 'first frame'); lapStart = lap('yield2', lapStart);
+layout.updateMirrors(camera, mirrorsOn(), renderer);
+composer.render();
+if (mirrorsOn()) layout.warmMirrors(renderer);
+lapStart = lap('draw', lapStart);
+await new Promise(resolve => requestAnimationFrame(resolve)); lap('present', lapStart);
 state.lightingWarmupMs = performance.now() - warmupStart;
-ui.progress(1, 'ready');
-state.ready = true; ui.ready(); fitView();
+state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
+// The other time of day (HDR download, CPU tint, PMREM and room bounce) waits until the walkthrough is up.
+// Both skies share the CubeUV environment layout and fixed light counts, so a dusk toggle reuses the compiled programs.
+const idle = cb => (window.requestIdleCallback ? requestIdleCallback(cb, { timeout: 4000 }) : setTimeout(cb, 1500));
+idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other).then(() => { state.otherSkyMs = performance.now() - t0; }); });
 if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); fitView(); }
 document.getElementById('enter').addEventListener('click', fitView);
 
 // ---- Loop. Deterministic hooks for screenshots: window.renderAt(t) draws exactly time t.
 const clock = new THREE.Clock(); let simT = 0;
+// Animated toggles (the garage door's ~3 s run, gates, lids) move shadow casters too: the sun shadow is refreshed while one
+// moves or snaps to a new value, on every tier; lighting.update adds the frame after it settles.
+const toggled = layout.animated.filter(o => o.userData.toggle).map(o => ({ toggle: o.userData.toggle, value: o.userData.toggle.value }));
+const togglesMoving = () => toggled.reduce((any, t) => { const v = t.toggle.value, changed = t.toggle.moving || v !== t.value; t.value = v; return any || changed; }, false);
 function frame(dt) {
   simT += dt;
   tourCtl.update(dt);
@@ -140,14 +175,14 @@ function frame(dt) {
   markers.update(dt);
   updateSwayLod(batch.lod, camera.position);
   updateRoomVisibility(batch.rooms, camera.position);
-  layout.animate(simT); layout.updateMirrors(camera, state.quality === 'hq', renderer);
+  layout.animate(simT); layout.updateMirrors(camera, mirrorsOn(), renderer);
   garden.update(simT);
   minimap.draw();
-  lighting.update(dt, false, !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
+  lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
   if (viewpoints.panoActive) renderer.render(scene, camera); else composer.render();
 }
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
+window.__app = { tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
 let readyFrames = 0;
 const loop = () => { const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true; requestAnimationFrame(loop); };
 requestAnimationFrame(loop);

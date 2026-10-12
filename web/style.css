@@ -1,0 +1,46 @@
+:root { --ink:#1d1b18; --paper:#f6f2ea; --accent:#c6482f; --muted:#8a847a; --glass:rgba(22,20,18,.62); --font:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Helvetica Neue",Arial,sans-serif; --serif:"Iowan Old Style","Palatino","Songti SC","Noto Serif CJK SC",Georgia,serif; }
+* { box-sizing:border-box }
+html,body { margin:0; height:100%; background:#0d0c0b; color:var(--paper); font-family:var(--font); overflow:hidden; -webkit-user-select:none; user-select:none }
+#gl { position:fixed; inset:0; width:100%; height:100%; display:block }
+.hidden { display:none !important }
+.overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(120% 90% at 50% 100%, rgba(248,235,215,.18), transparent 60%), linear-gradient(180deg, rgba(10,9,8,.85), rgba(10,9,8,.6)); z-index:30; backdrop-filter:blur(6px) }
+.card { width:min(560px, 92vw); padding:34px 36px 26px; background:rgba(246,242,234,.96); color:var(--ink); border-radius:18px; box-shadow:0 30px 80px rgba(0,0,0,.5) }
+.card .eyebrow { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:600 }
+.card h1 { font-family:var(--serif); font-weight:500; font-size:44px; margin:6px 0 2px; letter-spacing:-.01em }
+.card .sub { color:var(--muted); font-size:15px; margin-bottom:14px }
+.card .desc { font-size:14.5px; line-height:1.65; margin:0 0 20px }
+button.primary { font:inherit; font-size:16px; font-weight:600; background:var(--ink); color:var(--paper); border:0; border-radius:10px; padding:13px 22px; cursor:pointer }
+button.primary:disabled { opacity:.45; cursor:default }
+.card .hint { margin-top:12px; font-size:12px; color:var(--muted) }
+.loading { margin-top:16px; height:18px; position:relative; font-size:11px; color:var(--muted) }
+#loadbar { position:absolute; left:0; top:12px; height:3px; width:0; background:var(--accent); border-radius:2px; transition:width .25s }
+#hud { position:fixed; inset:0; pointer-events:none; z-index:20 }
+#topbar { position:absolute; left:0; right:0; top:0; display:flex; gap:8px; align-items:center; padding:12px 14px; pointer-events:auto; background:linear-gradient(180deg, rgba(0,0,0,.45), transparent) }
+#topbar .brand { font-family:var(--serif); font-size:18px; letter-spacing:.02em; text-shadow:0 1px 8px rgba(0,0,0,.6) }
+#topbar .spacer { flex:1 }
+.chip { font:inherit; font-size:13px; color:var(--paper); background:var(--glass); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:7px 13px; cursor:pointer; backdrop-filter:blur(8px) }
+.chip:hover { background:rgba(60,56,50,.8) } .chip.on { background:var(--accent); border-color:transparent }
+#crosshair { position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 0 1px rgba(0,0,0,.4) }
+#label { position:absolute; left:50%; top:calc(50% + 22px); transform:translateX(-50%); font-size:13px; padding:5px 10px; border-radius:7px; background:var(--glass); white-space:nowrap; opacity:0; transition:opacity .15s }
+#label.show { opacity:1 }
+#toast { position:absolute; left:50%; bottom:92px; transform:translateX(-50%); font-size:13px; padding:8px 14px; border-radius:9px; background:var(--glass); opacity:0; transition:opacity .3s; max-width:70vw; text-align:center }
+#toast.show { opacity:1 }
+#minimap { position:absolute; left:16px; bottom:16px; width:220px; height:220px; border-radius:50%; box-shadow:0 0 0 3px rgba(255,255,255,.55), 0 10px 30px rgba(0,0,0,.5); background:rgba(28,30,34,.85); pointer-events:auto; cursor:pointer }
+#bigmap { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(8,8,10,.78); pointer-events:auto; backdrop-filter:blur(4px) }
+#bigmapCanvas { width:min(92vw, 1100px); height:min(80vh, 760px); border-radius:14px; background:#f3f6fb; box-shadow:0 30px 80px rgba(0,0,0,.6) }
+.mapHint { position:absolute; bottom:22px; left:0; right:0; text-align:center; font-size:13px; color:rgba(255,255,255,.75) }
+#panel { position:absolute; right:14px; top:58px; bottom:14px; width:min(420px, 92vw); background:rgba(246,242,234,.97); color:var(--ink); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.5); pointer-events:auto; display:flex; flex-direction:column; overflow:hidden }
+#panelHead { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid rgba(0,0,0,.08); font-weight:600 }
+#panelClose { border:0; background:none; font-size:22px; cursor:pointer; color:var(--muted) }
+#panelBody { overflow:auto; padding:10px 12px 20px; font-size:14px; line-height:1.5 }
+.vp { display:flex; gap:10px; align-items:center; padding:8px; border-radius:10px; cursor:pointer } .vp:hover { background:rgba(0,0,0,.05) } .vp.active { background:rgba(198,72,47,.12) }
+.vp img { width:96px; height:64px; object-fit:cover; border-radius:6px; background:#ddd } .vp .t { font-weight:600; font-size:13.5px } .vp .s { color:var(--muted); font-size:12px }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px } .dot.pano{background:#2f6fe0} .dot.photo{background:#2fa66a} .dot.rn{background:#e0383a}
+.post { padding:10px 8px 14px; border-bottom:1px solid rgba(0,0,0,.08) } .post h4 { margin:0 0 6px; font-size:15px } .post p { margin:4px 0 8px; color:#3f3b35; white-space:pre-wrap } .post img, .post video { width:100%; border-radius:8px; margin-top:6px; display:block } .post a { color:var(--accent); font-size:12px } .post .go { font:inherit; font-size:12.5px; margin-top:8px; padding:6px 10px; border-radius:7px; border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer }
+#compare { position:absolute; inset:0; pointer-events:auto } #compareImg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; clip-path:inset(0 45% 0 0) }
+#compareSlider { position:absolute; left:50%; bottom:40px; transform:translateX(-50%); width:min(60vw, 520px) } #compareHint { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); font-size:12px; color:rgba(255,255,255,.8); white-space:nowrap }
+#compare .bar { position:absolute; top:0; bottom:0; width:2px; background:#fff; left:55%; box-shadow:0 0 8px rgba(0,0,0,.6) }
+#caption { position:absolute; left:50%; bottom:40px; transform:translateX(-50%); max-width:min(720px, 90vw); font-family:var(--serif); font-size:20px; line-height:1.4; text-align:center; text-shadow:0 2px 14px rgba(0,0,0,.8); padding:0 20px }
+#caption small { display:block; font-family:var(--font); font-size:13px; opacity:.8; margin-top:4px }
+#touch { display:none }
+@media (pointer:coarse) { #touch { display:block; position:absolute; inset:0; pointer-events:none } #stick { position:absolute; left:26px; bottom:250px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3); pointer-events:auto } #knob { position:absolute; left:40px; top:40px; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.7) } #lookpad { position:absolute; right:0; top:60px; bottom:0; width:55%; pointer-events:auto } #touchAct { position:absolute; right:22px; bottom:40px; font:inherit; font-size:15px; padding:16px 22px; border-radius:40px; border:0; background:var(--accent); color:#fff; pointer-events:auto } #minimap { width:150px; height:150px } #crosshair { display:none } }

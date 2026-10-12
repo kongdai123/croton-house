@@ -1,0 +1,9 @@
+# generated / heavy / re-downloadable
+web/node_modules/
+web/dist/
+web/build/
+web/assets/tex/
+web/assets/hdr/
+compare/*_3d.png
+.DS_Store
+__pycache__/

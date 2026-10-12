@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>2513 Croton Ave · Studio Hu Dwelling</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="title" class="overlay">
+  <div class="card">
+    <div class="eyebrow" data-i18n="eyebrow">Studio Hu Dwelling · 小红书</div>
+    <h1>2513 Croton Ave</h1>
+    <div class="sub" data-i18n="sub">Sarasota, Florida · 花园住宅 · 3D 漫游</div>
+    <p class="desc" data-i18n="desc">走进真实比例还原的 2513：客厅、厨房、卧室、后花园。可以坐在沙发和窗台上，拖动椅子，推开落地玻璃门，对照 Zillow 的照片和全景，以及小红书里的每一个取景点。</p>
+    <button id="enter" class="primary" data-i18n="enter">进入房子</button>
+    <div class="hint" data-i18n="hint">鼠标看 · WASD 走 · 点击家具互动 · M 地图 · T 导览 · N 黄昏 · Esc 菜单</div>
+    <div class="loading"><div id="loadbar"></div><span id="loadtext">loading…</span></div>
+  </div>
+</div>
+<div id="hud">
+  <div id="topbar">
+    <div class="brand"><b>2513</b> Croton Ave</div>
+    <div class="spacer"></div>
+    <button class="chip" id="btn-views" data-i18n="views">取景点</button>
+    <button class="chip" id="btn-rednote" data-i18n="rednote">小红书</button>
+    <button class="chip" id="btn-tour" data-i18n="tour">导览</button>
+    <button class="chip" id="btn-dusk" data-i18n="dusk">黄昏</button>
+    <button class="chip" id="btn-quality" title="quality">HQ</button>
+    <button class="chip" id="btn-lang">EN</button>
+  </div>
+  <div id="crosshair"></div>
+  <div id="label"></div>
+  <div id="toast"></div>
+  <canvas id="minimap" width="220" height="220"></canvas>
+  <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">点击任意蓝/绿/红点传送 · M 关闭</div></div>
+  <aside id="panel" class="hidden"><div id="panelHead"><span id="panelTitle"></span><button id="panelClose">×</button></div><div id="panelBody"></div></aside>
+  <div id="compare" class="hidden"><img id="compareImg" alt=""><input id="compareSlider" type="range" min="0" max="100" value="55"><div id="compareHint" data-i18n="comparehint">左右拖动滑块对比实拍 · 空格 切换 · Esc 关闭</div></div>
+  <div id="caption" class="hidden"></div>
+  <div id="touch"><div id="stick"><div id="knob"></div></div><div id="lookpad"></div><button id="touchAct" data-i18n="act">互动</button></div>
+</div>
+<script type="module" src="dist/app.js"></script>
+</body>
+</html>

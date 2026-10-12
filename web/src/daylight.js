@@ -64,7 +64,14 @@ export function bakeDaylight(root, lights) {
     return [0.65 * r * Math.cos(a), 0.65 * y, 0.65 * r * Math.sin(a)];
   });
   const obstacles = walls.concat(contacts);
-  for (let iy = 0; iy < NY; iy++) for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
+  const ambientTexture = texture(bounce, NY), windowTexture = texture(visibility, NY * windows.length);
+  let bakeMs = 0, baked = false;
+  // The ~2 s of ray tests run in bake(), which main.js calls while the GPU process compiles the shaders, so the bake
+  // overlaps the compile instead of adding to the load. The textures start as zeros and upload again once filled.
+  function bake() {
+    if (baked) return; baked = true;
+    const t0 = performance.now();
+    for (let iy = 0; iy < NY; iy++) for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
     const x = MIN.x + SIZE.x * ix / (NX - 1), y = SIZE.y * iy / (NY - 1), z = MIN.z + SIZE.z * iz / (NZ - 1);
     const index = (iy * NZ + iz) * NX + ix;
     let sky = 0;
@@ -81,8 +88,11 @@ export function bakeDaylight(root, lights) {
     for (const d of directions) if (!blocked(x, y, z, ...d, obstacles)) open++;
     const contact = 0.68 + 0.32 * open / directions.length;
     bounce[index] = Math.round(255 * (0.3 + 0.62 * (1 - Math.exp(-sky * 1.25))) * contact);
+    }
+    ambientTexture.needsUpdate = true; windowTexture.needsUpdate = true;
+    bakeMs = performance.now() - t0;
   }
-  const day = { value: 1 }, ambient = { value: texture(bounce, NY) }, window = { value: texture(visibility, NY * windows.length) };
+  const day = { value: 1 }, ambient = { value: ambientTexture }, window = { value: windowTexture };
   const lookup = windows.map(({ center }, i) => `if ( distance( worldLight, vec3(${center.toArray().map(n => n.toFixed(5)).join(',')}) ) < 0.08 ) return texture( uDaylightWindows, vec3( uv.xy, (${i}.0 * ${NY}.0 + uv.z * ${NY - 1}.0 + 0.5) / ${NY * windows.length}.0 ) ).r;`).join('\n');
   const declarations = `uniform float uInteriorDay; uniform highp sampler3D uDaylightAmbient; uniform highp sampler3D uDaylightWindows; varying vec3 vDaylightPosition;
     vec3 daylightWorldDirection(vec3 v) { return vec3(dot(viewMatrix[0].xyz, v), dot(viewMatrix[1].xyz, v), dot(viewMatrix[2].xyz, v)); }
@@ -121,5 +131,5 @@ export function bakeDaylight(root, lights) {
     shader.fragmentShader = shader.fragmentShader.replace('getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )', 'uExteriorBounce * mix(1.0, 0.28, uInteriorDay) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\niblIrradiance *= daylightFill; radiance *= mix(1.0, sqrt(daylightFill), uInteriorDay);');
   }
-  return { day, patch, bakeMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
+  return { day, patch, bake, get bakeMs() { return bakeMs; }, collectMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
 }

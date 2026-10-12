@@ -276,6 +276,17 @@ const HOUSE_KEEP = { x0: -8.36, x1: 8.36, y0: -6.16, y1: 5.8 };            // ho
 const STEP = { x0: PORCH.x0 + 0.2, x1: PORCH.x1 - 0.2, y0: PORCH.y0 - 0.42, y1: PORCH.y0 };
 export const PAVED = [HOUSE_KEEP, PORCH, STEP, WALK, DRIVE, PAD, PATIO, COURT_A, COURT_B, COURT_PAD, AC_UNITS];   // no plant footprint on these
 export const SHELL = [LOUNGE, ...SIDE_PATHS, FRONT_WALK];                                                                // walkable shell: centres stay off, leaves may spill over
+// Bounding boxes of the shell polygons: a point farther than r from a box is farther than r from every edge inside it,
+// so plantClearance skips the exact edge test for most polygons (that test was ~2 s of the load).
+const SHELL_BOX = SHELL.map(poly => { const xs = poly.map(p => p[0]), ys = poly.map(p => p[1]); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; });
+function nearShell(x, y, r) {
+  for (let i = 0; i < SHELL.length; i++) {
+    const b = SHELL_BOX[i];
+    if (x < b.x0 - r || x > b.x1 + r || y < b.y0 - r || y > b.y1 + r) continue;
+    if (edgeDist(x, y, SHELL[i]) < r) return true;
+  }
+  return false;
+}
 export const BEDS = [   // cover: 'dense' = mulch carpeted with ground cover, 'shell' = white shell with plants and edge ground cover only
   { poly: [[-14.0, 5.62], [14.0, 5.62], [14.0, 18.95], [-14.0, 18.95]], density: 0.26, mix: 'back', cover: 'dense' },               // back garden round the lounge
   { poly: [[-14.0, 0.4], [-8.3, 0.4], [-8.3, 5.62], [-14.0, 5.62]], density: 0.26, mix: 'side', cover: 'dense' },                  // west side yard
@@ -355,7 +366,7 @@ function plantClearance(obj, p) {
     const x = px + dx, y = py + dy;
     if (h < 1.95 && (x < -14.08 || x > 14.08 || y > 19.08 || (p.x > 8.3 && y < -0.88))) return false;
     if (h < 0.92 && x > AC_UNITS.x0 - .03 && x < AC_UNITS.x1 + .03 && y > AC_UNITS.y0 - .03 && y < AC_UNITS.y1 + .03) return false;
-    if (h < .14 && SHELL.some(poly => edgeDist(x, y, poly) < .055)) return false;
+    if (h < .14 && nearShell(x, y, .055)) return false;
     if (h > 2.43 && x > -8.85 && x < 8.85 && y > -6.7 && y < 6.34) return false;
     return true;
   });

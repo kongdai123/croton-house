@@ -154,11 +154,12 @@ lapStart = lap('yield2', lapStart);
 // Compile with the composer's buffer bound: three bakes "render target or screen" into each program (tone mapping,
 // output colour space), so compiling for the screen here would compile every material twice.
 renderer.setRenderTarget(composer.readBuffer);
-await Promise.race([
-  renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err)),
-  new Promise(resolve => setTimeout(resolve, 120000)),
-]);
+const compiling = renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err));
 renderer.setRenderTarget(null);
+// compileAsync has queued every link, so the GPU process is busy on all cores: the daylight bake (~2 s of CPU ray
+// tests) runs now, overlapping the compile instead of adding to the load. Its textures upload before the warm draw.
+lighting.bakeDaylight(); lapStart = lap('bake', lapStart);
+await Promise.race([compiling, new Promise(resolve => setTimeout(resolve, 120000))]);
 lapStart = lap('compile', lapStart);
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);

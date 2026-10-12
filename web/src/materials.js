@@ -38,6 +38,12 @@ function capImage(img) {
   }
   return { image: k < 1 ? shrink(img, k) : img, flipY: true };
 }
+// A bitmap decoded with imageOrientation 'flipY' only needs the size cap; it never flips again.
+function capBitmap(bitmap) {
+  const size = Math.max(bitmap.width, bitmap.height), k = Math.min(1, textureCap / size);
+  if (k >= 1) return { image: bitmap, flipY: false };
+  return createImageBitmap(bitmap, { resizeWidth: Math.round(bitmap.width * k), resizeHeight: Math.round(bitmap.height * k), resizeQuality: 'high' }).then(b => ({ image: b, flipY: false }));
+}
 function shrink(img, k) {
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
@@ -54,10 +60,17 @@ function source(url) {
   let done;
   const job = new Promise(r => { done = r; }).finally(() => { settled++; pending.delete(job); });
   pending.add(job); requested++;
-  loader.load(url, img => Promise.resolve(capImage(img)).then(({ image, flipY }) => {
+  const apply = ({ image, flipY }) => {
     Object.assign(s, { flipY, loaded: true }); s.source.data = image; s.source.needsUpdate = true;
     for (const t of s.users) { t.flipY = flipY; t.needsUpdate = true; }
-  }).finally(done), undefined, done);
+  };
+  const viaImage = () => loader.load(url, img => Promise.resolve(capImage(img)).then(apply).finally(done), undefined, done);
+  // Decode straight from the download: createImageBitmap(blob) decodes, flips and converts off the main thread, where
+  // going through an <img> first cost ~40 ms of main-thread work per scan. Any failure falls back to the <img> path.
+  if (offThread) fetch(url).then(r => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+    .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }))
+    .then(capBitmap).then(apply).then(done, viaImage);
+  else viaImage();
   return s;
 }
 

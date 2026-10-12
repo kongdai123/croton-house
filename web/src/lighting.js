@@ -384,5 +384,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     material.envMapIntensity = intensity;
     material.envMapRotation.y = indoorPet ? 0 : envRotation;
   }
-  return { fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
+  function runDaylightBake() { daylight?.bake(); }
+  return { fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

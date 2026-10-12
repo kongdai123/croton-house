@@ -1,0 +1,1042 @@
+[
+  {
+    "id": "g08",
+    "x": 0.8,
+    "y": -2.2,
+    "heading": 142,
+    "eye": 1.2,
+    "quality": "approx",
+    "zh": "客厅 · 窗台座特写",
+    "en": "Living room · window seat",
+    "file": "g08_5cce06f8.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.8,
+      "y": -2.2,
+      "eye": 1.2,
+      "heading": 142,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g08.png"
+  },
+  {
+    "id": "g09",
+    "x": 0.3,
+    "y": 0.65,
+    "heading": 140,
+    "eye": 1.2,
+    "quality": "approx",
+    "zh": "客厅 · 皮沙发与窗台座",
+    "en": "Living room · leather sofa and window seat",
+    "file": "g09_0d583944.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.3,
+      "y": 0.65,
+      "eye": 1.2,
+      "heading": 140,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g09.png"
+  },
+  {
+    "id": "g10",
+    "x": 2.745,
+    "y": -0.8,
+    "heading": 185,
+    "eye": 1.28,
+    "quality": "approx",
+    "zh": "客厅 · 正看窗台座与入户门",
+    "en": "Living room · window seat and front door",
+    "file": "g10_13733067.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 2.745,
+      "y": -0.8,
+      "eye": 1.28,
+      "heading": 185,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g10.png"
+  },
+  {
+    "id": "g11",
+    "x": 3.55,
+    "y": 0.45,
+    "heading": 230,
+    "eye": 1.35,
+    "quality": "approx",
+    "zh": "客厅 · 回望厨房",
+    "en": "Living room · looking toward the kitchen",
+    "file": "g11_eb0cd5ec.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 3.55,
+      "y": 0.45,
+      "eye": 1.35,
+      "heading": 230,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g11.png"
+  },
+  {
+    "id": "g51",
+    "x": 0.25,
+    "y": -3.8,
+    "heading": 62,
+    "eye": 1.4,
+    "quality": "approx",
+    "zh": "客厅 · 皮沙发与红画",
+    "en": "Living room · leather sofa and red painting",
+    "file": "g51_c4350434.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.25,
+      "y": -3.8,
+      "eye": 1.4,
+      "heading": 62,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g51.png"
+  },
+  {
+    "id": "g12",
+    "x": 0,
+    "y": -2.4,
+    "heading": 262,
+    "eye": 1.4,
+    "zh": "厨房 · 正看炉灶",
+    "en": "Kitchen · range",
+    "quality": "poor",
+    "file": "g12_0f0acf6b.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0,
+      "y": -2.4,
+      "eye": 1.4,
+      "heading": 262,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g12.png"
+  },
+  {
+    "id": "g13",
+    "x": -2.35,
+    "y": 0,
+    "heading": 172,
+    "eye": 1.4,
+    "zh": "厨房 · 中岛内侧与水槽",
+    "en": "Kitchen · island aisle and sink",
+    "quality": "approx",
+    "file": "g13_c80cb12e.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -2.35,
+      "y": 0,
+      "eye": 1.4,
+      "heading": 172,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g13.png"
+  },
+  {
+    "id": "g14",
+    "x": 0.15,
+    "y": -3.6,
+    "heading": 313,
+    "eye": 1.4,
+    "zh": "厨房 · 中岛与烤箱柜",
+    "en": "Kitchen · island and oven column",
+    "quality": "approx",
+    "file": "g14_bc1e3b11.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.15,
+      "y": -3.6,
+      "eye": 1.4,
+      "heading": 313,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g14.png"
+  },
+  {
+    "id": "g15",
+    "x": 2.25,
+    "y": -2.6,
+    "heading": 270,
+    "eye": 1.35,
+    "zh": "厨房 · 中岛全景",
+    "en": "Kitchen · island overview",
+    "quality": "poor",
+    "file": "g15_de625578.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 2.25,
+      "y": -2.6,
+      "eye": 1.35,
+      "heading": 270,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g15.png"
+  },
+  {
+    "id": "g16",
+    "x": -2.35,
+    "y": -2.15,
+    "heading": 192,
+    "eye": 1.6,
+    "zh": "厨房 · 水槽与炉灶",
+    "en": "Kitchen · sink and range",
+    "quality": "poor",
+    "file": "g16_98a0b125.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -2.35,
+      "y": -2.15,
+      "eye": 1.6,
+      "heading": 192,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g16.png"
+  },
+  {
+    "id": "g17",
+    "x": -2.25,
+    "y": 0.15,
+    "heading": 190,
+    "eye": 1.35,
+    "zh": "厨房 · 沿中岛看水槽",
+    "en": "Kitchen · looking along the island",
+    "quality": "approx",
+    "file": "g17_68280338.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -2.25,
+      "y": 0.15,
+      "eye": 1.35,
+      "heading": 190,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g17.png"
+  },
+  {
+    "id": "g18",
+    "x": -2.15,
+    "y": -2.15,
+    "heading": 190,
+    "eye": 1.6,
+    "zh": "厨房 · 水槽窗与黑色瓷砖",
+    "en": "Kitchen · sink window and black tiles",
+    "quality": "poor",
+    "file": "g18_c9763886.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -2.15,
+      "y": -2.15,
+      "eye": 1.6,
+      "heading": 190,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g18.png"
+  },
+  {
+    "id": "g19",
+    "x": 0.85,
+    "y": -2.4,
+    "heading": 25,
+    "eye": 1.35,
+    "zh": "餐厅 · 从厨房看餐桌",
+    "en": "Dining room · viewed from the kitchen",
+    "quality": "approx",
+    "file": "g19_1a4c81a8.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.85,
+      "y": -2.4,
+      "eye": 1.35,
+      "heading": 25,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g19.png"
+  },
+  {
+    "id": "g20",
+    "x": 2.85,
+    "y": 1.3,
+    "heading": 312,
+    "eye": 1.4,
+    "zh": "餐厅 · 餐桌与书房",
+    "en": "Dining room · table and office",
+    "quality": "approx",
+    "file": "g20_25a91641.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 2.85,
+      "y": 1.3,
+      "eye": 1.4,
+      "heading": 312,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g20.png"
+  },
+  {
+    "id": "g21",
+    "x": -0.85,
+    "y": 4.6,
+    "heading": 139,
+    "eye": 1.4,
+    "zh": "餐厅 · 回望客厅",
+    "en": "Dining room · looking toward the living room",
+    "quality": "approx",
+    "file": "g21_0d80aed3.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -0.85,
+      "y": 4.6,
+      "eye": 1.4,
+      "heading": 139,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g21.png"
+  },
+  {
+    "id": "g22",
+    "x": 2.85,
+    "y": 4.85,
+    "heading": 250,
+    "eye": 1.4,
+    "zh": "书房 · 白色书桌与旧木边柜",
+    "en": "Office · white desk and reclaimed console",
+    "quality": "approx",
+    "file": "g22_2ff214a8.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 2.85,
+      "y": 4.85,
+      "eye": 1.4,
+      "heading": 250,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g22.png"
+  },
+  {
+    "id": "g23",
+    "x": 1,
+    "y": 2.1,
+    "heading": 40,
+    "eye": 1.4,
+    "zh": "餐厅 · 书架坐凳",
+    "en": "Dining room · bookcase bench",
+    "quality": "approx",
+    "file": "g23_a0e2afc0.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 1,
+      "y": 2.1,
+      "eye": 1.4,
+      "heading": 40,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g23.png"
+  },
+  {
+    "id": "g24",
+    "x": 1.85,
+    "y": -0.5,
+    "heading": 0,
+    "eye": 1.25,
+    "zh": "餐厅 · 门洞与餐桌",
+    "en": "Dining room · framed by the opening",
+    "quality": "approx",
+    "file": "g24_3ff3d5c3.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 1.85,
+      "y": -0.5,
+      "eye": 1.25,
+      "heading": 0,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g24.png"
+  },
+  {
+    "id": "g25",
+    "x": 2.8,
+    "y": 4.75,
+    "heading": 0,
+    "eye": 1.4,
+    "zh": "家庭房 · 花园双开门",
+    "en": "Family room · French doors to the garden",
+    "quality": "poor",
+    "file": "g25_47d076d3.jpg",
+    "pitch": 0,
+    "openDoors": true,
+    "doors": [
+      "bf8cb9f37a"
+    ],
+    "doorFraction": 0.7,
+    "actual": {
+      "x": 2.8,
+      "y": 4.75,
+      "eye": 1.4,
+      "heading": 0,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g25.png"
+  },
+  {
+    "id": "g26",
+    "x": -4.78,
+    "y": 1.9,
+    "heading": 20,
+    "eye": 1.4,
+    "zh": "主卧 · 床与花园推拉门",
+    "en": "Primary bedroom · bed and garden slider",
+    "quality": "approx",
+    "file": "g26_606c0432.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -4.78,
+      "y": 1.9,
+      "eye": 1.4,
+      "heading": 20,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g26.png"
+  },
+  {
+    "id": "g27",
+    "x": -4.95,
+    "y": 4.9,
+    "heading": 160,
+    "eye": 1.4,
+    "zh": "主卧 · 床尾看衣柜",
+    "en": "Primary bedroom · closet viewed from the bed foot",
+    "quality": "approx",
+    "file": "g27_0a211ac8.jpg",
+    "pitch": 0,
+    "closeDoors": [
+      "0f9916c91a"
+    ],
+    "actual": {
+      "x": -4.95,
+      "y": 4.9,
+      "eye": 1.4,
+      "heading": 160,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g27.png"
+  },
+  {
+    "id": "g28",
+    "x": -4.85,
+    "y": 3.9,
+    "heading": 190,
+    "eye": 1.4,
+    "zh": "主卧 · 衣柜与胡桃木小柜",
+    "en": "Primary bedroom · closet and walnut cabinet",
+    "quality": "approx",
+    "file": "g28_e6c9dd0d.jpg",
+    "pitch": 0,
+    "closeDoors": [
+      "0f9916c91a"
+    ],
+    "actual": {
+      "x": -4.85,
+      "y": 3.9,
+      "eye": 1.4,
+      "heading": 190,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g28.png"
+  },
+  {
+    "id": "g29",
+    "x": -5.15,
+    "y": 0.95,
+    "heading": 270,
+    "eye": 1.4,
+    "zh": "主卧 · 步入式衣帽间",
+    "en": "Primary bedroom · walk-in closet",
+    "quality": "poor",
+    "file": "g29_576f03cf.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -5.15,
+      "y": 0.95,
+      "eye": 1.4,
+      "heading": 270,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g29.png"
+  },
+  {
+    "id": "g30",
+    "x": -6.185,
+    "y": 5.12,
+    "heading": 240,
+    "eye": 1.25,
+    "zh": "主卫 · 双盆洗手台与淋浴间",
+    "en": "Primary bath · double vanity and shower",
+    "quality": "approx",
+    "file": "g30_ffa7fbce.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -6.185,
+      "y": 5.12,
+      "eye": 1.25,
+      "heading": 240,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g30.png"
+  },
+  {
+    "id": "g31",
+    "x": -6.55,
+    "y": 4.1,
+    "heading": 190,
+    "eye": 1.4,
+    "zh": "主卫 · 淋浴间与收纳门",
+    "en": "Primary bath · shower and linen door",
+    "quality": "approx",
+    "file": "g31_1edacfa4.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -6.55,
+      "y": 4.1,
+      "eye": 1.4,
+      "heading": 190,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g31.png"
+  },
+  {
+    "id": "g32",
+    "x": 4.698973,
+    "y": 5.174195,
+    "heading": 145,
+    "eye": 1.25,
+    "zh": "花园次卧 · 床与卫生间门",
+    "en": "Garden bedroom · bed and bathroom doorway",
+    "quality": "approx",
+    "file": "g32_88057370.jpg",
+    "pitch": 0,
+    "openDoors": true,
+    "doors": [
+      "57fafde9ea",
+      "498f1f300a"
+    ],
+    "actual": {
+      "x": 4.698972940202523,
+      "y": 5.174195127817027,
+      "eye": 1.25,
+      "heading": 145,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g32.png"
+  },
+  {
+    "id": "g33",
+    "x": 4.6,
+    "y": 2.25,
+    "heading": 40,
+    "eye": 1.4,
+    "zh": "花园次卧 · 床与花园推拉门",
+    "en": "Garden bedroom · bed and garden slider",
+    "quality": "approx",
+    "file": "g33_f945eab8.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 4.6,
+      "y": 2.25,
+      "eye": 1.4,
+      "heading": 40,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g33.png"
+  },
+  {
+    "id": "g35",
+    "x": 4.6,
+    "y": -2.35,
+    "heading": 138,
+    "eye": 1.4,
+    "zh": "前侧次卧 · 松木床与两扇窗",
+    "en": "Front bedroom · pine bed and two windows",
+    "quality": "approx",
+    "file": "g35_a049e0db.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 4.6,
+      "y": -2.35,
+      "eye": 1.4,
+      "heading": 138,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g35.png"
+  },
+  {
+    "id": "g52",
+    "x": -5.6,
+    "y": 3.643726,
+    "heading": 118,
+    "eye": 1.4,
+    "zh": "主卧 · 白洗松木床",
+    "en": "Primary bedroom · whitewashed pine bed",
+    "quality": "approx",
+    "file": "g52_3802327f.jpg",
+    "pitch": 0,
+    "closeDoors": [
+      "0f9916c91a"
+    ],
+    "actual": {
+      "x": -5.6,
+      "y": 3.643725830020305,
+      "eye": 1.4,
+      "heading": 118,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g52.png"
+  },
+  {
+    "id": "g34",
+    "x": 5.5,
+    "y": 1.6,
+    "heading": 128,
+    "eye": 1.6,
+    "zh": "次卧卫生间 · 洗手台与淋浴",
+    "en": "Bedroom bath · vanity and shower",
+    "quality": "poor",
+    "file": "g34_b5bbbf83.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 5.5,
+      "y": 1.6,
+      "eye": 1.6,
+      "heading": 128,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g34.png"
+  },
+  {
+    "id": "g36",
+    "x": 5.35,
+    "y": -1.05,
+    "heading": 62,
+    "eye": 1.6,
+    "zh": "走廊卫生间 · 洗手台与窗",
+    "en": "Hall bath · vanity and window",
+    "quality": "poor",
+    "file": "g36_b87d428f.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 5.35,
+      "y": -1.05,
+      "eye": 1.6,
+      "heading": 62,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g36.png"
+  },
+  {
+    "id": "g48",
+    "x": -6.6,
+    "y": -0.9,
+    "heading": 309,
+    "eye": 1.4,
+    "zh": "车库 · 洗烘机与旧木柜",
+    "en": "Garage · laundry and rustic console",
+    "quality": "poor",
+    "file": "g48_f58d6793.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -6.6,
+      "y": -0.9,
+      "eye": 1.4,
+      "heading": 309,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g48.png"
+  },
+  {
+    "id": "g49",
+    "x": -4.35,
+    "y": -3.9,
+    "heading": 333,
+    "eye": 1.4,
+    "zh": "车库 · 洗衣区与乒乓球桌",
+    "en": "Garage · laundry and ping-pong table",
+    "quality": "poor",
+    "file": "g49_4325ff81.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -4.35,
+      "y": -3.9,
+      "eye": 1.4,
+      "heading": 333,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g49.png"
+  },
+  {
+    "id": "g01",
+    "x": 9.38,
+    "y": 0.6,
+    "heading": 335,
+    "eye": 1.4,
+    "zh": "东侧花园 · 暮色小径",
+    "en": "East garden · dusk path",
+    "quality": "poor",
+    "file": "g01_9f8a4a42.jpg",
+    "pitch": 0,
+    "dusk": true,
+    "actual": {
+      "x": 9.38,
+      "y": 0.6,
+      "eye": 1.4,
+      "heading": 335,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g01.png"
+  },
+  {
+    "id": "g02",
+    "x": 1.8,
+    "y": 17.23,
+    "heading": 180,
+    "eye": 1.4,
+    "pitch": 0.2,
+    "zh": "后院 · 暮色立面全景",
+    "en": "Backyard · dusk façade overview",
+    "quality": "poor",
+    "file": "g02_678a0506.jpg",
+    "dusk": true,
+    "actual": {
+      "x": 1.8,
+      "y": 17.23,
+      "eye": 1.4,
+      "heading": 180,
+      "pitch": 0.2
+    },
+    "out": "../../evidence/zvet_render_g02.png"
+  },
+  {
+    "id": "g03",
+    "x": -5,
+    "y": -6.8,
+    "heading": 95,
+    "eye": 1.4,
+    "zh": "前院 · 门廊与花园",
+    "en": "Front garden · porch and planting",
+    "quality": "poor",
+    "file": "g03_4ce92d63.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -5,
+      "y": -6.8,
+      "eye": 1.4,
+      "heading": 95,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g03.png"
+  },
+  {
+    "id": "g04",
+    "x": -0.6,
+    "y": -14.9,
+    "heading": 0,
+    "eye": 1.6,
+    "pitch": -0.04,
+    "zh": "前院 · 房屋全景",
+    "en": "Front yard · house overview",
+    "quality": "poor",
+    "file": "g04_372b9ec8.jpg",
+    "actual": {
+      "x": -0.6,
+      "y": -14.9,
+      "eye": 1.6,
+      "heading": 0,
+      "pitch": -0.04
+    },
+    "out": "../../evidence/zvet_render_g04.png"
+  },
+  {
+    "id": "g05",
+    "x": -3.2,
+    "y": -8.1,
+    "heading": 55,
+    "eye": 1.38,
+    "zh": "门廊 · 铁艺柱与窗",
+    "en": "Porch · iron columns and windows",
+    "quality": "poor",
+    "file": "g05_b0555799.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -3.2,
+      "y": -8.1,
+      "eye": 1.38,
+      "heading": 55,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g05.png"
+  },
+  {
+    "id": "g06",
+    "x": 0.5,
+    "y": -9.7,
+    "heading": 0,
+    "eye": 1.4,
+    "zh": "入户 · 前门与门廊",
+    "en": "Entrance · front door and porch",
+    "quality": "approx",
+    "file": "g06_79587962.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 0.5,
+      "y": -9.7,
+      "eye": 1.4,
+      "heading": 0,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g06.png"
+  },
+  {
+    "id": "g37",
+    "x": 6.68,
+    "y": 5.8,
+    "heading": 335,
+    "eye": 1.4,
+    "zh": "后院 · 从门廊看花园",
+    "en": "Backyard · garden viewed from the patio",
+    "quality": "poor",
+    "file": "g37_f45b15bc.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 6.68,
+      "y": 5.8,
+      "eye": 1.4,
+      "heading": 335,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g37.png"
+  },
+  {
+    "id": "g38",
+    "x": 6.4,
+    "y": 6.95,
+    "heading": 286,
+    "eye": 1.4,
+    "zh": "后院 · 沿房屋看露台",
+    "en": "Backyard · looking along the patio",
+    "quality": "approx",
+    "file": "g38_c885be56.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 6.4,
+      "y": 6.95,
+      "eye": 1.4,
+      "heading": 286,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g38.png"
+  },
+  {
+    "id": "g39",
+    "x": -0.5,
+    "y": 13.9,
+    "heading": 193.5,
+    "eye": 1.34,
+    "zh": "后院 · 花园与玻璃门",
+    "en": "Backyard · garden and glass doors",
+    "quality": "approx",
+    "file": "g39_b9e4477c.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -0.5,
+      "y": 13.9,
+      "eye": 1.34,
+      "heading": 193.5,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g39.png"
+  },
+  {
+    "id": "g40",
+    "x": 3,
+    "y": 9,
+    "heading": 355,
+    "eye": 1.4,
+    "zh": "后院 · 火盆与木长凳",
+    "en": "Backyard · fire pit and lumber bench",
+    "quality": "poor",
+    "file": "g40_078bdb06.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 3,
+      "y": 9,
+      "eye": 1.4,
+      "heading": 355,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g40.png"
+  },
+  {
+    "id": "g41",
+    "x": -1.25,
+    "y": 14.4,
+    "heading": 123,
+    "eye": 1.4,
+    "zh": "后院 · 木长凳与次卧推拉门",
+    "en": "Backyard · lumber bench and bedroom slider",
+    "quality": "approx",
+    "file": "g41_f0508c6a.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -1.25,
+      "y": 14.4,
+      "eye": 1.4,
+      "heading": 123,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g41.png"
+  },
+  {
+    "id": "g42",
+    "x": 2.4,
+    "y": 8.15,
+    "heading": 0,
+    "eye": 1.4,
+    "zh": "后院 · 花园休憩区",
+    "en": "Backyard · garden lounge",
+    "quality": "poor",
+    "file": "g42_e138f81b.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 2.4,
+      "y": 8.15,
+      "eye": 1.4,
+      "heading": 0,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g42.png"
+  },
+  {
+    "id": "g43",
+    "x": -2.7,
+    "y": 6.9,
+    "heading": 275,
+    "eye": 1.4,
+    "zh": "西侧庭院 · 推拉门与花箱",
+    "en": "West courtyard · slider and planter",
+    "quality": "poor",
+    "file": "g43_5b40ef25.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": -2.7,
+      "y": 6.9,
+      "eye": 1.4,
+      "heading": 275,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g43.png"
+  },
+  {
+    "id": "g44",
+    "x": 2.8,
+    "y": 7.7,
+    "heading": 248,
+    "eye": 1.4,
+    "zh": "露台 · 暮色双开门",
+    "en": "Patio · French doors at dusk",
+    "quality": "approx",
+    "file": "g44_271ad142.jpg",
+    "pitch": 0,
+    "dusk": true,
+    "openDoors": true,
+    "doors": [
+      "161782cdfa",
+      "bf8cb9f37a"
+    ],
+    "doorFraction": 0.8,
+    "actual": {
+      "x": 2.8,
+      "y": 7.7,
+      "eye": 1.4,
+      "heading": 248,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g44.png"
+  },
+  {
+    "id": "g45",
+    "x": 2.3,
+    "y": 7.4,
+    "heading": 245,
+    "eye": 1.4,
+    "zh": "露台 · 暮色客厅与躺椅",
+    "en": "Patio · living room and lounge chairs at dusk",
+    "quality": "approx",
+    "file": "g45_14d0a649.jpg",
+    "pitch": 0,
+    "dusk": true,
+    "openDoors": true,
+    "doors": [
+      "161782cdfa"
+    ],
+    "doorFraction": 0.8,
+    "actual": {
+      "x": 2.3,
+      "y": 7.4,
+      "eye": 1.4,
+      "heading": 245,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g45.png"
+  },
+  {
+    "id": "g46",
+    "x": 3.119,
+    "y": 7.359,
+    "heading": 200.629,
+    "eye": 1.2,
+    "zh": "露台 · 暮色餐厅门",
+    "en": "Patio · dining-room doors at dusk",
+    "quality": "poor",
+    "file": "g46_695a9f82.jpg",
+    "pitch": 0,
+    "dusk": true,
+    "openDoors": true,
+    "doors": [
+      "bf8cb9f37a"
+    ],
+    "doorFraction": 0.7,
+    "actual": {
+      "x": 3.119,
+      "y": 7.359,
+      "eye": 1.2,
+      "heading": 200.62900000000002,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g46.png"
+  },
+  {
+    "id": "g47",
+    "x": 9.79,
+    "y": 2.77,
+    "heading": 0,
+    "eye": 1.4,
+    "zh": "东侧花园 · 通往篮球架的小径",
+    "en": "East garden · path toward the basketball hoop",
+    "quality": "poor",
+    "file": "g47_505cce7d.jpg",
+    "pitch": 0,
+    "actual": {
+      "x": 9.79,
+      "y": 2.77,
+      "eye": 1.4,
+      "heading": 0,
+      "pitch": 0
+    },
+    "out": "../../evidence/zvet_render_g47.png"
+  }
+]

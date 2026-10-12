@@ -1,0 +1,43 @@
+FLOWERS decor pass — completed
+
+Only src/furniture/flowers.js and src/styling_flowers.js were edited. No commits or pushes.
+202 placements; 243,478 triangles in the flowering layer; 610 meshes with shared specimen geometry/materials.
+Zones: courtyard A 8, courtyard B 6, front beds 35, islands 16, back 104, sides 33.
+17 seeded builders. Eight cached specimens per species, merged leaves/flowers, no lights, new textures <=512px.
+
+Photo anchors:
+- birdOfParadise: orange/blue Strelitzia flowers and paddle foliage, g38.
+- guzmaniaRed / guzmaniaOrange / potBromeliad: green rosettes with elevated bract spikes, g05/g43.
+- ixora / firebush: red-orange shrub clusters, g05/g06 and back-bed palette g38–g43.
+- pentasRed / pentasPink: low star-cluster drifts, g38/g43 palette.
+Additional requested Gulf-coast accents (not asserted to be identifiable in the photos):
+- hibiscusCoral / hibiscusRed / hibiscusYellow: scalloped single blooms and projecting staminal columns.
+- plumbago: blue five-petal clusters; lantana: gold/coral clusters.
+- heliconia: alternating lobster-claw bracts; firespike: red tubular spikes.
+- bougainvillea: magenta three-bract clusters with stakes and ties.
+- potPentas: pink flowering stoneware pot, matching the listing's container styling.
+
+Checks: esbuild passes; no browser page errors in final captures. All six requested tour views inspected.
+No new centres on paving or shell. Existing plant-centre clearance >=0.499m (rounded placements).
+Courtyard flower mesh bounds stay within both low-wall inner faces. Floor heights: front -.008,
+back/sides -.024, islands -.020, courtyard 0. Pots have actual soil, hollow rims, and stem colliders.
+The occupied foliage snapshot reflects current PLACEMENTS + generatePlanting(7), including the relocated
+courtyard banana (-4.3,8.05). Refresh the snapshot if foliage placements/scatter change again.
+
+Photo/render sheets (photo refs are palette/placement comparisons, not registered camera matches):
+../../evidence/decor_flowers_front_overview.jpg
+../../evidence/decor_flowers_garden_overview.jpg
+../../evidence/decor_flowers_courtyard_overview.jpg
+../../evidence/decor_flowers_before_after.jpg
+Also individual decor_flowers_{front,entry,patio,east,lounge,court,entry_garden,court_detail}.jpg.
+Before/after captures share the same browser session/lighting; flower visibility is toggled for the baseline.
+The (0,-6.6), heading 0 view sees only the entry door; added (0,-9) to check the surrounding beds.
+
+Recommended lead edit in src/layout.js:127 (left unchanged):
+EXACT CURRENT LINE:
+  { m: 'plants', i: 'bromeliad', x: -5.2, y: 6.3, h: 0.38, seed: 5 }, { m: 'plants', i: 'bromeliad', x: -4.4, y: 6.3, h: 0.38, seed: 6 }, { m: 'plants', i: 'bromeliad', x: 6.0, y: 6.3, h: 0.38, seed: 7 }, { m: 'plants', i: 'bromeliad', x: 6.6, y: 6.3, h: 0.38, seed: 8 },
+PROPOSED REPLACEMENT:
+  { m: 'flowers', i: 'guzmaniaRed', x: -5.2, y: 6.3, h: 0.35, seed: 5 }, { m: 'flowers', i: 'guzmaniaOrange', x: -4.4, y: 6.3, h: 0.35, seed: 6 }, { m: 'flowers', i: 'guzmaniaRed', x: 6.0, y: 6.3, h: 0.35, seed: 7 }, { m: 'flowers', i: 'guzmaniaOrange', x: 6.6, y: 6.3, h: 0.35, seed: 8 },
+Why: these four existing plants are foliage rosettes. Flowering Guzmania bracts would make the white
+planter boxes match g43. The soil top is .35m; .38m leaves a 3cm gap above the soil.
+The rest of the pass is complete; this optional replacement belongs to the lead's owned layout file.

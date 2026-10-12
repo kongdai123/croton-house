@@ -1,7 +1,9 @@
 # Codex brief · 2513 Croton Ave walkthrough — packaging + mobile pass
 
-Project: `/Users/masenov/Documents/GitHub/Yireeb/playground/croton-house/web` (a side project, NOT part of the Yireeb repo; never
-commit or push anything). Read `../HANDOFF.md` first for the layout of the code. A static server already serves `web/` at
+> **Done, kept for history.** `web/tools/package.py` and the mobile pass shipped. The site is now built and deployed by
+> `.github/workflows/pages.yml` on every push to `master`. The project moved out of Yireeb to its own repo, `croton-house`.
+
+Project: `/Users/masenov/Documents/GitHub/croton-house/web` (its own repo now). Read `HANDOFF.md` at the repo root first for the layout of the code. A static server already serves `web/` at
 http://127.0.0.1:8780 (do not start another). Build with `node tools/build.mjs`. Screenshots: `node tools/shot.mjs "<path?query>" out.png [w] [h]`
 (headless system Chrome; `index.html?x=<plan x>&y=<plan y>&h=<heading>&p=<pitch>&fast=1` skips the title screen).
 

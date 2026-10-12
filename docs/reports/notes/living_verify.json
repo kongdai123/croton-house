@@ -1,0 +1,57 @@
+{
+  "results": [
+    {
+      "check": "sit and stand",
+      "root": "living-sofa",
+      "kind": "sofa",
+      "facing": 0
+    },
+    {
+      "check": "sit and stand",
+      "root": "living-window-seat",
+      "kind": "bench",
+      "facing": 3.141592653589793
+    },
+    {
+      "check": "console drag and right-click return",
+      "home": [
+        3.78,
+        0,
+        2.78
+      ],
+      "moved": 0.44934553646685527,
+      "menu": [
+        "放回原处 · 松木长凳 · 红画",
+        "全部放回 (1)"
+      ]
+    },
+    {
+      "name": "front door to dining",
+      "maxDeviation": 2.1316282072803006e-14,
+      "blocked": null,
+      "end": [
+        1.8499999999999952,
+        1.9000000000000123
+      ]
+    },
+    {
+      "name": "living to kitchen aisle",
+      "maxDeviation": 2.5613449128457256e-15,
+      "blocked": null,
+      "end": [
+        -2.6000000000000023,
+        -0.5000000000000011
+      ]
+    },
+    {
+      "name": "living to hall",
+      "maxDeviation": 7.549516567451064e-15,
+      "blocked": null,
+      "end": [
+        4.519999999999994,
+        -1.5999999999999983
+      ]
+    }
+  ],
+  "errors": []
+}

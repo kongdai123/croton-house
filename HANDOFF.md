@@ -1,6 +1,19 @@
-# Handoff: Croton House walkthrough (Oct 12, 2026, 04:10)
+# Handoff: Croton House walkthrough (Oct 12, 2026, updated after `642152e`)
 
-Three.js (r183) walkthrough of 2513 Croton Ave in `web/`. The dev server at http://127.0.0.1:8780 is already running; don't start or kill it. Build with `cd web && node tools/build.mjs`. Nothing is committed: all work is uncommitted in the working tree.
+Three.js (r183) walkthrough of 2513 Croton Ave in `web/`.
+
+## Status and workflow
+- **Git:** work is committed on `master`. Every push to `master` builds and deploys to GitHub Pages (`.github/workflows/pages.yml`). Check `git status` for anything in progress before you start.
+- **Dev server:** http://127.0.0.1:8780 serves `web/`. If it is not running, start it from `web/` with `python3 -m http.server 8780 --bind 127.0.0.1`. Leave it running when you finish.
+- **Build:** `cd web && node tools/build.mjs` (add `--watch` to rebuild on save, `--min` for the deploy build).
+- **Frame rate:** the app caps at 30 fps by default (`main.js`, loop at the bottom). `?fps=60` sets another cap and `?fps=0` runs uncapped. `tools/perf.mjs` and `tools/pets_perf.mjs` pass `fps=0` so their frame times stay meaningful; any new timing tool should too.
+- **Where notes live:** see the *Docs* section at the end. Nothing important should live only in `/tmp`.
+
+## Since the last handoff (committed)
+- Background music: the copyright-free Tuscany track, then AIR's acoustic Mike Mills; the commercial Brush recording stays off the public site.
+- Map pins start hidden. **H** toggles all three legends together; quality moved to **J**.
+- The front door opens on arrival. Textures default to 1K (phones 512, `?tex=2k` for the full library); Enter turns on only when the bar is full, and before shader compile so Windows drivers can leave the landing.
+- The garage is lit from the shop bars, shades start raised, and foliage and the kitchen wall no longer show through.
 
 ## HUD and sitting pets (done this session)
 
@@ -8,7 +21,7 @@ The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The w
 
 - Aim label is 18px, tour caption 26px. During the tour the crosshair and the label are hidden (`body.touring`).
 - **G** calls the dog, **K** calls the cat. The chips show the key.
-- **地图图例 / Map legends** replaces the three pin chips: 小红书, 全景, 照片, plus 全部显示 / 全部隐藏. Dusk and HQ chips are gone (**N** dusk, **H** quality). On a touch screen those two sit at the bottom of the dropdown.
+- **地图图例 / Map legends** replaces the three pin chips: 小红书, 全景, 照片, plus 全部显示 / 全部隐藏. Dusk and HQ chips are gone (**N** dusk, **J** quality; **H** toggles the legends). On a touch screen those two sit at the bottom of the dropdown.
 - Buttons: 小红书 / RedNote, 全景 / Pano, 教程 / Tutorial.
 - You can pet a dog while you are sitting, if you look at it. Petting a sitting or lying dog keeps it seated (hearts, head up) instead of standing it up. Calling a sitting dog makes it get up and come.
 - Front door: closed hinged doors, including the front door, get a collider (`house.js`, `if (!open0) setHinged(d, false)`). Not re-checked with a walk-through after the last build.
@@ -17,13 +30,13 @@ The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The w
 - **Front planting:**
   - The palm band is continuous across the centre, so the front door is hidden from the street.
   - The south curb is a single piece, and the `frontBounds` clause that shoved centre plants east was removed.
-  - Code is in `web/src/layout.js`; screenshot `/tmp/ch/gap_sheet.jpg`.
+  - Code is in `web/src/layout.js`; screenshot `docs/evidence/gap_sheet.jpg`.
 - **Tour (`web/src/tour.js`):**
   - Stops 1 and 2 are aerial (`eye` set).
   - The foyer stop has a `via` terrace waypoint. The camera holds height over the planting, drops onto the terrace, then follows the nav path through the front door.
   - Straight (direct) flights now hold height and drop late (`viewpoints.js`).
-  - Screenshot `/tmp/ch/desc_sheet.jpg`.
-- **Closet (Codex `closet`):** the front-bedroom closet has white louvered bifolds that open with a click and a furnished interior. Screenshots `/tmp/ch/closet_closed.png`, `closet_open.png`, `closet_inside.png`.
+  - Screenshot `docs/evidence/desc_sheet.jpg`.
+- **Closet (Codex `closet`):** the front-bedroom closet has white louvered bifolds that open with a click and a furnished interior. Screenshots `docs/evidence/closet_closed.png`, `closet_open.png`, `closet_inside.png`.
 - **Pets (Cursor subagent, done):**
   - Tabby cat (`src/pets/cat.js`, `assets/pets/cat.glb`) and shared roaming (`src/pets/roam.js`).
   - Petting: within 1.3 m and facing the pet, click.
@@ -36,7 +49,7 @@ The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The w
   - The landing page's ochre decoration block is now obviously decorative.
 
 ## Still open
-- **Unreviewed reports:** `/tmp/ch/codex_livingroom2_report.md`, `/tmp/ch/codex_hud_report.md`, `/tmp/ch/codex_frontyard2_report.md`. The status of the `hqlook` and `daylight` Codex windows is unknown.
+- **Unreviewed reports:** `docs/reports/codex_livingroom2_report.md`, `codex_hud_report.md`, `codex_frontyard2_report.md`. The `hqlook` and `daylight` Codex windows never wrote reports; treat that work as unfinished.
 - **Foliage clipping:** the closet agent noticed it in the bedroom tour view.
 - **Regression check:** `node tools/chairtest.mjs`.
 - **Older backlog:**
@@ -50,7 +63,7 @@ The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The w
 
 ## Conventions and constraints
 - **Coordinates:** plan uses +x east and +y north; world z = −plan y. Camera vertical FOV is 62°.
-- **Screenshot helper:** `node /tmp/ch/kshot.mjs W H out.png "x,y,headingDeg,pitchRAD,eye,vfovDeg"`.
+- **Screenshot helpers (run from `web/`):** `node tools/shot.mjs "index.html?x=..&y=..&h=..&p=..&fast=1" out.png 1280 800` for one view with the HUD; `node tools/kshot.mjs W H out.png "x,y,headingDeg,pitchRAD,eye,vfovDeg"` for several clean views. Write outputs to `docs/evidence/` if they should outlive the session.
 - **Headless tests:** use playwright with `channel: 'chrome'` and `--use-angle=metal --ignore-gpu-blocklist`, wait for `window.__ready`, and use `window.__app` as the app handle.
 - **HUD clicks:** `#hud` has `pointer-events:none`, so interactive children need `pointer-events:auto`. i18n lives in `DICT` in `src/ui.js` (zh first) and elements use `data-i18n`.
 - **Front yard:**
@@ -60,3 +73,10 @@ The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The w
   - It is a Le Corbusier tribute, not a copy, with no RedNote mention.
   - The credit reads "made by Tianfu Wang and friends" (zh 由王天夫和朋友们制作). Never say "AI".
 - **Pet agents on Cursor:** old pet subagents used an explicit Claude slug billed to the Anthropic key. New Cursor subagents should omit the model so they inherit the Cursor quota.
+- **Batching and lights:** see `docs/briefs/agent_env.md`. After load, never reassign `mesh.material` or move a sub-part unless its root has `userData.toggle` or `userData.noBatch`, and never add, remove or hide lights (change intensity instead), or every shader recompiles.
+
+## Docs
+- `BRIEF.md`: the furniture module contract every `src/furniture/*.js` follows.
+- `docs/briefs/`: the shared agent environment notes and the finished packaging/mobile brief.
+- `docs/reports/`: every Codex agent report; `docs/reports/notes/` holds the longer reports, test results and test scripts they link to.
+- `docs/evidence/`: screenshots and comparison sheets the reports link to. It is git-ignored (about 140 MB), so it exists only on this machine.

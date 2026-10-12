@@ -2,7 +2,8 @@
 - Project: `/Users/masenov/Documents/GitHub/croton-house/web` (Three.js r183 ES modules bundled by esbuild). Read `HANDOFF.md` at the
   repo root first. Commit only when asked; a push to `master` deploys the public site. The user is building an interactive photoreal walkthrough of a Zillow listing (2513 Croton Ave,
   Sarasota). They are picky and test in desktop Chrome with HQ mode on.
-- Static server at http://127.0.0.1:8780 (start it from `web/` with `python3 -m http.server 8780 --bind 127.0.0.1` if it is down).
+- Static server at http://127.0.0.1:8780 (start it from `web/` with `python3 tools/serve.py` if it is down; it disables caching).
+- After changing walls, windows or fixed furniture, regenerate the daylight bake: `node tools/bake_daylight.mjs`.
   `node tools/build.mjs --watch` rebuilds `dist/app.js` on every save to `src/`; `node tools/build.mjs` shows compile errors.
   The app caps at 30 fps; add `&fps=0` to any URL used for frame timing. **Several agents share this bundle**: a syntax or runtime error breaks everyone's
   screenshots, so keep it compiling and loading, and fix any break immediately.

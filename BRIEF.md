@@ -44,7 +44,7 @@ export const items = { sofa: () => build(), coffeeTable: () => build2(), ... }; 
 ## Verify your work (required before you report)
 1. `node tools/build.mjs` (bundles; fix every error it prints).
 2. A static server should be serving the web folder at http://127.0.0.1:8780. If it is not, start it from `web/` with
-   `python3 -m http.server 8780 --bind 127.0.0.1` and leave it running. Screenshot with
+   `python3 tools/serve.py` and leave it running. Screenshot with
    `node tools/shot.mjs "showcase.html?module=<area>&item=<name>&az=35&el=15&dist=3" /tmp/<area>_<name>.png`
    and LOOK at the png (Read tool). `az`/`el` in degrees, `dist` metres; omit `item` to see every item in a row;
    add `&collider=1` to draw colliders. The HUD line prints each item's size and metadata so you can check numbers.

@@ -1,15 +1,23 @@
-# Handoff: Croton House walkthrough (Oct 12, 2026, updated after `642152e`)
+# Handoff: Croton House walkthrough (Oct 12, 2026, evening)
 
 Three.js (r183) walkthrough of 2513 Croton Ave in `web/`.
 
 ## Status and workflow
 - **Git:** work is committed on `master`. Every push to `master` builds and deploys to GitHub Pages (`.github/workflows/pages.yml`). Check `git status` for anything in progress before you start.
-- **Dev server:** http://127.0.0.1:8780 serves `web/`. If it is not running, start it from `web/` with `python3 -m http.server 8780 --bind 127.0.0.1`. Leave it running when you finish.
+- **Dev server:** http://127.0.0.1:8780 serves `web/`. If it is not running, start it from `web/` with `python3 tools/serve.py` (it sends `Cache-Control: no-store`, so a plain reload picks up a new build; the stock `http.server` lets Chrome keep stale CSS and JS). Leave it running when you finish.
 - **Build:** `cd web && node tools/build.mjs` (add `--watch` to rebuild on save, `--min` for the deploy build).
 - **Frame rate:** the app caps at 30 fps by default (`main.js`, loop at the bottom). `?fps=60` sets another cap and `?fps=0` runs uncapped. `tools/perf.mjs` and `tools/pets_perf.mjs` pass `fps=0` so their frame times stay meaningful; any new timing tool should too.
+- **Daylight bake is precomputed:** `data/daylight.bin` holds the window-light and bounce grid. **After changing walls, windows or fixed furniture, run `cd web && node tools/bake_daylight.mjs`** (dev server running). A stale file is caught by its fingerprint and the app bakes live instead, so nothing breaks, but every visitor pays ~0.5–2 s again. Movable furniture and toggles never enter the bake. `?daylight=live` ignores the file.
+- **Sizing:** `--u` in `style.css` is 1px up to a 1440 × 900 window and grows with the window beyond that; the landing, loading screen, intro, top bar, minimap, aim label, tour caption and tutorial all use it. Rendering is capped at 1440p (`MAX_SHORT`/`MAX_PIXELS` in `main.js`), and resizes apply at most every 500 ms.
+- **Stats for nerds:** right-click the scene, the ` key, or `?stats=1`. Draw calls, triangles, programs, render size, load and warm-up timings, daylight source, build commit.
 - **Where notes live:** see the *Docs* section at the end. Nothing important should live only in `/tmp`.
 
-## Since the last handoff (committed)
+## Loading, intro and scaling (this session)
+- After Enter, a *Preparing the rooms* screen in the landing's style (ribbon photo, colour planes, breathing measure bars) covers the shader compile and counts linked programs.
+- Then an introduction pop-up over the first view: the house in four lines with the architect's photos, and the four essential controls. **I** or clicking *2513 Croton Ave* in the top left reopens it. The tutorial no longer opens by itself; **?** still shows it.
+- The architect is credited as *Studio Hu* (from the landing page); no name or bio exists in the repo yet.
+
+## Earlier (committed)
 - Background music: the copyright-free Tuscany track, then AIR's acoustic Mike Mills; the commercial Brush recording stays off the public site.
 - Map pins start hidden. **H** toggles all three legends together; quality moved to **J**.
 - The front door opens on arrival. Textures default to 1K (phones 512, `?tex=2k` for the full library); Enter turns on only when the bar is full, and before shader compile so Windows drivers can leave the landing.

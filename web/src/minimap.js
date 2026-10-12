@@ -22,11 +22,15 @@ export class Minimap {
   rebuildBlips() {
     const P = this.points, toPlan = (px, py) => [VB[0] + px / 100 * VB[2], -(VB[1] + py / 100 * VB[3])];
     this.blips = [];
+    if (this.targets) this.blips.push(...this.targets);
+    else {
     for (const p of P.panorama) { const [x, y] = toPlan(p.x, p.y); this.blips.push({ kind: 'pano', id: p.id, x, y, title: p.title, order: p.order }); }
     for (const p of P.photo) { const [x, y] = toPlan(p.x, p.y); this.blips.push({ kind: 'photo', id: p.id, x, y, heading: p.angle, gallery: p.gallery }); }
+    }
     // panos not on the plan (outdoor) + rednote posts come from the viewpoints/rednote systems
     for (const b of this.extraBlips || []) this.blips.push(b);
   }
+  isVisible(kind) { return !this.markers || (this.markers.visible && this.markers.enabled[kind]); }
   setExtra(blips) { this.extraBlips = blips; this.rebuildBlips(); }
   // plan -> canvas px for the small radar (heading-up, centred on the player)
   draw() {
@@ -49,7 +53,7 @@ export class Minimap {
     // floor plan image (svg) over the house
     if (this.imgReady) { const [ix, iy] = toC(VB[0], -VB[1]); c.drawImage(this.img, ix, iy, VB[2] * k, VB[3] * k); }
     // blips
-    for (const b of this.blips) { const [x, y] = toC(b.x, b.y); if (x * x + y * y > (R * 1.4) ** 2) continue; c.beginPath(); c.arc(x, y, 3.2 * this.dpr, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = this.dpr; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke(); }
+    for (const b of this.blips) { if (!this.isVisible(b.kind)) continue; const [x, y] = toC(b.x, b.y); if (x * x + y * y > (R * 1.4) ** 2) continue; c.beginPath(); c.arc(x, y, 3.2 * this.dpr, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = this.dpr; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke(); }
     // player arrow (always at centre, pointing up)
     c.restore(); c.save(); c.translate(R, R + R * 0.18);
     c.rotate(0);
@@ -75,16 +79,18 @@ export class Minimap {
     const lab = (x, y, s) => { const [a, b] = toC(x, y); c.fillText(s, a, b); };
     lab(-5.9, -2.0, t('Garage')); lab(0.9, 7.8, t('Patio')); lab(5.0, 13.5, t('Backyard')); lab(0, -10.5, t('Front yard'));
     this.hit = [];
-    for (const b of this.blips) { const [x, y] = toC(b.x, b.y); c.beginPath(); c.arc(x, y, 6 * this.dpr, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = 1.5 * this.dpr; c.strokeStyle = '#fff'; c.stroke(); this.hit.push({ x, y, b }); if (b.heading !== undefined) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.sin(b.heading * Math.PI / 180) * 14 * this.dpr, y - Math.cos(b.heading * Math.PI / 180) * 14 * this.dpr); c.strokeStyle = 'rgba(47,166,106,.7)'; c.stroke(); } }
+    for (const b of this.blips) { if (!this.isVisible(b.kind)) continue; const [x, y] = toC(b.x, b.y); c.beginPath(); c.arc(x, y, 6 * this.dpr, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = 1.5 * this.dpr; c.strokeStyle = '#fff'; c.stroke(); this.hit.push({ x, y, b }); if (b.heading !== undefined) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.sin(b.heading * Math.PI / 180) * 14 * this.dpr, y - Math.cos(b.heading * Math.PI / 180) * 14 * this.dpr); c.strokeStyle = b.kind === 'pano' ? 'rgba(47,111,224,.7)' : b.kind === 'rn' ? 'rgba(224,56,58,.7)' : 'rgba(47,166,106,.7)'; c.stroke(); } }
+    c.globalAlpha = 1;
     // player
     const [px, py] = toC(this.player.pos.x, -this.player.pos.z); c.save(); c.translate(px, py); c.rotate(-this.player.yaw); c.beginPath(); c.moveTo(0, -10 * this.dpr); c.lineTo(7 * this.dpr, 8 * this.dpr); c.lineTo(0, 4 * this.dpr); c.lineTo(-7 * this.dpr, 8 * this.dpr); c.closePath(); c.fillStyle = '#1d1b18'; c.fill(); c.restore();
     c.fillStyle = '#1d1b18'; c.textAlign = 'left'; c.font = `${13 * this.dpr}px sans-serif`;
-    const legend = [['#2f6fe0', t('pano')], ['#2fa66a', t('photo')], ['#e0383a', t('rnpost')]]; legend.forEach(([col, s], i) => { c.beginPath(); c.arc(20 * this.dpr, (20 + i * 20) * this.dpr, 6 * this.dpr, 0, 7); c.fillStyle = col; c.fill(); c.fillStyle = '#1d1b18'; c.fillText(s, 32 * this.dpr, (24 + i * 20) * this.dpr); });
+    const legend = [['#2f6fe0', t('pano'), 'pano'], ['#2fa66a', t('photo'), 'photo'], ['#e0383a', t('rnpost'), 'rn']]; legend.forEach(([col, s, kind], i) => { c.globalAlpha = this.isVisible(kind) ? 1 : 0.3; c.beginPath(); c.arc(20 * this.dpr, (20 + i * 20) * this.dpr, 6 * this.dpr, 0, 7); c.fillStyle = col; c.fill(); c.fillStyle = '#1d1b18'; c.fillText(s, 32 * this.dpr, (24 + i * 20) * this.dpr); });
+    c.globalAlpha = 1;
   }
   bigClick(e) {
     const r = this.bigCanvas.getBoundingClientRect(); const x = (e.clientX - r.left) * this.dpr, y = (e.clientY - r.top) * this.dpr;
     let best = null, bd = 14 * this.dpr;
-    for (const h of this.hit || []) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h.b; } }
+    for (const h of this.hit || []) { if (!this.isVisible(h.b.kind)) continue; const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h.b; } }
     if (best) { this.toggleBig(); this.goTo(best); return; }
     // otherwise teleport to the clicked floor point
     const { k, ox, oy } = this.bigMetrics(); const wx = (x - ox) / k, wy = (oy - y) / k; this.toggleBig(); this.goTo({ kind: 'point', x: wx, y: wy });

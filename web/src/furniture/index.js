@@ -1,5 +1,6 @@
 // Registry of furniture modules. Each module exports `items`: { name: () => THREE.Group } built with ../kit.js.
 export const MODULES = {
+  niche: () => import('./niche.js'),
   living: () => import('./living.js'),
   kitchen: () => import('./kitchen.js'),
   dining: () => import('./dining.js'),
@@ -8,4 +9,11 @@ export const MODULES = {
   outdoor: () => import('./outdoor.js'),
   plants: () => import('./plants.js'),
   decor: () => import('./decor_plus.js'),
+  garage: () => import('./garage.js'),
+  props_living: () => import('./props_living.js'),
+  props_kitchen: () => import('./props_kitchen.js'),
+  props_rooms: () => import('./props_rooms.js'),
+  closet: () => import('./closet.js'),
+  props_garden: () => import('./props_garden.js'),
+  flowers: () => import('./flowers.js'),
 };

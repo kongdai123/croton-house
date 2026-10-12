@@ -42,9 +42,9 @@ function tileHeight(n = 6, seed = 5) {
   }
   return ctex(c, { srgb: false });
 }
-// Vertical stacked finger tile (behind the range and around the window): 12 cols × 3 rows per texture.
+// Vertical stacked finger tile (behind the range and around the window): 32 cols × 6 rows per texture (≈0.028 × 0.152).
 function fingerTile(height = false) {
-  const W = 512, [c, g] = cv(W, W), r = rng(height ? 17 : 17), cols = 12, rows = 3, sw = W / cols, sh = W / rows, gap = 3.2;
+  const W = 1024, [c, g] = cv(W, W), r = rng(height ? 17 : 17), cols = 32, rows = 6, sw = W / cols, sh = W / rows, gap = 4;
   g.fillStyle = height ? '#000' : '#cfcbc3'; g.fillRect(0, 0, W, W);
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const x0 = x * sw + gap / 2, y0 = y * sh + gap / 2, w = sw - gap, h = sh - gap, v = (r() - 0.5);
@@ -96,6 +96,17 @@ function cooktopTex() {
   g.fillStyle = 'rgba(200,200,200,0.4)'; g.font = '16px sans-serif'; g.fillText('HOT SURFACE', 345, 545); g.strokeStyle = 'rgba(200,200,200,0.3)'; g.strokeRect(12, 12, W - 24, H - 24);
   return ctex(c);
 }
+// Matte black chalk-paint panel above the microwave (owner's "chalkboard"): blank, with faint erased-chalk haze.
+function chalkPanelTex() {
+  const W = 512, H = 256, [c, g] = cv(W, H), r = rng(31); g.fillStyle = '#1d1f21'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 9; i++) {
+    const x = r() * W, y = r() * H, rad = 40 + r() * 110, grd = g.createRadialGradient(x, y, 2, x, y, rad);
+    grd.addColorStop(0, `rgba(235,235,230,${0.025 + r() * 0.03})`); grd.addColorStop(1, 'rgba(235,235,230,0)'); g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  }
+  g.strokeStyle = 'rgba(230,230,225,0.035)'; g.lineWidth = 14; g.lineCap = 'round';
+  for (let i = 0; i < 6; i++) { g.beginPath(); const y = 40 + r() * 180; g.moveTo(30 + r() * 80, y); g.quadraticCurveTo(250, y + (r() - 0.5) * 60, 400 + r() * 90, y + (r() - 0.5) * 40); g.stroke(); }
+  return ctex(c);
+}
 // Small blue/white LED display (range clock, microwave, oven).
 function displayTex(text = '10:43') {
   const [c, g] = cv(256, 64); g.fillStyle = '#020203'; g.fillRect(0, 0, 256, 64);
@@ -136,6 +147,10 @@ export const L = {
   oil: once(() => new THREE.MeshPhysicalMaterial({ color: 0xb08a1e, roughness: 0.1, transparent: true, opacity: 0.6, depthWrite: false })),
   bottleGlass: once(() => new THREE.MeshPhysicalMaterial({ color: 0xe6efe9, roughness: 0.04, transparent: true, opacity: 0.28, clearcoat: 1, depthWrite: false, side: THREE.DoubleSide })),
   grille: once(() => new THREE.MeshStandardMaterial({ color: 0x101010, roughness: 0.8 })),
+  hoodSteel: once(() => new THREE.MeshStandardMaterial({ color: 0x6a6d71, roughness: 0.3, metalness: 0.9 })),   // stainless hood, reads dark against the finger tile (g12)
+  fridgeSlate: once(() => new THREE.MeshPhysicalMaterial({ color: 0x55585d, roughness: 0.34, metalness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.3 })),   // slate / black-stainless fridge (g13, g18)
+  chalk: once(() => new THREE.MeshStandardMaterial({ map: chalkPanelTex(), roughness: 0.95 })),
+  ventWhite: once(() => new THREE.MeshStandardMaterial({ color: 0xe9e9e6, roughness: 0.5, metalness: 0.3 })),
 };
 
 // ---------- geometry utilities ----------
@@ -244,7 +259,7 @@ export function fronts(parent, x0, x1, y0, y1, face, rows, { base = true } = {})
 }
 // Tile panel on a wall plane (back face at zWall), world-scaled grid aligned to (ux, vy).
 export function tile(x0, x1, y0, y1, zWall, kind = 'sq', origin = [0, TOP]) {
-  const mat = kind === 'sq' ? L.tileSq() : L.tileFinger(), k = kind === 'sq' ? 1 / 0.6 : 1 / 0.3;
+  const mat = kind === 'sq' ? L.tileSq() : L.tileFinger(), k = 1 / 0.912;   // 6" (0.152) squares and 0.152-tall fingers on one grid (g12)
   const m = box(x1 - x0, y1 - y0, 0.008, mat, { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: zWall + 0.004 });
   return wuv(m, k, 'y', [(x0 + x1) / 2 - origin[0], (y0 + y1) / 2 - origin[1], 0]);
 }
@@ -287,13 +302,17 @@ export function range(cx, frontZ, backZ) {
   return g;
 }
 // Under-cabinet black range hood 0.76 × 0.50 deep at 1.65-1.90: flat canopy lip + sloped pyramid body.
-export function hood(cx, backZ) {
-  const g = new THREE.Group(), w = 0.76, d = 0.5, bm = M.blackAppliance();
+export function hood(cx, backZ, bm = M.blackAppliance()) {
+  const g = new THREE.Group(), w = 0.76, d = 0.5;
   g.add(box(w, 0.06, d, bm, { r: 0.004, seg: 1, x: cx, y: 1.65, z: backZ + d / 2, bottom: true }));
   g.add(frustum({ x0: cx - w / 2 + 0.005, x1: cx + w / 2 - 0.005, z0: backZ, z1: backZ + d - 0.01 }, { x0: cx - w / 2 + 0.04, x1: cx + w / 2 - 0.04, z0: backZ, z1: backZ + 0.3 }, 1.71, 1.90, bm));
   // underside baffle filters + two LED lamps; front button strip
   for (const s of [-1, 1]) g.add(box(0.3, 0.004, 0.36, M.steel(), { x: cx + s * 0.17, y: 1.648, z: backZ + 0.25 }));
-  for (const s of [-1, 1]) g.add(cyl(0.022, 0.022, 0.004, L.ledSmall(), { seg: 16, x: cx + s * 0.25, y: 1.646, z: backZ + 0.45 }));
+  for (const s of [-1, 1]) {
+    const lamp = cyl(0.022, 0.022, 0.004, L.ledSmall(), { seg: 16, x: cx + s * 0.25, y: 1.646, z: backZ + 0.45 });
+    lamp.userData.lightFixture = { name: `Range hood lamp ${s < 0 ? 1 : 2}`, zh: `抽油烟机灯 ${s < 0 ? 1 : 2}` }; g.add(lamp);
+    lamp.userData.keep = true;
+  }
   g.add(box(0.12, 0.016, 0.003, L.stainlessBlack(), { x: cx, y: 1.68, z: backZ + d + 0.0015 }));
   for (let i = 0; i < 4; i++) g.add(cyl(0.0035, 0.0035, 0.003, L.ledSmall(), { seg: 8, x: cx - 0.045 + i * 0.03, y: 1.68, z: backZ + d + 0.003, rx: Math.PI / 2 }));
   return g;

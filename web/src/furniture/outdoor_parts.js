@@ -7,6 +7,35 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 export const once = (fn) => { let v; return () => (v ??= fn()); };
 export function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 export const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+// Shared by soft furnishings and outdoor objects. Reversing mid-animation starts at the current pose.
+// State is the requested state; value is the eased pose. The placed root remains unbatched automatically.
+export function animatedToggle(root, { label, labelOn, duration = 0.9, apply }) {
+  let last = null, elapsed = duration, from = 0;
+  const previous = root.userData.animate;
+  const toggle = root.userData.toggle = {
+    on: false, value: 0, moving: false, label, labelOn,
+    set(on, instant = false) {
+      on = !!on;
+      if (instant) { toggle.on = on; toggle.value = +on; toggle.moving = false; elapsed = duration; apply(toggle.value, last ?? 0); return; }
+      if (on === toggle.on) return;
+      from = toggle.value; elapsed = 0; toggle.on = on; toggle.moving = true;
+    },
+  };
+  root.userData.animate = (t) => {
+    const dt = last === null ? 0 : Math.max(0, Math.min(0.1, t - last)); last = t;
+    if (toggle.moving) {
+      elapsed = Math.min(duration, elapsed + dt);
+      const e = ss(0, duration, elapsed);
+      toggle.value = from + ((toggle.on ? 1 : 0) - from) * e;
+      toggle.moving = elapsed < duration;
+    }
+    previous?.(t);
+    apply(toggle.value, t);
+  };
+  apply(0, 0);
+  return toggle;
+}
 function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')]; }
 function texOf(c, { srgb = true, aniso = 8 } = {}) { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; }
 

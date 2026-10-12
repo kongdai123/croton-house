@@ -5,6 +5,7 @@
 import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, cushion,
          autoCollider, describe, shadow } from '../kit.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { animatedToggle } from './outdoor_parts.js';
 
 const CEIL = 2.44;
 const once = (fn) => { let v; return () => (v ??= fn()); };
@@ -232,17 +233,29 @@ function curtainSheer() {
   const sway = new THREE.Group(); sway.position.y = CURT_TOP; root.add(sway);
   const inner = new THREE.Group(); inner.position.y = -CURT_TOP; sway.add(inner);
   inner.add(cg.cloth.clone(), cg.hem.clone(), cg.tape.clone());
+  const carriers = new THREE.Group(); root.add(carriers);
   // snap carriers at the back of every fold (where the ripplefold tape clips to the track)
   for (let i = 0; i <= FOLDS * 2; i++) {
     const u = i / (FOLDS * 2), x = (u - 0.5) * CURT_W, z = AMP * 0.86 * Math.sin(u * FOLDS * Math.PI * 2);
     if (i % 2) continue;
-    root.add(cyl(0.006, 0.006, CEIL - 0.022 - CURT_TOP + 0.012, W, { seg: 8, x: x * (1 + 0), y: (CEIL - 0.022 + CURT_TOP - 0.012) / 2, z: 0 }));
+    carriers.add(cyl(0.006, 0.006, CEIL - 0.022 - CURT_TOP + 0.012, W, { seg: 8, x, y: (CEIL - 0.022 + CURT_TOP - 0.012) / 2, z: 0 }));
   }
   root.userData.animate = (t) => {
     sway.scale.z = 1 + 0.02 * Math.sin(t * 0.55) + 0.006 * Math.sin(t * 1.37 + 0.8);
     sway.rotation.x = 0.0035 * Math.sin(t * 0.41 + 1.1);
     sway.rotation.z = 0.0015 * Math.sin(t * 0.29);
   };
+  const toggle = animatedToggle(root, {
+    label: { en: 'Open curtain', zh: '拉开窗帘' }, labelOn: { en: 'Close curtain', zh: '合上窗帘' },
+    apply(open) {
+      // Narrow placed panels are on the right jamb; full-width panels stack to the left.
+      const side = root.userData.stackSide ?? (root.scale.x < 0.9 ? 1 : -1);
+      const width = 1 - open * 0.82, offset = side * CURT_W * (1 - width) / 2;
+      sway.scale.x = carriers.scale.x = width;
+      sway.position.x = carriers.position.x = offset;
+    },
+  });
+  root.userData.onTime = (dusk, instant) => toggle.set(!dusk, instant);
   return finish(root, { id: 'decor-curtain-sheer', name: 'Sheer ripplefold curtain panel', zh: '落地纱帘', note: '1.50 w, plane = local X, faces ±Z; place one per side of each glass door' }, false);
 }
 
@@ -254,12 +267,18 @@ function cellularShade(w = 1.84, id = 'decor-cellular-shade', name = 'Cellular s
   root.add(box(w, railTop - railBot, 0.05, W, { r: 0.006, y: (railTop + railBot) / 2 }));
   for (const s of [-1, 1]) root.add(box(0.008, 0.048, 0.052, L.plateWhite(), { r: 0.002, x: s * (w / 2 - 0.004), y: (railTop + railBot) / 2 }));
   const cell = box(w - 0.012, ph + 0.006, 0.03, S, { r: 0.007, seg: 2 });
+  const pleats = new THREE.Group(); pleats.position.y = railBot; root.add(pleats);
   for (let i = 0; i < n; i++) {
-    const c = cell.clone(); c.position.set(0, railBot - ph * (i + 0.5), (i % 2 ? 0.0008 : -0.0008)); root.add(c);
+    const c = cell.clone(); c.position.set(0, -ph * (i + 0.5), (i % 2 ? 0.0008 : -0.0008)); pleats.add(c);
   }
   const yb = railBot - drop;
-  root.add(box(w - 0.004, 0.022, 0.04, W, { r: 0.007, y: yb - 0.011 }));
-  root.add(box(0.06, 0.016, 0.012, W, { r: 0.004, y: yb - 0.014, z: 0.025 }));     // finger pull on the room side
+  const bottom = new THREE.Group(); root.add(bottom);
+  bottom.add(box(w - 0.004, 0.022, 0.04, W, { r: 0.007, y: yb - 0.011 }));
+  bottom.add(box(0.06, 0.016, 0.012, W, { r: 0.004, y: yb - 0.014, z: 0.025 }));     // finger pull on the room side
+  animatedToggle(root, {
+    label: { en: 'Raise shade', zh: '升起蜂巢帘' }, labelOn: { en: 'Lower shade', zh: '放下蜂巢帘' },
+    apply(raised) { pleats.scale.y = 1 - raised * 0.86; bottom.position.y = drop * raised * 0.86; },
+  });
   return finish(root, { id, name, zh: '蜂巢帘', note: 'inside-mount; window head 2.06, rail 2.03-2.08, glass at -Z' }, false);
 }
 

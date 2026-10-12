@@ -1,14 +1,8 @@
 // 2513 Croton Ave · interactive photoreal walkthrough. Entry point.
 import * as THREE from 'three';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { setEnvironment, M } from './materials.js';
-import { buildHouse, CEIL } from './house.js';
+import { createLighting } from './lighting.js';
+import { buildHouse, CEIL, getDoors } from './house.js';
+import { buildGarden } from './grass.js';
 import { Player } from './player.js';
 import { Layout } from './layout.js';
 import { Interact } from './interact.js';
@@ -16,18 +10,31 @@ import { Minimap } from './minimap.js';
 import { Viewpoints } from './viewpoints.js';
 import { RedNote } from './rednote.js';
 import { Tour } from './tour.js';
+import { buildGrid } from './nav.js';
+import { Markers } from './markers.js';
 import { UI, t, setLang, getLang } from './ui.js';
 import { Human } from './human.js';
+import { batchStatic, updateSwayLod, updateRoomVisibility } from './batch.js';
+import { Pets } from './pets/roam.js';
 
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 300);
 scene.add(camera);
+// Size the drawing buffer from the canvas box (CSS keeps #gl covering the viewport; setSize(..., false) writes no inline size).
+// Registered before any await so viewport changes during the loading screen still reach the canvas; composer joins once lighting exists.
+let post = null;
+function fitView() {
+  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false); post?.setSize(w, h);
+}
+fitView();
+new ResizeObserver(fitView).observe(canvas);
+addEventListener('resize', fitView);
+visualViewport?.addEventListener('resize', fitView);
 
 const state = { dusk: false, quality: 'hq', ready: false, loaded: 0, total: 1, mode: 'walk', onLock: null };
 const ui = new UI(state);
@@ -35,49 +42,37 @@ const house = await (await fetch('data/house.json')).json();
 const points = await (await fetch('data/floorplan_points.json')).json();
 const tour = await (await fetch('data/tour.json')).json();
 const posts = await (await fetch('data/rednote_posts.json')).json();
+const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json() : []).catch(() => []);
 
-// ---- Lighting rig: HDRI sky (day / dusk) for ambient+reflections, a sun directional light with a large soft shadow map,
-//      and interior fixtures from the furniture modules (point/spot/rect lights, on at dusk).
-const pmrem = new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
-const skies = {};
-async function loadSky(name) { if (skies[name]) return skies[name]; const hdr = await new RGBELoader().loadAsync(`assets/hdr/${name}_2k.hdr`); const env = pmrem.fromEquirectangular(hdr).texture; hdr.mapping = THREE.EquirectangularReflectionMapping; skies[name] = { env, bg: hdr }; return skies[name]; }
-const DAY = 'drakensberg_solitary_mountain_puresky', DUSK = 'belfast_sunset_puresky';
-const roomEnv = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-const sun = new THREE.DirectionalLight(0xfff1dc, 3.2); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.00015; sun.shadow.normalBias = 0.03; sun.shadow.radius = 2;
-Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 80 }); scene.add(sun); scene.add(sun.target);
-const hemi = new THREE.HemisphereLight(0xfff6ea, 0xd9c4a8, 0.55); scene.add(hemi);
-const fixtures = new THREE.Group(); scene.add(fixtures);   // interior lights (added by layout)
-for (const [gx, gz] of [[-6.0, 1.5], [-6.0, 3.8]]) { const gl = new THREE.PointLight(0xfff2dc, 2.2, 7, 1.5); gl.position.set(gx, 2.35, gz); gl.userData.base = 2.2; gl.userData.always = true; fixtures.add(gl); }
-
-function applyTime() {
-  const sky = skies[state.dusk ? DUSK : DAY]; if (!sky) return;
-  scene.environment = roomEnv; scene.background = sky.bg; scene.backgroundBlurriness = 0.0;
-  setEnvironment(roomEnv, state.dusk ? 0.18 : 0.8);
-  if (state.dusk) {
-    sun.color.set(0xffa36a); sun.intensity = 0.9; sun.position.set(-30, 7, 18); scene.environmentIntensity = 0.18; scene.backgroundIntensity = 0.45; hemi.intensity = 0.25; hemi.color.set(0x8a9cc8); hemi.groundColor.set(0x3a2f26);
-    renderer.toneMappingExposure = 1.0;
-  } else {
-    sun.color.set(0xfff3e2); sun.intensity = 3.4; sun.position.set(-14, 24, 10); scene.environmentIntensity = 0.8; scene.backgroundIntensity = 1.0; hemi.intensity = 0.55; hemi.color.set(0xfff6ea); hemi.groundColor.set(0xd9c4a8);
-    renderer.toneMappingExposure = 1.12;
-  }
-  fixtures.visible = true; for (const l of fixtures.children) if (l.isLight) l.intensity = l.userData.always ? l.userData.base : (state.dusk ? l.userData.base * 3.2 : l.userData.base * 0.08);
-  for (const e of emissives) e.emissiveIntensity = state.dusk ? e.userData.base * 1.5 : 0.12;
-  document.getElementById('btn-dusk').classList.toggle('on', state.dusk);
+// ---- Lighting: daylight openings, practical fixtures and separate room / sky reflections.
+const lighting = createLighting(renderer, scene, camera, house);
+const { fixtures, composer, gtao } = lighting;
+post = composer; fitView();
+async function applyTime() {
+  await lighting.applyTime(state.dusk);
+  for (const o of layout.placed) o.userData.onTime?.(state.dusk, !state.ready);
+  pets?.relight();
+  ui.syncLegends();
 }
-const emissives = [];
-function collectEmissives(root) { root.traverse(o => { if (o.isMesh && o.material?.emissive && o.material.emissiveIntensity > 0 && !emissives.includes(o.material)) { o.material.userData.base = o.material.emissiveIntensity; emissives.push(o.material); } }); }
 
 // ---- Build ----
 ui.progress(0.05, 'sky');
-await loadSky(DAY);
+await lighting.loadSky();
 ui.progress(0.15, 'house');
 const houseRoot = buildHouse(house);
 scene.add(houseRoot);
+ui.progress(0.25, 'garden');
+const garden = buildGarden({ quality: state.quality, camera });
+scene.add(garden.group);
 ui.progress(0.3, 'furniture');
 const layout = new Layout(scene, fixtures, house, points);
 await layout.build((p, msg) => ui.progress(0.3 + p * 0.55, msg));
-collectEmissives(scene);
+lighting.collectMaterials(scene);
+// Prepare both HDRs/PMREMs while the loading screen still covers the scene.
+const lightingPreload = Promise.all([lighting.loadSky(false), lighting.loadSky(true)]);
 ui.progress(0.9, 'finishing');
+const Q0 = new URLSearchParams(location.search);
+const batch = Q0.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
 
 // ---- Player, interaction, UI systems ----
 const player = new Player(camera, canvas, state);
@@ -85,56 +80,74 @@ const Q = new URLSearchParams(location.search);
 player.teleport(+(Q.get('x') ?? 0.0), -(+(Q.get('y') ?? -6.9)), +(Q.get('h') ?? 0), +(Q.get('p') ?? 0));   // default: the front walk, looking at the house
 const human = new Human(scene, player);
 const interact = new Interact(scene, camera, player, layout, ui, human);
+const pets = Q.get('pets') === '0' ? null : new Pets({ scene, player, layout, camera, ui, lighting, seed: Q.has('petseed') ? +Q.get('petseed') : undefined });
+interact.pets = pets;
 const minimap = new Minimap(player, layout, points, tour, posts, ui, (target) => goTo(target));
-const viewpoints = new Viewpoints(scene, camera, player, points, tour, ui, renderer);
+const viewpoints = new Viewpoints(scene, camera, player, points, tour, ui, renderer, photoSpots);
 const rednote = new RedNote(posts, ui, viewpoints);
 const tourCtl = new Tour(player, tour, points, ui, viewpoints);
-minimap.setExtra(viewpoints.extraBlips().concat(rednote.blips()));
-function goTo(target) { viewpoints.goTo(target); }
-ui.bind({ player, viewpoints, rednote, tour: tourCtl, minimap, toggleDusk: () => { state.dusk = !state.dusk; loadSky(DUSK).then(applyTime); }, toggleQuality });
+const markers = new Markers(scene, camera, player, rednote, viewpoints, ui, houseRoot);
+interact.markers = markers;
+interact.viewRoots = viewpoints.viewRoots = [houseRoot, layout.root];
+viewpoints.markers = markers;
+if (Q.get('pins') === '0') Object.assign(markers.enabled, { rn: false, pano: false, photo: false });
+minimap.markers = markers; minimap.targets = viewpoints.targets;
+minimap.setExtra(rednote.blips());
+function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kind && p.target.id === target.id); if (pin) markers.activate({ pin }); else viewpoints.goTo(target); }
+ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
 
-// ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA. Toggle with the HQ chip.
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight); gtao.output = GTAOPass.OUTPUT.Default;
-Object.assign(gtao.gtaoMaterial.defines ?? {}, {});
-gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1, thickness: 1, distanceFallOff: 1, scale: 1.2, samples: 12, screenSpaceRadius: false });
-gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, radiusExponent: 1, rings: 2, samples: 16 });
-gtao.blendIntensity = 0.85;
-composer.addPass(gtao);
-const smaa = new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); composer.addPass(smaa);
-composer.addPass(new OutputPass());
-function toggleQuality() { state.quality = state.quality === 'hq' ? 'fast' : 'hq'; gtao.enabled = state.quality === 'hq'; renderer.setPixelRatio(state.quality === 'hq' ? Math.min(devicePixelRatio, 2) : 1); composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); document.getElementById('btn-quality').classList.toggle('on', state.quality === 'hq'); }
-document.getElementById('btn-quality').classList.add('on');
-// mobile: start in fast mode
-if (matchMedia('(pointer:coarse)').matches || innerWidth < 900) toggleQuality();
+// ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA. H toggles quality.
+function toggleDusk() { state.dusk = !state.dusk; ui.syncLegends(); applyTime(); }
+function toggleQuality() { state.quality = state.quality === 'hq' ? 'fast' : 'hq'; garden.setQuality(state.quality); lighting.setQuality(state.quality === 'hq'); renderer.setPixelRatio(state.quality === 'hq' ? Math.min(devicePixelRatio, 2) : 1); composer.setPixelRatio(renderer.getPixelRatio()); fitView(); ui.syncLegends(); }
+ui.syncLegends();
+// phones/tablets start in fast mode; desktops always start in HQ (H toggles)
+if (matchMedia('(pointer:coarse)').matches) toggleQuality();
 
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); gtao.setSize(innerWidth, innerHeight); });
-
-if (Q.has('dusk')) { state.dusk = true; await loadSky(DUSK); }
+if (Q.has('dusk')) state.dusk = true;
 if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
 if (Q.has('fast')) toggleQuality();
-applyTime();
+await lightingPreload;
+layout.prepareMirrors();
+const initialDusk = state.dusk;
+const warmupStart = performance.now();
+for (const warmDusk of [!initialDusk, initialDusk]) {
+  state.dusk = warmDusk;
+  await applyTime();
+  await renderer.compileAsync(scene, camera);
+  // Include background conversion, shadow materials, mirrors and HQ post passes.
+  // The loading screen covers these frames; the final frame restores the start time.
+  layout.updateMirrors(camera, state.quality === 'hq', renderer);
+  composer.render();
+  layout.warmMirrors(renderer);
+  await new Promise(resolve => requestAnimationFrame(resolve));
+}
+state.lightingWarmupMs = performance.now() - warmupStart;
 ui.progress(1, 'ready');
-state.ready = true; ui.ready();
-if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); }
+state.ready = true; ui.ready(); fitView();
+if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); fitView(); }
+document.getElementById('enter').addEventListener('click', fitView);
 
 // ---- Loop. Deterministic hooks for screenshots: window.renderAt(t) draws exactly time t.
-const clock = new THREE.Clock(); let simT = 0; let fpsN = 0, fpsT = 0, fpsChecked = Q.has('fast') || Q.has('hq');
+const clock = new THREE.Clock(); let simT = 0;
 function frame(dt) {
   simT += dt;
   tourCtl.update(dt);
   viewpoints.update(dt);
   player.update(dt);
   human.update(dt);
+  pets?.update(dt);
   interact.update(dt);
-  layout.animate(simT); layout.updateMirrors(camera.position);
+  markers.update(dt);
+  updateSwayLod(batch.lod, camera.position);
+  updateRoomVisibility(batch.rooms, camera.position);
+  layout.animate(simT); layout.updateMirrors(camera, state.quality === 'hq', renderer);
+  garden.update(simT);
   minimap.draw();
-  sun.target.position.set(player.pos.x, 0, player.pos.z); sun.position.set(player.pos.x + (state.dusk ? -30 : -14), state.dusk ? 7 : 24, player.pos.z + (state.dusk ? 18 : 10));
+  lighting.update(dt, false, !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
   if (viewpoints.panoActive) renderer.render(scene, camera); else composer.render();
 }
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { scene, camera, player, layout, viewpoints, tourCtl, rednote, state, applyTime, renderer, goTo, minimap, interact, THREE };
+window.__app = { scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
 let readyFrames = 0;
-const loop = () => { const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true; if (!fpsChecked && state.ready && document.getElementById('title').classList.contains('hidden')) { fpsN++; fpsT += dt; if (fpsT > 3) { fpsChecked = true; const fps = fpsN / fpsT; if (fps < 40 && state.quality === 'hq') { toggleQuality(); ui.toast(getLang() === 'zh' ? '已切到流畅模式（按 H 切回高画质）' : 'Switched to smooth mode (H for high quality)', 3000); } } } requestAnimationFrame(loop); };
+const loop = () => { const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true; requestAnimationFrame(loop); };
 requestAnimationFrame(loop);

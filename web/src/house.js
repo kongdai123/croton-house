@@ -1,27 +1,68 @@
 // House shell built from data/house.json (Zillow floor plan, metres, +y north).
 // World frame: X = plan x (east), Y up, Z = -plan y (north is -Z). Ceiling 2.44 m.
 import { THREE, M, box, cyl, plane, group, shadow, tube } from './kit.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const CEIL = 2.44;
 export const P = (x, y) => new THREE.Vector3(x, 0, -y);              // plan -> world (on the floor)
 export const planToWorld = (x, y, h = 0) => new THREE.Vector3(x, h, -y);
 export const headingToYaw = (deg) => THREE.MathUtils.degToRad(-deg);  // plan heading (0 = north, clockwise) -> yaw about +Y where yaw 0 looks -Z (north)
 
-// Regions outside the Zillow interior plan (hand-drawn plan + photos), plan coordinates.
-export const GARAGE = { x0: -8.02, x1: -3.507, y0: -4.72, y1: 0.656 };        // 15' × 19.5' garage, laundry closet inside at x>-4.93, y>-1.53
-export const LAUNDRY = { x0: -4.93, x1: -3.507, y0: -1.53, y1: 0.656 };
+// Regions outside the Zillow interior scan, from the owner's full floor plan (g07, 1024 px: 41.4 px/m in x, 40.5 in y)
+// and the garage photos (g04, g48, g49). Interior faces unless noted.
+export const GARAGE = { x0: -7.903, x1: -3.507, y0: -5.735, y1: 0.156 };      // 15' × 19.5', dark-painted; front flush with bedroom 3
+export const LAUNDRY = { x0: -7.903, x1: -6.364, y0: 0.156, y1: 1.481 };       // open nook in the garage's NW corner: stacked W/D, heater, sink
+export const WALKIN = { x0: -6.25, x1: -4.93, y0: 0.27, y1: 1.481 };           // primary walk-in closet (pine shelves, g29), door c1bf892aaa
+export const LINEN = { x0: -4.816, x1: -3.507, y0: -0.6, y1: 0.656 };          // louvered bifold closet off the vestibule (g27/g28), door 0f9916c91a
+export const FRONT_CLOSET_VIEW = { key: 'front-closet', x0: 3.85, x1: 8.10, z0: 1.30, z1: 5.95 }; // bedroom, doorway and reach-in cavity
+export const GARAGE_DOOR = { x0: -7.75, x1: -5.29, h: 2.13 };                  // 8' × 7' sectional, open (g04)
+export const SIDE_DOOR = { y0: -2.82, y1: -1.9 };                              // west wall, to the parking pad
 export const LOT = { x0: -14.5, x1: 14.5, y0: -14.2, y1: 19.5 };               // 95' × 110' lot
 export const PATIO = { x0: -2.4, x1: 4.2, y0: 5.47, y1: 10.2 };
 export const COURT_A = { x0: -6.2, x1: -2.4, y0: 5.47, y1: 8.6 };
 export const COURT_B = { x0: 4.2, x1: 8.3, y0: 5.47, y1: 8.6 };
-export const PORCH = { x0: -1.7, x1: 1.75, y0: -6.25, y1: -4.72 };
-export const WALK = { x0: -0.65, x1: 0.65, y0: -14.2, y1: -6.25 };
-export const DRIVE = { x0: -7.9, x1: -3.9, y0: -14.2, y1: -4.72 };
-export const PAD = { x0: -11.2, x1: -8.3, y0: -9.0, y1: -3.6 };
+export const PORCH = { x0: -3.507, x1: 3.97, y0: -5.85, y1: -4.72 };           // recessed between the garage and bedroom 3, under the main roof
+export const WALK = { x0: -0.65, x1: 0.65, y0: -7.85, y1: -6.0 };
+export const DRIVE = { x0: -8.17, x1: -4.9, y0: -14.2, y1: -6.0 };
+export const PAD = { x0: -11.5, x1: -8.17, y0: -7.2, y1: 0.15 };              // parking pad along the garage's west wall (g07)
+export const WEST_FENCE_Y = 0.17;
+// Outer face of the whole building (Zillow footprint + the garage annex): pieces on this outline get a stucco skin.
+export const EXT_FP = [[-8.0176, 5.471], [8.0292, 5.471], [8.0292, -5.8503], [3.9699, -5.8503], [3.9699, -4.7203], [-3.507, -4.7203], [-3.507, -5.8503], [-8.0176, -5.8503]];
+// Openings the Zillow scan missed: the primary-bath window over the toilet (g31, west wall in g07).
+const EXTRA_WINDOWS = [{ id: 'pbathW', kind: 'window', dir: 'V', x0: -8.018, x1: -7.903, y0: 2.58, y1: 3.35, width: 0.77, sillOverride: 1.15, headOverride: 2.06 }];
+// g18: sink window spans ~7.2 six-inch tiles, with a tile column beside the fridge panel.
+export const KITCHEN_WINDOW = { x0: -2.804, x1: -1.704, sill: 1.10, head: 2.0 };
+const WINDOW_SIZE = { '26cd997f2a': KITCHEN_WINDOW };
+function resizeWindows(house) {
+  for (const o of house.openings) {
+    const s = WINDOW_SIZE[o.id]; if (!s) continue;
+    const [a0, a1, b0, b1] = o.dir === 'H' ? ['x0', 'x1', 'y0', 'y1'] : ['y0', 'y1', 'x0', 'x1'];
+    const old0 = o[a0], old1 = o[a1], lo = s[a0] ?? old0, hi = s[a1] ?? old1;
+    for (const p of house.pieces) if (p.wall === o.wall && p[b0] === o[b0] && p[b1] === o[b1]) {
+      if (p[a0] === old0 && p[a1] === old1 && (p.kind === 'sill' || p.kind === 'lintel')) {
+        p[a0] = lo; p[a1] = hi;
+        if (p.kind === 'sill') p.z1 = s.sill; else p.z0 = s.head;
+      } else if (p.kind === 'solid') {
+        if (p[a1] === old0) p[a1] = lo;
+        if (p[a0] === old1) p[a0] = hi;
+      }
+    }
+    o[a0] = lo; o[a1] = hi; o.width = hi - lo;
+    o.sillOverride = s.sill; o.headOverride = s.head;
+  }
+}
+const once = (fn) => { let v; return () => (v ??= fn()); };
+// Garage finishes (g48/g49): chocolate-charcoal paint over block, near-black sealed slab, unpainted drywall header over the laundry nook.
+const GM = {
+  wall: once(() => { const m = M.stucco().clone(); m.color.set(0x4a3e36); m.roughness = 0.9; m.normalScale.set(0.18, 0.18); return m; }),
+  floor: once(() => { const m = M.concrete().clone(); m.color.set(0x3b3937); m.roughness = 0.55; m.normalScale.set(0.15, 0.15); return m; }),
+  ceiling: once(() => new THREE.MeshStandardMaterial({ color: 0x3e3833, roughness: 0.95 })),
+  drywall: once(() => new THREE.MeshStandardMaterial({ color: 0xcdbfae, roughness: 0.92 })),
+};
 
-const colliders = [];   // {x0,x1,z0,z1} world AABBs the player cannot cross
+const colliders = [];   // {x0,x1,z0,z1} world AABBs the player cannot cross; `top` = height for walls under windows
 export const getColliders = () => colliders;
-export function addAABB(x0, x1, z0, z1, tag = '') { colliders.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tag }); }
+export function addAABB(x0, x1, z0, z1, tag = '', top = CEIL) { colliders.push({ x0: Math.min(x0, x1), x1: Math.max(x0, x1), z0: Math.min(z0, z1), z1: Math.max(z0, z1), tag, top }); }
 const doors = [];       // interactive doors {group, pivot, open, angle, kind}
 export const getDoors = () => doors;
 
@@ -30,8 +71,11 @@ function shapeFromPoly(pts) { return new THREE.Shape(pts.map(p => new THREE.Vect
 function slab(pts, y, mat, { up = true, holes = [] } = {}) {
   const s = shapeFromPoly(pts); for (const h of holes) s.holes.push(new THREE.Path(h.map(p => new THREE.Vector2(p[0], p[1]))));
   const g = new THREE.ShapeGeometry(s, 8);
-  g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);      // XY plane -> XZ; plan y becomes -z for up (good), +z for down -> flip below
-  if (!up) g.scale(1, 1, -1);
+  g.rotateX(-Math.PI / 2);                          // XY plane -> XZ, plan y -> -z
+  if (!up) {                                        // ceilings: reverse the winding so the front face looks down
+    const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
+    const n = g.attributes.normal.array; for (let i = 1; i < n.length; i += 3) n[i] = -n[i];
+  }
   const m = new THREE.Mesh(g, mat); m.position.y = y; m.receiveShadow = true; m.castShadow = false; return m;
 }
 function rectPts(r) { return [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]]; }
@@ -40,11 +84,12 @@ function rectPts(r) { return [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r
 function wallBox(x0, x1, y0, y1, h0, h1, mat, collide = true) {
   const w = x1 - x0, d = y1 - y0, h = h1 - h0;
   const m = box(w, h, d, mat, { x: (x0 + x1) / 2, y: h0 + h / 2, z: -(y0 + y1) / 2 });
-  if (collide && h0 < 1.2) addAABB(x0, x1, -y1, -y0, 'wall');
+  if (collide && h0 < 1.2) addAABB(x0, x1, -y1, -y0, 'wall', h1);
   return m;
 }
 
 export function buildHouse(house, mods, opts = {}) {
+  resizeWindows(house);
   const root = new THREE.Group(); root.name = 'house';
   const interior = new THREE.Group(), exterior = new THREE.Group(); root.add(interior, exterior);
   const fp = house.footprint;
@@ -58,55 +103,66 @@ export function buildHouse(house, mods, opts = {}) {
     if (note && /Bathroom/.test(note.label)) { const t = slab(r.pts, 0.004, M.tileWhite()); interior.add(t); }
   }
   interior.add(slab(fp, CEIL, M.ceiling(), { up: false }));
-  // garage + laundry: concrete floor, dark grey walls, flat ceiling
-  const garagePts = [[GARAGE.x0, GARAGE.y0], [GARAGE.x1, GARAGE.y0], [GARAGE.x1, GARAGE.y1], [GARAGE.x0, GARAGE.y1]];
-  interior.add(slab(garagePts, -0.004, M.concrete()));
-  interior.add(slab(garagePts, CEIL, M.ceiling(), { up: false }));
+  // annex: the two closets are part of the house (oak, white ceiling); garage + laundry nook get the dark slab and ceiling
+  for (const r of [WALKIN, LINEN]) { interior.add(slab(rectPts(r), 0.0, floorMat)); interior.add(slab(rectPts(r), CEIL, M.ceiling(), { up: false })); }
+  const garagePts = [[GARAGE.x0, GARAGE.y0], [GARAGE.x1, GARAGE.y0], [GARAGE.x1, LINEN.y0 - 0.114], [-4.93, LINEN.y0 - 0.114], [-4.93, GARAGE.y1], [LAUNDRY.x1, GARAGE.y1], [LAUNDRY.x1, LAUNDRY.y1], [LAUNDRY.x0, LAUNDRY.y1]];
+  interior.add(slab(garagePts, -0.004, GM.floor()));
+  interior.add(slab(garagePts, CEIL, GM.ceiling(), { up: false }));
 
   // ---- Walls from pieces ----
   const wallMat = M.wallPaint();
-  const outside = (p) => isExteriorPiece(p, fp);
-  for (const p of house.pieces) {
-    const mat = wallMat;
+  const nichePaint = wallMat.clone(); nichePaint.color.set(0xe6e2d9);
+  // RedNote 6acbf22b00: west-facing cavity below Bedroom B's closet. Replace the
+  // scanned narrow south return and back with a 0.908 m opening, 0.621 m deep.
+  // These pieces drive both the visible walls/baseboards and the collision list.
+  const nicheWalls = new Set(['9ea2fa065a-4b22d8e16a', '9ea2fa065a-a909747e2a', '9ea2fa065a-5dcc2680fa']);
+  const pieces = cutOpenings(house.pieces.filter(p => !nicheWalls.has(p.wall)), EXTRA_WINDOWS);
+  pieces.push(
+    { wall: 'niche-back', dir: 'V', kind: 'solid', x0: 3.9699, x1: 4.0842, y0: 0.69, y1: 1.7653, z0: 0, z1: CEIL },
+    { wall: 'niche-pier', dir: 'H', kind: 'solid', x0: 3.3489, x1: 4.0842, y0: 0.69, y1: 0.80, z0: 0, z1: CEIL },
+  );
+  const outside = (p) => isExteriorPiece(p, EXT_FP);
+  for (const p of pieces) {
+    const mat = p.wall.startsWith('niche-') ? nichePaint : wallMat;
     if (p.wall === 'null-88b2e5c46a') { interior.add(wallBox(p.x0, p.x1, p.y0, p.y1, 0, 1.02, wallMat, true)); interior.add(box(p.x1 - p.x0 + 0.04, 0.03, 0.30, M.quartz(), { x: (p.x0 + p.x1) / 2, y: 1.035, z: -(p.y0 + p.y1) / 2 })); continue; }
     interior.add(wallBox(p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, mat, p.kind === 'solid' || p.kind === 'sill'));
     if (outside(p)) {
       // exterior skin: stucco, 0.15 thick, flush with the openings
-      const s = skinRect(p, fp, 0.15);
+      const s = skinRect(p, EXT_FP, 0.15);
       if (s) interior.add(wallBox(s.x0, s.x1, s.y0, s.y1, p.z0, p.z1 + (p.z1 >= CEIL - 1e-3 ? 0.12 : 0), M.stucco(), p.kind === 'solid' || p.kind === 'sill'));
     }
   }
-  // garage walls (outside the Zillow plan): south (garage door), west, north, plus laundry partition
-  const gm = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.9 });   // the garage is painted dark grey (photos)
-  const GW = 0.26;
-  // south wall with garage door opening 2.75 w
-  const gd0 = -6.9, gd1 = -4.15;
-  interior.add(wallBox(GARAGE.x0 - GW, gd0, GARAGE.y0 - GW, GARAGE.y0, 0, CEIL + 0.12, M.stucco()));
-  interior.add(wallBox(gd1, GARAGE.x1, GARAGE.y0 - GW, GARAGE.y0, 0, CEIL + 0.12, M.stucco()));
-  interior.add(wallBox(gd0, gd1, GARAGE.y0 - GW, GARAGE.y0, 2.15, CEIL + 0.12, M.stucco(), false));
-  interior.add(wallBox(GARAGE.x0 - GW, GARAGE.x0, GARAGE.y0 - GW, GARAGE.y1 + 0.0, 0, CEIL + 0.12, M.stucco()));
-  // north wall of garage up to the house wall (-8.02..-4.93 at y=0.656) is interior to the laundry; exterior skin from -8.02..-4.93 at y=1.48 handled by plan walls (null-a3ab... are plan walls at y 1.48 - those are exterior of the primary bath). Laundry: x -8.02..-4.93, y 0.656..1.48 -> its south wall:
-  interior.add(wallBox(GARAGE.x0, LAUNDRY.x0, GARAGE.y1, GARAGE.y1 + 0.114, 0, CEIL, gm));
-  // inside faces of garage: dark paint panels on the stucco walls
-  const paintInset = 0.002;
-  interior.add(wallBox(GARAGE.x0, GARAGE.x0 + 0.01, GARAGE.y0, GARAGE.y1, 0, CEIL, gm, false));
-  interior.add(wallBox(GARAGE.x0, gd0, GARAGE.y0, GARAGE.y0 + 0.01, 0, CEIL, gm, false));
-  interior.add(wallBox(gd1, GARAGE.x1, GARAGE.y0, GARAGE.y0 + 0.01, 0, CEIL, gm, false));
-  interior.add(wallBox(GARAGE.x1 - 0.01, GARAGE.x1, GARAGE.y0, LAUNDRY.y0, 0, CEIL, gm, false));
-  // laundry closet partition walls (plan "closet": x -4.93..-3.507, y -1.53..0.656), door to kitchen already in plan wall; make west & south walls
-  interior.add(wallBox(LAUNDRY.x0 - 0.114, LAUNDRY.x0, LAUNDRY.y0, LAUNDRY.y1, 0, CEIL, wallMat));
-  interior.add(wallBox(LAUNDRY.x0 - 0.114, LAUNDRY.x1, LAUNDRY.y0 - 0.114, LAUNDRY.y0, 0, CEIL, wallMat));
-  // garage door (white sectional, closed) and its frame
-  const gdoor = group();
-  for (let i = 0; i < 4; i++) gdoor.add(box(gd1 - gd0 - 0.1, 0.5, 0.045, M.doorWhite(), { r: 0.006, x: (gd0 + gd1) / 2, y: 0.27 + i * 0.52, z: -(GARAGE.y0 - 0.13) }));
-  interior.add(gdoor); addAABB(gd0, gd1, -(GARAGE.y0), -(GARAGE.y0 - 0.2), 'garagedoor');
+  buildAnnex(interior, house);
+
+  // ---- Primary bedroom: dropped soffit along the headboard wall (g26, panos 60243e1740 / b9a18422cd) ----
+  interior.add(box(1.14, CEIL - 2.21, 5.357 - 1.822, M.ceiling(), { x: -2.284 - 0.57, y: (CEIL + 2.21) / 2, z: -(1.822 + 5.357) / 2 }));
 
   // ---- Baseboards (interior faces) ----
-  for (const p of house.pieces) if (p.kind === 'solid') {
+  for (const p of pieces) if (p.kind === 'solid') {
     const t = 0.012, h = 0.09;
     if (p.dir === 'H') { interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y1 + t / 2) })); interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y0 - t / 2) })); }
     else { interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x1 + t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 })); interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x0 - t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 })); }
   }
+
+  // Alcove end-grain baseboard on the pier face; the back/side returns come from
+  // the wall pieces above. The existing continuous ceiling closes the cavity.
+  interior.add(box(0.012, 0.09, 0.134, M.trim(), { x: 3.3429, y: 0.045, z: -0.745 }));
+  // Oak transition strip runs along the dining opening, ending at the cavity's north jamb.
+  interior.add(box(2.929, 0.018, 0.105, floorMat, { x: 1.8845, y: 0.009, z: -1.70, r: 0.003, seg: 1 }));
+  // Flush recessed can: opaque baffle hides the ceiling behind the glowing lens.
+  const can = group(); can.name = 'niche-recessed-can';
+  can.add(cyl(0.087, 0.087, 0.006, M.trim(), { x: 3.65, y: CEIL - 0.005, z: -1.254, seg: 32 }));
+  const baffle = new THREE.MeshStandardMaterial({ color: 0xbcb5a5, roughness: 0.85 });
+  const lens = new THREE.MeshStandardMaterial({ color: 0xffeed1, emissive: 0xffd49a, emissiveIntensity: 2.2, roughness: 0.5 });
+  can.add(cyl(0.071, 0.071, 0.009, baffle, { x: 3.65, y: CEIL - 0.009, z: -1.254, seg: 32 }));
+  const canLens = cyl(0.057, 0.057, 0.003, lens, { x: 3.65, y: CEIL - 0.015, z: -1.254, seg: 32 });
+  // This can is on in the daytime reference too; preserve its glow across time toggles.
+  canLens.onBeforeRender = () => { canLens.material.emissiveIntensity = 2.2; };
+  can.add(canLens);
+  const wash = new THREE.SpotLight(0xffd7aa, 3.5, 2.8, 0.85, 0.85, 2);
+  wash.name = 'niche-warm-wash'; wash.position.set(3.65, CEIL - 0.03, -1.254);
+  wash.target.position.set(3.94, 1.72, -1.254); wash.castShadow = false;
+  can.add(wash, wash.target); interior.add(can);
 
   // ---- Header beam at the living -> dining/office opening (dropped soffit, as in the photos) ----
   interior.add(box(3.35 - 0.42, CEIL - 2.13, 0.32, wallMat, { x: (0.42 + 3.35) / 2, y: (CEIL + 2.13) / 2, z: -1.765 }));
@@ -116,8 +172,7 @@ export function buildHouse(house, mods, opts = {}) {
   for (const o of house.openings) {
     if (o.kind === 'door') interior.add(buildDoor(o, house)); else interior.add(buildWindow(o, house, mods));
   }
-  // primary bath window (not on the Zillow plan but visible in g34): small awning window on the north wall
-  interior.add(buildWindow({ id: 'pbath', kind: 'window', dir: 'H', x0: -7.5, x1: -6.9, y0: 5.357, y1: 5.471, width: 0.6, sillOverride: 1.5, headOverride: 2.06 }, house, mods));
+  for (const o of EXTRA_WINDOWS) interior.add(buildWindow(o, house, mods));
 
   // ---- Exterior ----
   exterior.add(buildRoof());
@@ -146,38 +201,172 @@ function skinRect(p, fp, t) {
   const out = inside(cx + 0.2, cy) ? -1 : 1; return out > 0 ? { x0: p.x1, x1: p.x1 + t, y0: p.y0, y1: p.y1 } : { x0: p.x0 - t, x1: p.x0, y0: p.y0, y1: p.y1 };
 }
 export function pointInPoly(pt, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1]; if (((yi > pt[1]) !== (yj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi)) c = !c; } return c; }
+// Split solid pieces around extra windows into wall | sill | lintel | wall, the way the scan's own pieces come.
+function cutOpenings(pieces, extra) {
+  const out = [];
+  for (const p of pieces) {
+    const o = p.kind === 'solid' && extra.find(e => e.dir === p.dir && (p.dir === 'V'
+      ? Math.abs((p.x0 + p.x1) / 2 - (e.x0 + e.x1) / 2) < 0.06 && p.y0 < e.y0 && p.y1 > e.y1
+      : Math.abs((p.y0 + p.y1) / 2 - (e.y0 + e.y1) / 2) < 0.06 && p.x0 < e.x0 && p.x1 > e.x1));
+    if (!o) { out.push(p); continue; }
+    const [a0, a1, k0, k1] = p.dir === 'V' ? ['y0', 'y1', o.y0, o.y1] : ['x0', 'x1', o.x0, o.x1];
+    out.push({ ...p, [a1]: k0 }, { ...p, [a0]: k1 }, { ...p, [a0]: k0, [a1]: k1, kind: 'sill', z0: 0, z1: o.sillOverride }, { ...p, [a0]: k0, [a1]: k1, kind: 'lintel', z0: o.headOverride, z1: CEIL });
+  }
+  return out;
+}
+
+// ---- Garage annex (owner's plan g07; photos g04, g27–g29, g48, g49) ----
+// Block walls with a stucco skin outside and chocolate paint inside; the walk-in and linen closets are white with
+// pine fit-outs; the laundry nook stays open to the garage under a drywall bulkhead.
+function buildAnnex(g, house) {
+  const st = M.stucco(), dark = GM.wall(), white = M.wallPaint(), pine = M.pine(), SK = 0.15, HX = CEIL + 0.12;
+  const W = (x0, x1, y0, y1, h0, h1, m, c = true) => g.add(wallBox(x0, x1, y0, y1, h0, h1, m, c));
+  const xo = -8.0176, yo = -5.8503, xe = -3.393;            // outer faces of the west, front and porch-side block walls
+  const { y0: sd0, y1: sd1 } = SIDE_DOOR, { x0: gd0, x1: gd1, h: gdh } = GARAGE_DOOR;
+  // west wall + skin, side door to the parking pad
+  for (const [a, b] of [[yo, sd0], [sd1, LAUNDRY.y1]]) { W(xo, GARAGE.x0, a, b, 0, CEIL, dark); W(xo - SK, xo, a, b, 0, HX, st); }
+  W(xo, GARAGE.x0, sd0, sd1, house.doorHeight, CEIL, dark, false); W(xo - SK, xo, sd0, sd1, house.doorHeight, HX, st, false);
+  g.add(buildDoor({ id: 'gside', kind: 'door', dir: 'V', x0: xo, x1: GARAGE.x0, y0: sd0, y1: sd1, width: sd1 - sd0 }, house));
+  // front wall + skin around the 8' × 7' garage door opening
+  for (const [a, b] of [[GARAGE.x0, gd0], [gd1, GARAGE.x1]]) W(a, b, yo, GARAGE.y0, 0, CEIL, dark);
+  for (const [a, b] of [[xo - SK, gd0], [gd1, xe + SK]]) W(a, b, yo - SK, yo, 0, HX, st);
+  W(gd0, gd1, yo - SK, GARAGE.y0, gdh, HX, st, false);
+  W(gd0, gd1, GARAGE.y0, GARAGE.y0 + 0.004, gdh, CEIL, dark, false);
+  // white door jamb liners + exterior casing (g04)
+  const trim = M.trim(), jz = -(yo - SK + GARAGE.y0) / 2, jd = GARAGE.y0 - (yo - SK);
+  for (const x of [gd0 + 0.01, gd1 - 0.01]) g.add(box(0.02, gdh, jd, trim, { x, y: gdh / 2, z: jz }));
+  g.add(box(gd1 - gd0, 0.02, jd, trim, { x: (gd0 + gd1) / 2, y: gdh - 0.01, z: jz }));
+  for (const x of [gd0 - 0.045, gd1 + 0.045]) g.add(box(0.09, gdh + 0.09, 0.025, trim, { x, y: (gdh + 0.09) / 2, z: -(yo - SK - 0.012) }));
+  g.add(box(gd1 - gd0 + 0.18, 0.09, 0.025, trim, { x: (gd0 + gd1) / 2, y: gdh + 0.045, z: -(yo - SK - 0.012) }));
+  // porch-side wall (the garage's east face, under the main roof) + skin
+  W(GARAGE.x1, xe, yo, PORCH.y1, 0, CEIL, dark); W(xe, xe + SK, yo, PORCH.y1, 0, HX, st);
+  // chocolate paint over the kitchen wall's garage face, stopping at the door casing
+  W(GARAGE.x1 - 0.016, GARAGE.x1 - 0.012, PORCH.y1, -1.423, 0, CEIL, dark, false);
+
+  // linen closet (louvered bifold off the vestibule): west + south walls, pine shelving at the back
+  const T = 0.114, ls0 = LINEN.y0 - T;
+  W(-4.93, LINEN.x0, ls0, LINEN.y1, 0, CEIL, white); W(-4.93, GARAGE.x1, ls0, LINEN.y0, 0, CEIL, white);
+  W(-4.934, -4.93, ls0, GARAGE.y1, 0, CEIL, dark, false); W(-4.93, GARAGE.x1, ls0 - 0.004, ls0, 0, CEIL, dark, false);
+  for (let i = 0; i < 5; i++) {
+    const y = 0.42 + i * 0.4;
+    g.add(box(LINEN.x1 - LINEN.x0, 0.022, 0.4, pine, { x: (LINEN.x0 + LINEN.x1) / 2, y, z: -(LINEN.y0 + 0.2) }));
+    for (const x of [LINEN.x0 + 0.01, LINEN.x1 - 0.01]) g.add(box(0.02, 0.03, 0.4, pine, { x, y: y - 0.026, z: -(LINEN.y0 + 0.2) }));
+  }
+
+  // walk-in closet: south wall to the garage, partition to the laundry nook; pine hanging bay + cubbies (g29)
+  W(LAUNDRY.x1, -4.93, GARAGE.y1, WALKIN.y0, 0, CEIL, white); W(LAUNDRY.x1, WALKIN.x0, WALKIN.y0, WALKIN.y1, 0, CEIL, white);
+  W(LAUNDRY.x1 - 0.004, -4.934, GARAGE.y1 - 0.004, GARAGE.y1, 0, CEIL, dark, false);
+  W(LAUNDRY.x1 - 0.004, LAUNDRY.x1, GARAGE.y1, LAUNDRY.y1 - 0.016, 0, CEIL, dark, false);
+  const hx0 = WALKIN.x0, hx1 = -5.08, hd = 0.5, hz = -(WALKIN.y0 + hd / 2);
+  for (const x of [hx0 + 0.009, hx1 - 0.009]) g.add(box(0.018, 2.05, hd, pine, { x, y: 1.025, z: hz }));
+  for (const y of [1.74, 2.04]) g.add(box(hx1 - hx0, 0.02, hd, pine, { x: (hx0 + hx1) / 2, y, z: hz }));
+  g.add(cyl(0.012, 0.012, hx1 - hx0 - 0.036, M.steel(), { x: (hx0 + hx1) / 2, y: 1.66, z: -(WALKIN.y0 + 0.27), rz: Math.PI / 2, seg: 12 }));
+  for (let i = 0; i < 9; i++) {
+    const hg = new THREE.Group(); hg.position.set(hx0 + 0.12 + i * 0.105, 1.66, -(WALKIN.y0 + 0.27)); hg.rotation.y = Math.PI / 2 + (i % 3 - 1) * 0.06;
+    hg.add(box(0.42, 0.014, 0.012, pine, { y: -0.075 })); hg.add(tube([[0, -0.07, 0], [0, -0.02, 0], [0, 0.012, 0.01], [0, 0.012, -0.012]], 0.0025, M.steel(), { seg: 8, radial: 5 }));
+    for (const s of [-1, 1]) { const arm = box(0.2, 0.012, 0.012, pine, { x: s * 0.1, y: -0.045 }); arm.rotation.z = s * 0.3; hg.add(arm); }
+    g.add(hg);
+  }
+  const cx0 = WALKIN.x0, cx1 = -5.5, cd = 0.32, cz = -(WALKIN.y1 - cd / 2);
+  for (const x of [cx0 + 0.009, (cx0 + cx1) / 2, cx1 - 0.009]) g.add(box(0.018, 2.1, cd, pine, { x, y: 1.05, z: cz }));
+  for (let i = 0; i < 7; i++) g.add(box(cx1 - cx0, 0.018, cd, pine, { x: (cx0 + cx1) / 2, y: 0.06 + i * 0.34, z: cz }));
+  g.add(cyl(0.11, 0.11, 0.03, M.ceiling(), { x: (WALKIN.x0 + WALKIN.x1) / 2, y: CEIL - 0.015, z: -(WALKIN.y0 + WALKIN.y1) / 2, seg: 24 }));
+
+  // laundry nook: bulkhead across its mouth (g48), chocolate paint on the bath wall above the machines
+  W(LAUNDRY.x0, LAUNDRY.x1, GARAGE.y1 - 0.12, WALKIN.y0, 2.08, CEIL, GM.drywall(), false);
+  W(LAUNDRY.x0, LAUNDRY.x1 - 0.004, LAUNDRY.y1 - 0.016, LAUNDRY.y1 - 0.012, 0, CEIL, dark, false);
+}
 
 // ---- Doors ----
 const DOOR_TYPES = {
   ca2bb42b5a: 'front', '161782cdfa': 'french4', bf8cb9f37a: 'french2', e5f2f69eea: 'slider', '9f018d7dea': 'slider',
-  '0f9916c91a': 'louver', d8425baf7a: 'louverWhite', '3809b9067a': 'opening', '2e2d4a125a': 'door', '40c340903a': 'door',
+  '0f9916c91a': 'bifold', d8425baf7a: 'bifold', '3809b9067a': 'opening', c1bf892aaa: 'pineOpening', '2e2d4a125a': 'door', '40c340903a': 'door',
 };
+// Hinge jamb + swing side (plan compass) and resting state. Unlisted doors keep the scan default.
+const DOOR_SPEC = {
+  d8425baf7a: { white: true, swing: 'S', open: false },    // front bedroom: white louvers fold into the room
+  '2e2d4a125a': { hinge: 'S', swing: 'W', open: false },   // kitchen -> garage, into the garage (closed in g12)
+  '40c340903a': { hinge: 'N', swing: 'E', open: true },    // vestibule -> kitchen, back against the kitchen wall so the vestibule stays clear
+  '143ab6b9ba': { hinge: 'S', swing: 'E', open: false },   // primary bath, into the bedroom
+  '60bf34160a': { hinge: 'W', swing: 'S', open: true },    // bedroom 3, into the room and back against its west wall (not into the hall)
+  '498f1f300a': { hinge: 'E', swing: 'N', open: true },    // bedroom B, back against the bath wall stub, clear of the wide opening
+  '57fafde9ea': { hinge: 'E', swing: 'S', open: false },   // bath B, into the bath
+  '054ac1818a': { hinge: 'S', swing: 'E', open: false },   // hall bath, into the bath
+  '029f0013aa': { hinge: 'E', swing: 'N', open: false },   // bath linen closet (g31)
+  gside: { hinge: 'N', swing: 'E', open: false },          // garage side door to the parking pad
+};
+// Six-panel leaf (the interior doors in g26/g31): raised panels both faces, 0.11 stiles.
+function sixPanel(leafW, H, leafT, mat, x0) {
+  const g = new THREE.Group();
+  g.add(box(leafW, H - 0.02, leafT, mat, { r: 0.003, x: x0 + leafW / 2, y: (H - 0.02) / 2 + 0.01 }));
+  const st = 0.11, mull = 0.1, pw = (leafW - 2 * st - mull) / 2;
+  const rows = [[0.22, 0.78], [0.98, 1.62], [1.72, H - 0.12]];
+  for (const [a, b] of rows) for (const i of [0, 1]) for (const s of [-1, 1]) {
+    const px = x0 + st + pw / 2 + i * (pw + mull);
+    g.add(box(pw - 0.02, b - a - 0.02, 0.008, mat, { r: 0.0035, seg: 2, x: px, y: (a + b) / 2, z: s * (leafT / 2 + 0.001) }));
+    g.add(box(pw, b - a, 0.002, M.doorWhite(), { x: px, y: (a + b) / 2, z: s * (leafT / 2 - 0.0004) }));
+  }
+  return g;
+}
+// One louvered leaf as a single geometry (stiles, rails, 45° slats in two fields), origin at its bottom centre.
+function louverLeafGeo(w, h, t, slatDepth = t * 0.95) {
+  const parts = [], st = 0.042, rt = 0.07, rb = 0.11, rm = 0.07, mid = h * 0.47;
+  const add = (bw, bh, bd, x, y, z = 0, rx = 0) => { const b = new THREE.BoxGeometry(bw, bh, bd); if (rx) b.rotateX(rx); b.translate(x, y, z); parts.push(b); };
+  for (const s of [-1, 1]) add(st, h, t, s * (w / 2 - st / 2), h / 2);
+  add(w - 2 * st, rb, t, 0, rb / 2); add(w - 2 * st, rt, t, 0, h - rt / 2); add(w - 2 * st, rm, t, 0, mid);
+  for (const [a, b] of [[rb, mid - rm / 2], [mid + rm / 2, h - rt]]) for (let y = a + 0.022; y < b - 0.012; y += 0.036) add(w - 2 * st, 0.006, slatDepth, 0, y, 0, -0.75);
+  const g = mergeGeometries(parts, false); for (const p of parts) p.dispose(); return g;
+}
 function buildDoor(o, house) {
   const g = new THREE.Group(); g.name = 'door-' + o.id;
+  if (o.id === 'd8425baf7a') g.userData.viewRoom = FRONT_CLOSET_VIEW;
   const type = DOOR_TYPES[o.id] || 'door';
   const H = house.doorHeight, w = o.width, isH = o.dir === 'H';
   const cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2, thick = isH ? o.y1 - o.y0 : o.x1 - o.x0;
   g.position.set(cx, 0, -cy); g.rotation.y = isH ? 0 : Math.PI / 2;   // local x runs along the opening, local z through the wall
-  const jamb = 0.016, trimW = 0.07;
+  const jamb = 0.016, trimW = 0.07, tm = type === 'pineOpening' || type === 'bifold' && !DOOR_SPEC[o.id]?.white ? M.pine() : M.trim();
   if (type !== 'opening') {
     // jambs + casing both sides
-    g.add(box(jamb, H, thick + 0.02, M.trim(), { x: -w / 2 + jamb / 2, y: H / 2 })); g.add(box(jamb, H, thick + 0.02, M.trim(), { x: w / 2 - jamb / 2, y: H / 2 })); g.add(box(w, jamb, thick + 0.02, M.trim(), { y: H - jamb / 2 }));
-    for (const s of [-1, 1]) { g.add(box(w + trimW * 2, trimW, 0.014, M.trim(), { y: H + trimW / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, M.trim(), { x: -w / 2 - trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, M.trim(), { x: w / 2 + trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); }
+    g.add(box(jamb, H, thick + 0.02, tm, { x: -w / 2 + jamb / 2, y: H / 2 })); g.add(box(jamb, H, thick + 0.02, tm, { x: w / 2 - jamb / 2, y: H / 2 })); g.add(box(w, jamb, thick + 0.02, tm, { y: H - jamb / 2 }));
+    for (const s of [-1, 1]) { g.add(box(w + trimW * 2, trimW, 0.014, tm, { y: H + trimW / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: -w / 2 - trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: w / 2 + trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); }
   } else {
     for (const s of [-1, 1]) g.add(box(w + trimW * 2, trimW, 0.014, M.trim(), { y: H + trimW / 2, z: s * (thick / 2 + 0.007) }));
   }
   const leafW = w - jamb * 2, leafT = 0.04;
   if (type === 'door' || type === 'front') {
-    const pivot = new THREE.Group(); pivot.position.set(-leafW / 2, 0, 0); g.add(pivot);
-    const leaf = box(leafW, H - 0.02, leafT, M.doorWhite(), { r: 0.003, x: leafW / 2, y: (H - 0.02) / 2 + 0.01 });
-    pivot.add(leaf);
-    // flat panel door with a shallow recessed rectangle, black lever handle
-    pivot.add(box(leafW - 0.16, H - 0.4, 0.004, M.doorWhite(), { x: leafW / 2, y: H / 2, z: leafT / 2 + 0.002 }));
-    for (const s of [-1, 1]) { pivot.add(cyl(0.028, 0.028, 0.012, M.doorBlackHardware(), { x: leafW - 0.08, y: 1.0, z: s * (leafT / 2 + 0.006), rx: Math.PI / 2 })); pivot.add(box(0.12, 0.016, 0.016, M.doorBlackHardware(), { x: leafW - 0.08 - 0.05, y: 1.0, z: s * (leafT / 2 + 0.03), r: 0.005 })); }
-    const open = type === 'front' ? 0 : (o.id === '2e2d4a125a' ? 0 : 1.35);
-    pivot.rotation.y = open;
-    doors.push({ id: o.id, group: g, pivot, angle: pivot.rotation.y, target: pivot.rotation.y, kind: type, w: leafW, plan: { cx, cy, isH } });
-    g.userData.door = doors[doors.length - 1];
+    const sp = DOOR_SPEC[o.id], hs = sp && (sp.hinge === 'N' || sp.hinge === 'E') ? -1 : 1;   // +1: hinges on the low-x / low-y jamb
+    const pivot = new THREE.Group(); pivot.position.set(-hs * leafW / 2, 0, 0); g.add(pivot);
+    pivot.add(sixPanel(leafW, H, leafT, M.doorWhite(), hs > 0 ? 0 : -leafW));
+    for (const s of [-1, 1]) { pivot.add(cyl(0.028, 0.028, 0.012, M.doorBlackHardware(), { x: hs * (leafW - 0.065), y: 1.0, z: s * (leafT / 2 + 0.006), rx: Math.PI / 2 })); pivot.add(box(0.12, 0.016, 0.016, M.doorBlackHardware(), { x: hs * (leafW - 0.065 - 0.05), y: 1.0, z: s * (leafT / 2 + 0.03), r: 0.005 })); }
+    // rotating +θ swings a low-end-hinged leaf toward -local z (north on H walls, west on V walls)
+    const openAngle = sp ? 1.45 * hs * ((isH ? sp.swing === 'N' : sp.swing === 'W') ? 1 : -1) : (type === 'front' ? -1.5 : 1.35);
+    const open0 = sp ? (sp.open ? openAngle : 0) : (type === 'front' || o.id === '2e2d4a125a' ? 0 : 1.35);
+    pivot.rotation.y = open0;
+    const d = { id: o.id, group: g, pivot, angle: open0, target: open0, openAngle, kind: type, w: leafW, plan: { cx, cy, isH }, openDefault: open0 !== 0 };
+    doors.push(d); g.userData.door = d;
+    if (!open0) setHinged(d, false);
+  } else if (type === 'bifold') {
+    // Two pairs fold to their jambs; pine opens into the vestibule, white into the bedroom.
+    const sp = DOOR_SPEC[o.id], swing = sp?.swing === 'S' ? -1 : 1;
+    const n = 4, lw = leafW / n - 0.003, lt = 0.03, P = sp?.white ? M.doorWhite() : M.pine();
+    const leafGeo = louverLeafGeo(lw, H - 0.03, lt, sp?.white ? 0.054 : lt * 0.95);
+    const pairs = [];
+    for (const s of [1, -1]) {
+      const p1 = new THREE.Group(); p1.position.set(-s * leafW / 2, 0, -swing * lt / 2); g.add(p1);
+      const p2 = new THREE.Group(); p2.position.set(s * (lw + 0.003), 0, 0); p1.add(p2);
+      for (const p of [p1, p2]) { const m = new THREE.Mesh(leafGeo, P); m.castShadow = m.receiveShadow = true; m.position.set(s * lw / 2, 0.01, 0); p.add(m); }
+      p2.add(cyl(0.012, 0.012, 0.03, M.blackSteel(), { x: s * (lw - 0.04), y: 1.0, z: -swing * (lt / 2 + 0.012), rx: Math.PI / 2, seg: 12 }));
+      pairs.push({ p1, p2, s });
+    }
+    if (!sp?.white) for (const sz of [-1, 1]) g.add(box(w + trimW * 2, CEIL - H - trimW, 0.014, P, { y: H + trimW + (CEIL - H - trimW) / 2, z: sz * (thick / 2 + 0.007) }));
+    const open0 = sp?.open === false ? 0 : 1;
+    const d = { id: o.id, group: g, kind: 'bifold', target: open0, fold: open0, w, thick, plan: { cx, cy, isH }, openDefault: !!open0 };
+    const pose = (t) => { const a = swing * t * 1.35; for (const { p1, p2, s } of pairs) { p1.rotation.y = s * a; p2.rotation.y = -s * 2 * a; } };
+    d.tick = (dt) => {
+      if (d._goal !== d.target) { d._goal = d.target; d._from = d.fold; d._t = 0; }
+      if (d._t < 1) { d._t = Math.min(1, d._t + dt / 0.9); d.fold = d._from + (d.target - d._from) * doorEase(d._t); pose(d.fold); }
+    };
+    pose(open0); doors.push(d); g.userData.door = d; setBifold(d, open0);
   } else if (type === 'louver' || type === 'louverWhite') {
     const mat = type === 'louver' ? M.louver() : M.doorWhite();
     const n = w > 1.0 ? 4 : 2, lw = leafW / n;
@@ -215,17 +404,28 @@ function buildDoor(o, house) {
   }
   return g;
 }
-// French doors: t in 0..1 swings every leaf outward (toward +local z = plan north side for H walls on the north).
+// Door motion profile (smootherstep): leaves start and stop gently.
+export const doorEase = (t) => t * t * t * (t * (6 * t - 15) + 10);
+// French doors: target t in 0..1 swings every leaf outward onto the patio (-local z = plan north for H walls);
+// the leaves ease there in poseFrench (driven from interact.js).
+export function poseFrench(d, v) {
+  d.open = v;
+  for (const l of d.leaves) l.pivot.rotation.y = v * (l.hingeLeft ? 1 : -1) * 1.65;
+}
 export function setFrench(d, t) {
-  d.open = t;
-  for (const l of d.leaves) { const a = t * (l.hingeLeft ? -1 : 1) * 1.65; l.pivot.rotation.y = a; }
+  d.target = t;
   // collider: closed = full width block; open = free
   const i = getColliders().findIndex(c => c.tag === 'french-' + d.id);
   if (i >= 0) getColliders().splice(i, 1);
   if (t < 0.5) { const { cx, cy, isH } = d.plan; if (isH) addAABB(cx - d.w / 2, cx + d.w / 2, -(cy + d.thick / 2), -(cy - d.thick / 2), 'french-' + d.id); else addAABB(cx - d.thick / 2, cx + d.thick / 2, -(cy + d.w / 2), -(cy - d.w / 2), 'french-' + d.id); }
 }
+export function setBifold(d, t) {
+  d.target = t;
+  const i = getColliders().findIndex(c => c.tag === 'bifold-' + d.id); if (i >= 0) getColliders().splice(i, 1);
+  if (t < 0.5) { const { cx, cy, isH } = d.plan; if (isH) addAABB(cx - d.w / 2, cx + d.w / 2, -(cy + d.thick / 2), -(cy - d.thick / 2), 'bifold-' + d.id); else addAABB(cx - d.thick / 2, cx + d.thick / 2, -(cy + d.w / 2), -(cy - d.w / 2), 'bifold-' + d.id); }
+}
 export function setHinged(d, open) {
-  d.target = open ? (d.kind === 'front' ? -1.5 : 1.35) : 0;
+  d.target = open ? (d.openAngle ?? (d.kind === 'front' ? -1.5 : 1.35)) : 0;
   const i = getColliders().findIndex(c => c.tag === 'hinged-' + d.id); if (i >= 0) getColliders().splice(i, 1);
   if (!open) { const { cx, cy, isH } = d.plan; if (isH) addAABB(cx - d.w / 2, cx + d.w / 2, -(cy + 0.06), -(cy - 0.06), 'hinged-' + d.id); else addAABB(cx - 0.06, cx + 0.06, -(cy + d.w / 2), -(cy - d.w / 2), 'hinged-' + d.id); }
 }
@@ -235,7 +435,9 @@ function buildWindow(o, house, mods) {
   const g = new THREE.Group(); g.name = 'window-' + o.id;
   const isH = o.dir === 'H', w = o.width, sill = o.sillOverride ?? house.windowSill, head = o.headOverride ?? house.windowHead, h = head - sill;
   const cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2, thick = isH ? o.y1 - o.y0 : o.x1 - o.x0;
-  g.position.set(cx, 0, -cy); g.rotation.y = isH ? 0 : Math.PI / 2;
+  // +Z faces the interior: south/east windows need the opposite sill orientation.
+  const south = isH && cy < -4, east = !isH && cx > 0;
+  g.position.set(cx, 0, -cy); g.rotation.y = isH ? (south ? Math.PI : 0) : (east ? -Math.PI / 2 : Math.PI / 2);
   const fr = M.trim(), f = 0.05, T = thick + 0.15 + 0.02;   // frame spans interior wall + stucco skin
   // outer frame
   g.add(box(w, f, T, fr, { y: sill + f / 2 })); g.add(box(w, f, T, fr, { y: head - f / 2 })); g.add(box(f, h, T, fr, { x: -w / 2 + f / 2, y: sill + h / 2 })); g.add(box(f, h, T, fr, { x: w / 2 - f / 2, y: sill + h / 2 }));
@@ -251,7 +453,8 @@ function buildWindow(o, house, mods) {
     }
   }
   // interior stool (sill shelf) + exterior sill
-  g.add(box(w + 0.12, 0.03, 0.09, fr, { y: sill - 0.015, z: thick / 2 + 0.03 }));
+  // The living-room builder supplies its own solid pine sill.
+  if (o.id !== '92767b980a') g.add(box(w + 0.12, 0.03, 0.09, fr, { y: sill - 0.015, z: thick / 2 + 0.03 }));
   g.add(box(w + 0.06, 0.04, 0.08, M.stucco(), { y: sill - 0.02, z: -(thick / 2 + 0.15 + 0.02), rx: 0.15 }));
   g.userData.window = { w, h, sill, head };
   return g;
@@ -282,11 +485,6 @@ function buildRoof() {
   g.add(box(0.03, fasciaH, D, fas, { x: x0, y: eave - fasciaH / 2 + 0.1, z: -cy })); g.add(box(0.03, fasciaH, D, fas, { x: x1, y: eave - fasciaH / 2 + 0.1, z: -cy }));
   // gutters (half round) along the front and back eaves
   for (const yy of [y0, y1]) g.add(cyl(0.06, 0.06, W, M.aluminum(), { x: (x0 + x1) / 2, y: eave + 0.05, z: -yy, rz: Math.PI / 2, seg: 12 }));
-  // porch roof extension across the front door (deeper overhang carried on the two iron columns)
-  const px0 = PORCH.x0 - 0.3, px1 = PORCH.x1 + 0.3, pd = 1.45;
-  g.add(box(px1 - px0, 0.22, pd, M.roof(), { x: (px0 + px1) / 2, y: eave + 0.11 - 0.02, z: -(y0 - pd / 2 + 0.02) }));
-  g.add(box(px1 - px0, 0.02, pd, M.soffit(), { x: (px0 + px1) / 2, y: eave - 0.01, z: -(y0 - pd / 2 + 0.02) }));
-  g.add(box(px1 - px0, fasciaH, 0.03, fas, { x: (px0 + px1) / 2, y: eave - fasciaH / 2 + 0.1, z: -(y0 - pd + 0.02) }));
   g.userData.eave = { x0, x1, y0, y1, eave };
   return g;
 }
@@ -296,35 +494,64 @@ function buildPorch(mods) {
   // porch slab
   g.add(box(PORCH.x1 - PORCH.x0, 0.12, PORCH.y1 - PORCH.y0, M.concrete(), { x: (PORCH.x0 + PORCH.x1) / 2, y: -0.06 + 0.02, z: -(PORCH.y0 + PORCH.y1) / 2 }));
   // front step
-  g.add(box(PORCH.x1 - PORCH.x0 - 0.4, 0.14, 0.4, M.concrete(), { x: (PORCH.x0 + PORCH.x1) / 2, y: -0.14 / 2 - 0.02, z: -(PORCH.y0 - 0.2) }));
+  g.add(box(WALK.x1 - WALK.x0 + 0.5, 0.14, 0.4, M.concrete(), { x: (WALK.x0 + WALK.x1) / 2, y: -0.14 / 2 - 0.02, z: -(PORCH.y0 - 0.2) }));
   return g;
 }
 
 // ---- Ground surfaces (lot), composed from the aerial photo (g50): dark mulch beds, a white shell-gravel lounge with
 //      lumber edging behind the terrace, concrete terrace/walk/drive, white pebble courtyards with low rendered walls.
 export const LOUNGE = [[-2.6, 9.3], [5.2, 9.3], [5.6, 11.0], [5.3, 14.6], [2.0, 15.2], [-1.8, 14.4], [-2.9, 12.0]];
-export const FRONT_BED = [[-3.6, -4.9], [8.3, -4.9], [8.3, -9.4], [3.2, -11.2], [-1.0, -11.4], [-3.6, -9.0]];
+export const FRONT_BED = [[-4.9, -5.85], [8.3, -5.85], [8.3, -8.1], [7.5, -11.8], [6.4, -14.2], [-4.9, -14.2]];
+export const WEST_SHELL = [[-14.5, -14.2], [-8.17, -14.2], [-8.17, -7.2], [-11.5, -7.2], [-11.5, 0.17], [-14.5, 0.17]];
+export const FRONT_TERRACE = { x0: -4.05, x1: 4.45, y0: -10.8, y1: -7.85 };
+export const FRONT_WALK = ribbonPoly([[-4.95, -7.05], [-3.0, -7.05], [-1.3, -7.25], [0, -6.55]], 1.15);
+export const COURT_PAD = { x0: 4.3, x1: 6.4, y0: 5.47, y1: 7.3 };          // concrete pad in courtyard B
+export const AC_UNITS = { x0: -9.2, x1: -8.3, y0: 0.55, y1: 2.45 };        // two condensers against the garage's west wall
+// Everything inside the fences that isn't paved or shell is planted bed over dark mulch (ground cover from grass.js).
+export const GARDEN = [[LOT.x0 + 0.3, WEST_FENCE_Y], [-8.17, WEST_FENCE_Y], [-8.17, -1.0], [LOT.x1 - 0.3, -1.0], [LOT.x1 - 0.3, 19.2], [LOT.x0 + 0.3, 19.2]];
+// Shell side paths (g47): west from the fence return past the AC units, round courtyard A into the lounge; east up the side yard.
+function ribbonPoly(pts, w) {
+  const c = new THREE.SplineCurve(pts.map(p => new THREE.Vector2(p[0], p[1]))).getSpacedPoints(Math.max(8, Math.round(c0len(pts) / 0.4)));
+  const L = [], R = [];
+  for (let i = 0; i < c.length; i++) { const a = c[Math.max(0, i - 1)], b = c[Math.min(c.length - 1, i + 1)], dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1, nx = -dy / l * w / 2, ny = dx / l * w / 2; L.push([c[i].x + nx, c[i].y + ny]); R.push([c[i].x - nx, c[i].y - ny]); }
+  return L.concat(R.reverse());
+}
+function c0len(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return s; }
+export const SIDE_PATHS = [
+  ribbonPoly([[-10.6, 0.1], [-10.55, 3.4], [-10.1, 6.6], [-8.4, 8.75], [-6.6, 9.3], [-5.0, 9.75], [-2.3, 11.55]], 1.3),
+  ribbonPoly([[10.6, -1.05], [10.55, 2.6], [10.35, 6.0], [10.0, 8.3]], 1.2),
+];
+// The front lawn has no mulched islands in the drone orbit.
+export const ISLAND_BEDS = [];
 function buildGround() {
   const g = new THREE.Group();
-  // base: mulch inside the fence; lawn verge toward the street; neighbours' lawns beyond
-  g.add(slab([[-80, -80], [80, -80], [80, 80], [-80, 80]], -0.09, M.grass()));
-  g.add(slab(rectPts(LOT), -0.03, M.mulch()));
-  g.add(slab([[LOT.x0, -14.2], [LOT.x1, -14.2], [LOT.x1, -11.8], [LOT.x0, -11.8]], -0.02, M.grass()));      // street verge lawn
-  g.add(slab([[8.6, -11.8], [LOT.x1, -11.8], [LOT.x1, -2.0], [8.6, -2.0]], -0.022, M.grass()));            // east side lawn (aerial)
-  // shell gravel: front beds and the back lounge (slightly proud of the mulch, with lumber edging)
-  g.add(slab(FRONT_BED, -0.008, M.shell()));
-  g.add(slab(LOUNGE, -0.006, M.shell()));
+  // base: St. Augustine turf outside the fences (lot front, street verge, east side lawn, neighbours' yards); blades in grass.js
+  g.add(slab([[-80, -80], [80, -80], [80, 80], [-80, 80]], -0.09, M.turf()));
+  g.add(slab(rectPts(LOT), -0.03, M.turf()));
+  // dark mulch only under the dense beds: the fenced garden and the front-lawn islands
+  g.add(slab(GARDEN, -0.024, M.bedMulch()));
+  for (const b of ISLAND_BEDS) g.add(slab(b, -0.02, M.bedMulch()));
+  // shell gravel: front beds, the back lounge (slightly proud of the mulch, with lumber edging) and the side paths
+  g.add(slab(FRONT_BED, -0.008, M.shellWhite()));
+  g.add(slab(WEST_SHELL, -0.008, M.shellWhite()));
+  g.add(slab(rectPts(FRONT_TERRACE), 0.22, M.shellWhite()));
+  g.add(slab(LOUNGE, -0.006, M.shellWhite()));
+  for (const p of SIDE_PATHS) g.add(slab(p, -0.007, M.shellWhite()));
   edging(g, LOUNGE); 
   // concrete: terrace, walk, drive, parking pad, courtyard B pad
-  for (const r of [PATIO, WALK, DRIVE, PAD, { x0: 4.3, x1: 6.4, y0: 5.47, y1: 7.3 }]) g.add(slab(rectPts(r), 0.012, M.concrete()));
+  for (const r of [PATIO, COURT_PAD]) g.add(slab(rectPts(r), 0.012, M.concrete()));
+  const frontConcrete = new THREE.MeshStandardMaterial({ color: 0xc3c1b8, roughness: 0.95 });
+  for (const r of [WALK, DRIVE, PAD]) g.add(slab(rectPts(r), 0.012, frontConcrete));
+  g.add(slab(FRONT_WALK, 0.014, frontConcrete));
+  for (const y of [-9.9, -12.0]) g.add(box(DRIVE.x1 - DRIVE.x0, 0.003, 0.009, M.blackMatte(), { x: (DRIVE.x0 + DRIVE.x1) / 2, y: 0.013, z: -y }));
   // courtyards: white pebbles with low rendered walls
   for (const r of [COURT_A, COURT_B]) g.add(slab(rectPts(r), 0.0, M.pebbles()));
   const lowWall = (x0, x1, y0, y1) => { g.add(box(x1 - x0, 0.42, y1 - y0, M.stucco(), { x: (x0 + x1) / 2, y: 0.21, z: -(y0 + y1) / 2 })); g.add(box(x1 - x0 + 0.04, 0.03, y1 - y0 + 0.04, M.trim(), { x: (x0 + x1) / 2, y: 0.435, z: -(y0 + y1) / 2 })); addAABB(x0, x1, -y1, -y0, 'lowwall'); };
   lowWall(COURT_A.x0, COURT_A.x1 - 1.2, COURT_A.y1 - 0.16, COURT_A.y1); lowWall(COURT_A.x0, COURT_A.x0 + 0.16, 5.6, COURT_A.y1);
   lowWall(COURT_B.x0 + 1.2, COURT_B.x1, COURT_B.y1 - 0.16, COURT_B.y1); lowWall(COURT_B.x1 - 0.16, COURT_B.x1, 5.6, COURT_B.y1);
-  // street + sidewalk
+  // The drone orbit shows shell and lawn meeting the road, with no public sidewalk across this lot.
   g.add(slab([[-60, -22], [60, -22], [60, -14.2], [-60, -14.2]], -0.025, M.asphalt()));
-  g.add(slab([[-60, -14.2], [60, -14.2], [60, -13.0], [-60, -13.0]], -0.012, M.concrete()));
+  for (const [x0, x1] of [[-60, LOT.x0], [LOT.x1, 60]]) g.add(slab([[x0, -14.2], [x1, -14.2], [x1, -13], [x0, -13]], -0.012, M.concrete()));
   // curb line
   g.add(box(120, 0.12, 0.2, M.concrete(), { x: 0, y: -0.06, z: 14.2 }));
   // house slab edge: a stem wall around the footprint + garage
@@ -332,7 +559,7 @@ function buildGround() {
   g.add(box(16.65, 0.2, 11.9, stem, { x: 0.0, y: -0.115, z: 0.19 }));   // top at -0.015: never coplanar with the floor slab
   // AC condensers on the west side yard
   const ac = new THREE.MeshStandardMaterial({ color: 0x8e9398, roughness: 0.6, metalness: 0.3 });
-  for (const y of [-0.6, 0.6]) { g.add(box(0.8, 0.85, 0.8, ac, { r: 0.02, x: -8.75, y: 0.45, z: -y })); g.add(cyl(0.3, 0.3, 0.02, M.blackMatte(), { x: -8.75, y: 0.88, z: -y })); addAABB(-9.2, -8.3, y - 0.45, y + 0.45, 'ac'); }
+  for (const y of [1.0, 2.0]) { g.add(box(0.8, 0.85, 0.8, ac, { r: 0.02, x: -8.75, y: 0.45, z: -y })); g.add(cyl(0.3, 0.3, 0.02, M.blackMatte(), { x: -8.75, y: 0.88, z: -y })); addAABB(-9.2, -8.3, -y - 0.45, -y + 0.45, 'ac'); }
   return g;
 }
 // 2x6 pressure-treated edging boards laid along a polygon (the lounge and bed borders in the aerial)
@@ -356,10 +583,10 @@ function buildFence() {
     addAABB(Math.min(x0, x1) - 0.1, Math.max(x0, x1) + 0.1, -Math.max(y0, y1) - 0.1, -Math.min(y0, y1) + 0.1, 'fence');
   };
   run(LOT.x0 + 0.3, 19.2, LOT.x1 - 0.3, 19.2);        // back
-  run(LOT.x0 + 0.3, -1.0, LOT.x0 + 0.3, 19.2);          // west side
-  run(LOT.x0 + 0.3, -1.0, -8.3, -1.0);                  // west return to the garage
+  run(LOT.x0 + 0.3, WEST_FENCE_Y, LOT.x0 + 0.3, 19.2);  // west side
+  run(LOT.x0 + 0.3, WEST_FENCE_Y, -8.17, WEST_FENCE_Y); // west return to the garage, behind the parking pad
   const runWood = (x0, y0, x1, y1) => { const len = Math.hypot(x1 - x0, y1 - y0), n = Math.max(1, Math.round(len / 2.44)), ang = Math.atan2(-(y1 - y0), x1 - x0); for (let i = 0; i < n; i++) { const t0 = i / n, t1 = (i + 1) / n, cx = x0 + (x1 - x0) * (t0 + t1) / 2, cy = y0 + (y1 - y0) * (t0 + t1) / 2, pl = len / n; const panel = woodFencePanel(pl, 1.83); panel.position.set(cx, 0, -cy); panel.rotation.y = -ang; g.add(panel); } addAABB(Math.min(x0, x1) - 0.1, Math.max(x0, x1) + 0.1, -Math.max(y0, y1) - 0.1, -Math.min(y0, y1) + 0.1, 'fence'); };
-  run(8.3, -1.0, LOT.x1 - 0.3, -1.0);                   // east return to the house
+  // Brown board return and its gate are placed with the front-yard furniture.
   runWood(LOT.x1 - 0.3, -1.0, LOT.x1 - 0.3, 19.2);      // east side: neighbour's horizontal wood fence (aerial)
   return g;
 }

@@ -1,0 +1,46 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build the walkthrough
+        working-directory: web
+        run: |
+          npm ci
+          node tools/build.mjs --min
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          rsync -a --exclude node_modules --exclude tools web/ _site/
+          rm -rf _site/assets/photos _site/assets/panos
+          cp -a source/zillow/gallery _site/assets/photos
+          cp -a source/zillow/panos _site/assets/panos
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

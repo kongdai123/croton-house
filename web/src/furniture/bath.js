@@ -24,7 +24,7 @@ function faucet() {
   const lever = box(0.014, 0.07, 0.02, N, { r: 0.006, seg: 3, y: 0.218, z: -0.03 }); lever.rotation.x = -0.95; f.add(lever);
   return f;
 }
-function vanity(W, id, name, zh) {
+function vanity(W, id, name, zh, sinks = 1) {
   const root = new THREE.Group(), D = 0.5, y0 = 0.45, cabH = 0.325, topH = 0.12, yT = 0.78, wood = L.vanityWood(), woodH = L.vanityWoodH();
   const zb = -D / 2, cabD = 0.44;
   root.add(box(W - 0.012, cabH, cabD, wood, { r: 0.004, y: y0, z: zb + cabD / 2, bottom: true }));
@@ -35,15 +35,18 @@ function vanity(W, id, name, zh) {
   // reveal under the top
   root.add(box(W - 0.04, 0.006, 0.03, L.shadowGap(), { y: y0 + cabH - 0.001, z: fz - 0.02, bottom: true }));
   // solid-surface top with the trough cut-out
-  const b = 0.006, hw = W / 2 - b, hd = D / 2 - b, bw = W - 0.4, by0 = -0.15, by1 = 0.13;
-  const hole = rrect(-bw / 2, by0, bw / 2, by1, 0.055).reverse();
-  root.add(extrude([[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]], topH - 2 * b, M.ceramicWhite(), { bevel: b, rx: -PI / 2, y: yT + b, holes: [hole] }));
-  // basin floor sloping 4° toward the back, slot drain with a brushed cover
-  const fl = extrude(rrect(-bw / 2 - 0.004, by0 - 0.004, bw / 2 + 0.004, by1 + 0.004, 0.055), 0.01, M.ceramicWhite(), { rx: -PI / 2 - 0.07, y: 0.797 });
-  root.add(fl);
-  root.add(box(bw * 0.5, 0.004, 0.03, L.shadowGap(), { y: 0.8055 - 0.07 * 0.115, z: -0.115, rx: -0.07 }));
-  root.add(box(bw * 0.48, 0.003, 0.022, L.steelDark(), { r: 0.001, y: 0.808 - 0.07 * 0.115, z: -0.115, rx: -0.07 }));
-  root.add(at(faucet(), 0, yT + topH, -0.185));
+  // one trough per sink (the primary bath's 1.50 top has two side by side, g30)
+  const b = 0.006, hw = W / 2 - b, hd = D / 2 - b, by0 = -0.15, by1 = 0.13;
+  const bw = sinks > 1 ? W / sinks - 0.16 : W - 0.4, cxs = Array.from({ length: sinks }, (_, i) => -W / 2 + (W / sinks) * (i + 0.5));
+  const holes = cxs.map(cx => rrect(cx - bw / 2, by0, cx + bw / 2, by1, 0.055).reverse());
+  root.add(extrude([[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]], topH - 2 * b, M.ceramicWhite(), { bevel: b, rx: -PI / 2, y: yT + b, holes }));
+  for (const cx of cxs) {
+    // basin floor sloping 4° toward the back, slot drain with a brushed cover
+    root.add(extrude(rrect(cx - bw / 2 - 0.004, by0 - 0.004, cx + bw / 2 + 0.004, by1 + 0.004, 0.055), 0.01, M.ceramicWhite(), { rx: -PI / 2 - 0.07, y: 0.797 }));
+    root.add(box(bw * 0.5, 0.004, 0.03, L.shadowGap(), { x: cx, y: 0.8055 - 0.07 * 0.115, z: -0.115, rx: -0.07 }));
+    root.add(box(bw * 0.48, 0.003, 0.022, L.steelDark(), { r: 0.001, x: cx, y: 0.808 - 0.07 * 0.115, z: -0.115, rx: -0.07 }));
+    root.add(at(faucet(), cx, yT + topH, -0.185));
+  }
   return autoCollider(describe(root, { id, name, zh }));
 }
 
@@ -192,7 +195,9 @@ function ladderRack() {
 export const items = {
   vanity: () => vanity(1.2, 'bath-vanity', 'Wall-hung vanity 1.20', '壁挂浴室柜'),
   vanitySmall: () => vanity(0.9, 'bath-vanitySmall', 'Wall-hung vanity 0.90 (hall bath)', '壁挂浴室柜（小）'),
+  vanityDouble: () => vanity(1.5, 'bath-vanityDouble', 'Double wall-hung vanity 1.50', '双盆壁挂浴室柜', 2),
   mirrorCabinet: () => mirrorCabinet(1.2, 3, 'bath-mirrorCabinet', 'Mirrored medicine cabinet 1.20', '镜柜'),
+  mirrorCabinetWide: () => mirrorCabinet(1.5, 3, 'bath-mirrorCabinetWide', 'Mirrored medicine cabinet 1.50', '三门镜柜'),
   mirrorCabinetSmall: () => mirrorCabinet(0.9, 2, 'bath-mirrorCabinetSmall', 'Mirrored medicine cabinet 0.90', '镜柜（小）'),
   toilet,
   shower,

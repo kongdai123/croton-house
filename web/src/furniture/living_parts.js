@@ -174,15 +174,17 @@ export function weaveMaps({ kind = 'plain', cells = 16, size = 512, strength = 3
     hgt[y * N + x] = h;
   }
   const mk = () => { const c = document.createElement('canvas'); c.width = c.height = N; return c; };
-  const cn = mk(), ca = mk(), gn = cn.getContext('2d'), ga = ca.getContext('2d'), In = gn.createImageData(N, N), Ia = ga.createImageData(N, N);
+  const cn = mk(), ca = mk(), cc = kind === 'basket' ? mk() : null, gn = cn.getContext('2d'), ga = ca.getContext('2d'), gc = cc?.getContext('2d'), In = gn.createImageData(N, N), Ia = ga.createImageData(N, N), Ic = gc?.createImageData(N, N);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const H = (a, b) => hgt[((b + N) % N) * N + ((a + N) % N)];
     const dx = (H(x + 1, y) - H(x - 1, y)) * strength, dy = (H(x, y + 1) - H(x, y - 1)) * strength;
     const l = Math.hypot(dx, dy, 1), i = (y * N + x) * 4;
     In.data[i] = (-dx / l * 0.5 + 0.5) * 255; In.data[i + 1] = (dy / l * 0.5 + 0.5) * 255; In.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; In.data[i + 3] = 255;
     const ao = 255 * (0.45 + 0.55 * Math.min(1, H(x, y) * 1.3)); Ia.data[i] = Ia.data[i + 1] = Ia.data[i + 2] = ao; Ia.data[i + 3] = 255;
+    if (Ic) { const c = 205 + 48 * H(x, y) + 2 * Math.sin(x * 1.7 + y * 2.3); Ic.data[i] = Ic.data[i + 1] = Ic.data[i + 2] = c; Ic.data[i + 3] = 255; }
   }
   gn.putImageData(In, 0, 0); ga.putImageData(Ia, 0, 0);
   const t = (c) => { const tx = new THREE.CanvasTexture(c); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.anisotropy = 8; return tx; };
-  return { normal: t(cn), ao: t(ca) };
+  let color = null; if (gc) { gc.putImageData(Ic, 0, 0); color = t(cc); color.colorSpace = THREE.SRGBColorSpace; }
+  return { normal: t(cn), ao: t(ca), color };
 }

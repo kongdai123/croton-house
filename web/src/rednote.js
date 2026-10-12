@@ -3,19 +3,19 @@ import { t, getLang } from './ui.js';
 
 // slug -> where to stand (plan x, y), heading (deg, 0 = north), pitch, and whether to switch to dusk.
 const SPOTS = {
-  '6ac5704700': { x: 0.9, y: 11.5, heading: 180, pitch: 0.05, dusk: true, zh: '黄昏时从后花园看回房子', en: 'From the back garden at dusk' },        // 花园住宅 (video)
-  '6a4b314b00': { x: -0.6, y: 2.4, heading: 352, pitch: 0.03, zh: '家庭室里看向三组落地玻璃门', en: 'The three glass doors from the family room' },  // 无界的庭院 (video)
-  '69ef572200': { x: -4.5, y: 3.5, heading: 300, pitch: -0.02, zh: '躺在床上看花园', en: 'From the bed toward the courtyard' },                 // 对着花园的床
-  '69d2af8a00': { x: -4.9, y: 4.6, heading: 120, pitch: -0.08, zh: '自制白蜡松木床', en: 'The whitewashed bed frame he built' },             // white wash bedframe
-  '6ab7b98000': { x: 2.2, y: -2.6, heading: 180, pitch: 0.0, zh: '窗台座 · 框出一处悠哉', en: 'The window seat, framing a lazy afternoon' },     // 窗前框出一处悠哉
-  '68f9b07600': { x: 2.3, y: -3.9, heading: 175, pitch: -0.35, zh: '窗台木板细部', en: 'The solid-wood sill detail' },                     // 2513佛州住宅 (sill)
-  '6acbf22b00': { x: 3.0, y: 2.6, heading: 85, pitch: -0.05, zh: '有深度的空腔', en: 'A niche with depth' },                            // 有深度的空腔
-  '69ec158300': { x: -2.0, y: -3.0, heading: 262, pitch: 0.15, zh: '微波炉上的黑板', en: 'The chalkboard above the microwave' },         // 微波炉上的黑板
-  '6a02916b00': { x: 2.5, y: 12.8, heading: 190, pitch: 0.04, dusk: true, zh: '后院灯火', en: 'Backyard lights at night' },                  // 后院灯火
-  '69fd344f00': { x: 0.9, y: 6.3, heading: 10, pitch: 0.0, zh: '无界的后花园', en: 'The borderless back garden' },                       // 无界的后花园
-  '69e6b9b100': { x: 1.4, y: 10.2, heading: 60, pitch: -0.4, zh: '后花园的贝壳和植物', en: 'Shells and plants in the garden' },           // 贝壳和植物
-  '6ab9bb8a00': { x: 2.0, y: -7.2, heading: 20, pitch: 0.35, zh: '60 厘米悬挑，为了一点树影', en: '60 cm eave, for a little tree shadow' },   // 60厘米悬挑
-  '68ac5a3b00': { x: 0.0, y: -8.5, heading: 0, pitch: 0.05, zh: '前院', en: 'Front yard' },
+  '6ac5704700': { x: 2.15, y: 14.3, heading: 183, pitch: 0.2, eye: 1.4, img: 0, dusk: true, zh: '黄昏时从后花园看回房子', en: 'The house from the back garden at dusk' },
+  '6a4b314b00': { x: 3.08, y: 3.05, heading: 7, pitch: -0.16, eye: 1.35, img: 0, zh: '从餐厅玻璃门旁看后花园', en: 'The garden through the dining-room doors' },
+  '69ef572200': { x: -5, y: 2.15, heading: 23, pitch: -0.15, eye: 1, img: 0, zh: '床尾旁看向花园玻璃门', en: 'Beside the foot of the bed, toward the garden' },
+  '69d2af8a00': { x: -5.25, y: 4.35, heading: 114, pitch: -0.15, eye: 1, img: 3, zh: '自制白蜡松木床 · 完工前', en: 'The whitewashed bed before furnishing' },
+  '6ab7b98000': { x: 2.75, y: -2.6, heading: 180, pitch: -0.04, eye: 1.2, img: 0, zh: '客厅窗台座 · 正面近景', en: 'The living-room window seat, close frontal view' },
+  '68f9b07600': { x: 1.7, y: -3.25, heading: 180, pitch: -0.3, eye: 0.8, img: 1, zh: '施工期窗台木板 · 近似视角', en: 'Construction sill detail; approximate view' },
+  '6acbf22b00': { x: 0.85, y: 0.25, heading: 66, pitch: -0.05, eye: 1.5, img: 1, zh: '墙面凹龛 · 书架与小凳', en: 'Wall alcove with shelves and stool' },
+  '69ec158300': { x: -2.3, y: 1.25, heading: 190, pitch: -0.06, eye: 1.6, img: 0, zh: '厨房过道看微波炉与黑板', en: 'The microwave and chalkboard from the kitchen aisle' },
+  '6a02916b00': { x: 2.15, y: 14.3, heading: 183, pitch: 0.2, eye: 1.4, img: 0, dusk: true, zh: '后花园回望亮灯的房子', en: 'Looking back at the lit house from the garden' },
+  '69fd344f00': { x: 3.08, y: 3.05, heading: 7, pitch: -0.16, eye: 1.35, img: 0, zh: '从室内门边看后花园', en: 'The garden viewed from inside the doorway' },
+  '69e6b9b100': { x: 4.4, y: 9.25, heading: 0, pitch: -0.72, eye: 1.6, img: 0, zh: '低头看贝壳地面与植物', en: 'Looking down at shells and garden planting' },
+  '6ab9bb8a00': { x: 1.5, y: -3.72, heading: 235, pitch: 0.05, eye: 0.8, img: 0, zh: '窗边悬挑柜 · 模型柜体不同', en: 'Window-side cantilever; the model cabinet differs' },
+  '68ac5a3b00': { x: 6.1, y: -0.95, heading: 90, pitch: -0.2, eye: 1.4, img: 0, zh: '浴缸细部 · 模型为淋浴间', en: 'Tub detail; the model has a shower instead' },
 };
 export class RedNote {
   constructor(posts, ui, viewpoints) {
@@ -23,7 +23,8 @@ export class RedNote {
     addEventListener('langchange', () => { if (this.panelOpen) this.renderPanel(); });
   }
   blips() { return this.posts.filter(p => SPOTS[p.slug]).map(p => { const s = SPOTS[p.slug]; return { kind: 'rn', id: p.slug, x: s.x, y: s.y, heading: s.heading, title: p.title }; }); }
-  targetFor(slug) { const s = SPOTS[slug]; return s ? { kind: 'rn', id: slug, x: s.x, y: s.y, heading: s.heading, pitch: s.pitch, dusk: s.dusk } : null; }
+  spotOf(slug) { return SPOTS[slug] || null; }
+  targetFor(slug) { const s = SPOTS[slug]; return s ? { kind: 'rn', id: slug, x: s.x, y: s.y, heading: s.heading, pitch: s.pitch, eye: s.eye, dusk: s.dusk } : null; }
   togglePanel() { if (this.panelOpen) { this.ui.closePanel(); this.panelOpen = false; return; } this.renderPanel(); }
   renderPanel() {
     const body = document.createElement('div'); const zh = getLang() === 'zh';
@@ -42,6 +43,6 @@ export class RedNote {
     }
     this.ui.openPanel(t('rednoteTitle'), body); this.panelOpen = true;
   }
-  go(slug) { const tg = this.targetFor(slug); if (!tg) return; if (tg.dusk && !window.__app.state.dusk) document.getElementById('btn-dusk').click(); this.viewpoints.goTo(tg, { onDone: () => { const p = this.posts.find(q => q.slug === slug); const s = SPOTS[slug]; this.ui.toast(`${p.title} · ${getLang() === 'zh' ? s.zh : s.en}`, 3500); } }); }
+  go(slug) { const pin = this.viewpoints.markers?.pins.find(p => p.kind === 'rn' && p.post.slug === slug); if (pin) { this.viewpoints.markers.activate({ pin }); return; } const tg = this.targetFor(slug); if (!tg) return; if (tg.dusk && !window.__app.state.dusk) this.ui.toggleDusk(); this.viewpoints.goTo(tg, { onDone: () => { const p = this.posts.find(q => q.slug === slug); const s = SPOTS[slug]; this.ui.toast(`${p.title} · ${getLang() === 'zh' ? s.zh : s.en}`, 3500); } }); }
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

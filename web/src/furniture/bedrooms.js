@@ -372,7 +372,7 @@ function louverDoors() {
 // Rugs: rounded-rectangle extrusions; cap UVs are metres, so 1 texture tile = 1 m.
 function rrect(w, d, r) { const pts = []; const q = 6; for (const [cx, cy, a0] of [[w / 2 - r, d / 2 - r, 0], [-w / 2 + r, d / 2 - r, PI / 2], [-w / 2 + r, -d / 2 + r, PI], [w / 2 - r, -d / 2 + r, 1.5 * PI]]) for (let i = 0; i <= q; i++) { const a = a0 + (i / q) * PI / 2; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } return pts; }
 function rug(w, d, t, mat, uvScale) {
-  const m = extrude(rrect(w, d, 0.05), t - 0.004, mat, { bevel: 0.002, rx: -PI / 2, y: 0.002 });
+  const m = extrude(rrect(w, d, 0.05), 0.001, mat, { bevel: 0.0005, rx: -PI / 2, y: 0.001 });
   const uv = m.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * uvScale, uv.getY(i) * uvScale); uv.needsUpdate = true;
   m.castShadow = false; return m;
 }

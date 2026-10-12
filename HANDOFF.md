@@ -1,48 +1,62 @@
-# 2513 Croton Ave · photoreal walkthrough — HANDOFF
+# Handoff: Croton House walkthrough (Oct 12, 2026, 04:10)
 
-> A surprise for the owner (Studio Hu Dwelling on RedNote, architect + landscape designer) of 2513 Croton Ave, Sarasota FL:
-> a first-person photoreal three.js walkthrough built from the Zillow listing (vector floor plan, 52 photos, 16 panoramas) and his
-> RedNote posts. Standalone local git repo (no remote). Nothing published yet. Last session: Claude (Fable 5.1), 2026-10-12.
-> 用户要求：照片级、家具与照片一致、花园有设计感、可坐/可拖椅/开门、GTA 小地图、Zillow 取景点与全景对照、小红书取景点、中文优先双语、最后发私密链接。
+Three.js (r183) walkthrough of 2513 Croton Ave in `web/`. The dev server at http://127.0.0.1:8780 is already running; don't start or kill it. Build with `cd web && node tools/build.mjs`. Nothing is committed: all work is uncommitted in the working tree.
 
-## 1. Start here
-1. Serve `web/` on 8780: in the Yireeb Claude session `preview_start name=croton-house` (its `.claude/launch.json` points here);
-   elsewhere `python3 -m http.server 8780 --bind 127.0.0.1 --directory web`. Open `http://localhost:8780/index.html`.
-2. Build after edits: `cd web && node tools/build.mjs`. New machine: `cd web && npm i && python3 -I tools/fetch_assets.py` (textures/skies are gitignored).
-3. Headless look: `node tools/shot.mjs "index.html?x=<plan x>&y=<plan y>&h=<heading°>&p=<pitch>&eye=1.5&fast=1[&dusk=1]" out.png`.
-   One furniture item: `showcase.html?module=<m>&item=<i>&az=30&el=15&dist=3`.
-4. Fidelity loop: `python3 -I web/tools/compare.py [panoId…]` → `compare/<id>_<title>.jpg` (left real panorama, right our render, same camera).
-5. Regression: `node web/tools/playtest.mjs /tmp/pt` (walk/sit/drag/doors/panels/pano/dusk/tour screenshots); `node web/tools/overlap.mjs` (clipping).
-6. Coordinates: plan metres, +y north, x east; world X=x, Z=−y. Heading 0 = north, clockwise. Placement `ry`: 0 south, π north, π/2 east, −π/2 west (module front = local +Z).
+## HUD and sitting pets (done this session)
 
-## 2. Map
-`source/zillow/` raw data (floor_shape.svg, gallery/, panos/, floorplan_points.json, tour.json) · `refs/<area>/` reference photos ·
-`compare/` latest side-by-sides · `BRIEF.md` modeler brief · `CODEX_BRIEF.md` packaging+mobile brief (Codex only wrote `tools/package.py`, untested).
-`web/src`: `main.js` scene/lights/post/adaptive quality/query start · `house.js` shell from plan + yard · `layout.js` PLACEMENTS table,
-`generatePlanting()`, lights, mirrors · `furniture/*.js` eight modeled areas (`decor_plus.js` wraps decor) · `kit.js`/`materials.js`/`proc.js`
-shared modeling API · `player.js` · `interact.js` · `minimap.js` · `viewpoints.js` (TRIM = per-pano heading fixes) · `rednote.js` · `tour.js` ·
-`human.js` · `ui.js` (zh/en).
+The Codex `hud2` / `pets2` windows were stopped before they wrote reports. The work was finished here and checked in the app.
 
-## 3. State (2026-10-12)
-Verified working: walk, sit, drag chairs/stools/poufs, French doors and sliders, minimap + big-map teleport, viewpoints panel, photo wipe,
-panorama mode (Space), RedNote panel with go-to, tour (T), dusk (N) with real fixtures, EN/中文. Rooms matching the panoramas: foyer,
-living, kitchen, dining, family room, hallway, patio, backyard. Yard follows the aerial and is densely planted.
-Fixed from user feedback: white flickering floor, janky controls, bare garden, garage/laundry modeled, pony wall, dusk lights, seated body size.
+- Aim label is 18px, tour caption 26px. During the tour the crosshair and the label are hidden (`body.touring`).
+- **G** calls the dog, **K** calls the cat. The chips show the key.
+- **地图图例 / Map legends** replaces the three pin chips: 小红书, 全景, 照片, plus 全部显示 / 全部隐藏. Dusk and HQ chips are gone (**N** dusk, **H** quality). On a touch screen those two sit at the bottom of the dropdown.
+- Buttons: 小红书 / RedNote, 全景 / Pano, 教程 / Tutorial.
+- You can pet a dog while you are sitting, if you look at it. Petting a sitting or lying dog keeps it seated (hearts, head up) instead of standing it up. Calling a sitting dog makes it get up and come.
+- Front door: closed hinged doors, including the front door, get a collider (`house.js`, `if (!open0) setHinged(d, false)`). Not re-checked with a walk-through after the last build.
 
-## 4. Next (priority)
-1. **Primary bedroom is a mess (user).** A shot from (−4.3, 3.3) heading 90 saw through to the family room: check wall x = −2.28
-   (`79c7b50eda-aa3b5b3fca`) in `house.js`, `bedWhitewash` placement (−3.43, 3.55, ry −π/2), shelf/side table; rerun `compare.py 60243e1740 b9a18422cd`.
-2. Verify unchecked edits: bedroom B trim +35° (`03fae42bc1`), primary bath vanity on the west wall (real one is a double vanity → add `vanityDouble`).
-3. Full `compare.py`, fix bedroom 3, hall baths; soften the ash-table grain (dining module).
-4. Photoreal polish: exterior window sills/frames, vents, more décor from photos, door hardware, better window glass.
-5. Mobile pass (CODEX_BRIEF job 2): look pad blocks panel close button; phone sheets; bigger slider thumb. Nothing edited yet.
-6. Package + publish: test `web/tools/package.py` (≤240 MB, ≤15 MB/file, one 36 MB video must be re-encoded), then publish `build/` as a
-   private claude.ai artifact (several publishes ≤64 MB to the same URL), test on phone + laptop, send link.
-7. Nice-to-have: exploded "how he built it" animation of the window seat / bed (Yireeb-style), RedNote video on the monitor.
+## Finished this session (verified)
+- **Front planting:**
+  - The palm band is continuous across the centre, so the front door is hidden from the street.
+  - The south curb is a single piece, and the `frontBounds` clause that shoved centre plants east was removed.
+  - Code is in `web/src/layout.js`; screenshot `/tmp/ch/gap_sheet.jpg`.
+- **Tour (`web/src/tour.js`):**
+  - Stops 1 and 2 are aerial (`eye` set).
+  - The foyer stop has a `via` terrace waypoint. The camera holds height over the planting, drops onto the terrace, then follows the nav path through the front door.
+  - Straight (direct) flights now hold height and drop late (`viewpoints.js`).
+  - Screenshot `/tmp/ch/desc_sheet.jpg`.
+- **Closet (Codex `closet`):** the front-bedroom closet has white louvered bifolds that open with a click and a furnished interior. Screenshots `/tmp/ch/closet_closed.png`, `closet_open.png`, `closet_inside.png`.
+- **Pets (Cursor subagent, done):**
+  - Tabby cat (`src/pets/cat.js`, `assets/pets/cat.glb`) and shared roaming (`src/pets/roam.js`).
+  - Petting: within 1.3 m and facing the pet, click.
+  - Call chips for the dog and the cat.
+  - Cost: +5 draw calls and about 0.02 ms CPU per frame.
+  - Known issues: occasional 30–45 ms re-plan spikes, and the dog's fur shells cost about 2–5 ms GPU.
+- **Earlier:**
+  - French doors open outward onto the patio.
+  - The panorama and photo-compare views have a Q exit box and button.
+  - The landing page's ochre decoration block is now obviously decorative.
 
-## 5. Gotchas
-- Shared materials own their envMap → day/dusk must set `envMapIntensity` (`setEnvironment(env, intensity)`).
-- Leaf cards need `allowOverride=false` or GTAO draws squares (done in `plants_parts.js`).
-- `shot.mjs` uses system Chrome (`channel:'chrome'`); Playwright's Chromium install is broken here.
-- Photos/panos are symlinks into `source/zillow`; 2k textures ignored by git, `fetch_assets.py` restores them.
-- Modelers' local materials ignore `M.*` tweaks; per-piece colour lives in its module. Never push anywhere without the user.
+## Still open
+- **Unreviewed reports:** `/tmp/ch/codex_livingroom2_report.md`, `/tmp/ch/codex_hud_report.md`, `/tmp/ch/codex_frontyard2_report.md`. The status of the `hqlook` and `daylight` Codex windows is unknown.
+- **Foliage clipping:** the closet agent noticed it in the bedroom tour view.
+- **Regression check:** `node tools/chairtest.mjs`.
+- **Older backlog:**
+  - Remove the kitchen cupboard that isn't in the listing photos.
+  - Redo the camera viewpoints for all three bedrooms.
+  - Fix the chair conflict: click should sit, drag should move.
+  - Right-click menu to put moved objects back (one or all).
+  - More styling in the side bedrooms, with less clumsy doors.
+  - Plants clipping into the bottom-right bathroom.
+  - Camera shake: the player should yield the camera during tour and fly-to flights.
+
+## Conventions and constraints
+- **Coordinates:** plan uses +x east and +y north; world z = −plan y. Camera vertical FOV is 62°.
+- **Screenshot helper:** `node /tmp/ch/kshot.mjs W H out.png "x,y,headingDeg,pitchRAD,eye,vfovDeg"`.
+- **Headless tests:** use playwright with `channel: 'chrome'` and `--use-angle=metal --ignore-gpu-blocklist`, wait for `window.__ready`, and use `window.__app` as the app handle.
+- **HUD clicks:** `#hud` has `pointer-events:none`, so interactive children need `pointer-events:auto`. i18n lives in `DICT` in `src/ui.js` (zh first) and elements use `data-i18n`.
+- **Front yard:**
+  - The front door must stay hidden from the street by foliage; never open a sightline.
+  - Front-yard shots are aerial.
+- **Landing page:**
+  - It is a Le Corbusier tribute, not a copy, with no RedNote mention.
+  - The credit reads "made by Tianfu Wang and friends" (zh 由王天夫和朋友们制作). Never say "AI".
+- **Pet agents on Cursor:** old pet subagents used an explicit Claude slug billed to the Anthropic key. New Cursor subagents should omit the model so they inherit the Cursor quota.

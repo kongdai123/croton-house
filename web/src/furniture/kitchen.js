@@ -3,8 +3,9 @@
 // matte-black 0.10 m square tile + vertical finger tile behind the range, black appliances, waterfall island with an
 // oak V-groove board seating side, rush-seat teak counter stools, oak LED linear pendant.
 // Wall runs: BACK at local -Z against the wall, FRONT at +Z. Origins on the floor at the footprint centre.
-import { THREE, M, box, cyl, lathe, extrude, tube, sphere, torus, addSeat, setMovable, autoCollider, describe } from '../kit.js';
-import { TOP, CT, KICK, DT, UP_D, UP_Y0, UP_Y1, L, wuv, bake, rrect, fronts, tile, quartz, range, hood, dishwasher, barPull, shaker } from './kitchen_parts.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, sphere, torus, addSeat, setMovable, autoCollider, setCollider, describe } from '../kit.js';
+import { KITCHEN_WINDOW } from '../house.js';
+import { TOP, CT, KICK, DT, REV, UP_D, UP_Y0, UP_Y1, L, wuv, bake, rrect, fronts, tile, quartz, range, hood, dishwasher, barPull, shaker } from './kitchen_parts.js';
 
 const RUN_D = 0.62, BACK = -RUN_D / 2, FACE = BACK + 0.58;   // carcass 0.58 deep, fronts 0.019, quartz to +0.31
 const white = () => M.cabinetWhite();
@@ -35,9 +36,6 @@ function layout(widths) {   // widths: [[name, w], ...] laid out from -X, centre
 }
 const SOUTH = layout([['corner', 0.30], ['range', 0.76], ['drawers', 0.30], ['sink', 0.64], ['dw', 0.60]]);
 const SOUTH_NARROW = layout([['corner', 0.30], ['range', 0.76], ['drawers', 0.27], ['sink', 0.64]]);
-// southRunB (real layout from the Zillow pano): corner 0.45, dishwasher 0.60, sink 0.75, drawer stack 0.20; no range.
-const SOUTH_B = layout([['corner', 0.45], ['dw', 0.60], ['sink', 0.75], ['drawers', 0.20]]);
-
 function buildSouthRun(S) {
   const g = new THREE.Group(), SINK_X = S.sinkX, WIN = S.win, end = S.x1;
   // corner base: drawer over a single door
@@ -52,25 +50,7 @@ function buildSouthRun(S) {
   // drawer stack (5 drawers)
   baseBox(g, ...S.drawers);
   fronts(g, ...S.drawers, KICK, TOP - CT, FACE, Array.from({ length: 5 }, () => ({ kind: 'drawer' })));
-  // sink base: open-topped carcass so the basin shows through the quartz cut-out; false front + two doors
-  const bz = 0.04, hole = { x0: SINK_X - 0.26, x1: SINK_X + 0.26, z0: bz - 0.195, z1: bz + 0.195 };
-  {
-    const [x0, x1] = S.sink, w = x1 - x0, cx = SINK_X;
-    g.add(box(w, 0.66 - KICK, FACE - BACK, white(), { x: cx, y: KICK, z: (BACK + FACE) / 2, bottom: true }));
-    g.add(box(w, KICK, FACE - BACK - 0.06, white(), { x: cx, y: 0, z: (BACK + FACE - 0.06) / 2, bottom: true }));
-    for (const s of [-1, 1]) g.add(box(0.018, TOP - CT - 0.66, FACE - BACK, white(), { x: cx + s * (w / 2 - 0.009), y: 0.66, z: (BACK + FACE) / 2, bottom: true }));
-    g.add(box(w, TOP - CT - 0.66, 0.018, white(), { x: cx, y: 0.66, z: BACK + 0.009, bottom: true }));
-    fronts(g, x0, x1, KICK, TOP - CT, FACE, [{ h: 0.16, kind: 'false' }, { kind: 'doors' }]);
-    // undermount charcoal composite basin 0.55 × 0.42 × 0.20 (outer), centred under the cut-out (g16/g18)
-    const by = TOP - CT - 0.2, bw = 0.55, bd = 0.42, t = 0.01, cm = L.sinkComposite();
-    g.add(box(bw, 0.2, t, cm, { x: cx, y: by, z: bz - bd / 2 + t / 2, bottom: true }));
-    g.add(box(bw, 0.2, t, cm, { x: cx, y: by, z: bz + bd / 2 - t / 2, bottom: true }));
-    for (const s of [-1, 1]) g.add(box(t, 0.2, bd - 2 * t, cm, { x: cx + s * (bw / 2 - t / 2), y: by, z: bz, bottom: true }));
-    g.add(box(bw - 2 * t, t, bd - 2 * t, cm, { x: cx, y: by, z: bz, bottom: true }));
-    g.add(cyl(0.045, 0.045, 0.004, M.blackSteel(), { seg: 24, x: cx + 0.12, y: by + t, z: bz + 0.06, bottom: true }));
-    g.add(cyl(0.03, 0.03, 0.002, L.innerDark(), { seg: 20, x: cx + 0.12, y: by + t + 0.003, z: bz + 0.06, bottom: true }));
-    g.add(faucet(cx, BACK + 0.09));
-  }
+  const hole = sinkBase(g, ...S.sink, SINK_X);
   if (S.dw) g.add(dishwasher((S.dw[0] + S.dw[1]) / 2, FACE + DT, BACK + 0.02));
   // quartz: one slab per stretch not interrupted by the range; the stretch holding the sink gets the cut-out
   const stretches = S.range ? [[S.x0, S.range[0]], [S.range[1], end]] : [[S.x0, end]];
@@ -92,6 +72,63 @@ function buildSouthRun(S) {
   }
   return g;
 }
+// Sink base: open-topped carcass so the basin shows through the quartz cut-out; false front + two doors; undermount
+// charcoal composite basin (0.55 × 0.42 × 0.20 outer, narrower in a small cabinet). Returns the quartz cut-out.
+function sinkBase(g, x0, x1, cx) {
+  const w = x1 - x0, bz = 0.04, bw = Math.min(0.55, w - 0.06), bd = 0.42, t = 0.01, by = TOP - CT - 0.2, cm = L.sinkComposite();
+  g.add(box(w, 0.66 - KICK, FACE - BACK, white(), { x: cx, y: KICK, z: (BACK + FACE) / 2, bottom: true }));
+  g.add(box(w, KICK, FACE - BACK - 0.06, white(), { x: cx, y: 0, z: (BACK + FACE - 0.06) / 2, bottom: true }));
+  for (const s of [-1, 1]) g.add(box(0.018, TOP - CT - 0.66, FACE - BACK, white(), { x: cx + s * (w / 2 - 0.009), y: 0.66, z: (BACK + FACE) / 2, bottom: true }));
+  g.add(box(w, TOP - CT - 0.66, 0.018, white(), { x: cx, y: 0.66, z: BACK + 0.009, bottom: true }));
+  fronts(g, x0, x1, KICK, TOP - CT, FACE, [{ h: 0.16, kind: 'false' }, { kind: 'doors' }]);
+  g.add(box(bw, 0.2, t, cm, { x: cx, y: by, z: bz - bd / 2 + t / 2, bottom: true }));
+  g.add(box(bw, 0.2, t, cm, { x: cx, y: by, z: bz + bd / 2 - t / 2, bottom: true }));
+  for (const s of [-1, 1]) g.add(box(t, 0.2, bd - 2 * t, cm, { x: cx + s * (bw / 2 - t / 2), y: by, z: bz, bottom: true }));
+  g.add(box(bw - 2 * t, t, bd - 2 * t, cm, { x: cx, y: by, z: bz, bottom: true }));
+  g.add(cyl(0.045, 0.045, 0.004, M.blackSteel(), { seg: 24, x: cx + bw * 0.22, y: by + t, z: bz + 0.06, bottom: true }));
+  g.add(cyl(0.03, 0.03, 0.002, L.innerDark(), { seg: 20, x: cx + bw * 0.22, y: by + t + 0.003, z: bz + 0.06, bottom: true }));
+  g.add(faucet(cx, BACK + 0.09));
+  return { x0: cx - bw / 2 + 0.015, x1: cx + bw / 2 - 0.015, z0: bz - 0.195, z1: bz + 0.195 };
+}
+// southRunB, real layout (g13/g16/g18, pano): west wall (plan x -3.393) → fridge side panel (-1.504). Placed with
+// ry = N, so local +x = plan west. Blind corner under the west run, black dishwasher (g18 puts it at x -2.79..-2.19),
+// sink base, narrow five-drawer stack against the fridge panel. The photos give 0.74 + 0.15 for sink + drawers but
+// the scanned fridge / front door leave 0.69, so both are scaled down. No wall cabinets: square tile counter → ceiling, finger tile under the window sill
+// and above the head (window 26cd997f2a follows the g18 dimensions in house.js).
+const SR_X = -2.449, sr = (a, b) => [+(SR_X - b).toFixed(4), +(SR_X - a).toFixed(4)];
+const SOUTH_R = (() => {
+  const pw = -3.393, pe = -1.504, S = {}; let x = pw;
+  for (const [k, w] of [['corner', 0.60], ['dw', 0.60], ['sink', pe - pw - 1.325], ['drawers', 0.125]]) { S[k] = sr(x, x + w); x += w; }
+  [S.x0, S.x1] = sr(pw, pe); S.win = sr(KITCHEN_WINDOW.x0, KITCHEN_WINDOW.x1); S.sinkX = (S.sink[0] + S.sink[1]) / 2;
+  return S;
+})();
+function buildSouthRunReal(S = SOUTH_R) {
+  const g = new THREE.Group(), [w0, w1] = S.win, WY0 = KITCHEN_WINDOW.sill, WY1 = KITCHEN_WINDOW.head;
+  // blind corner: carcass behind a plain filler (the west run's bases cover the rest)
+  baseBox(g, ...S.corner);
+  g.add(box(S.corner[1] - S.corner[0] - REV, TOP - CT - KICK, DT, white(), { r: 0.002, seg: 1, x: (S.corner[0] + S.corner[1]) / 2, y: KICK, z: FACE + DT / 2, bottom: true }));
+  g.add(dishwasher((S.dw[0] + S.dw[1]) / 2, FACE + DT, BACK + 0.02));
+  const hole = sinkBase(g, ...S.sink, S.sinkX);
+  baseBox(g, ...S.drawers);
+  fronts(g, ...S.drawers, KICK, TOP - CT, FACE, Array.from({ length: 5 }, () => ({ kind: 'drawer' })));
+  g.add(quartz(S.x0, S.x1, BACK, -BACK, TOP - CT, hole));
+  // tile (local +x = west): square counter → ceiling west of the window, finger strips under the sill and over the head
+  const a = Math.max(w0, S.x0), o = [S.x1, TOP];
+  g.add(tile(w1, S.x1, TOP, CEIL, BACK, 'sq', o));
+  if (w0 > S.x0) g.add(tile(S.x0, w0, TOP, CEIL, BACK, 'sq', o));
+  g.add(tile(a, w1, TOP, WY0, BACK, 'fg', [w1, TOP]));
+  g.add(tile(a, w1, WY1, CEIL, BACK, 'fg', [w1, WY1]));
+  return g;
+}
+// Cabinet over the fridge and a full-height side panel on its west (g13/g18). Fridge-local coordinates (ry = N:
+// local +x = plan west); wall face at z -0.396.
+function buildFridgeSurround() {
+  const g = new THREE.Group(), wall = -0.396, front = 0.32, y0 = 1.80;
+  g.add(box(0.019, CEIL - 0.003, front - wall, white(), { x: 0.4645, y: 0, z: (wall + front) / 2, bottom: true }));
+  g.add(box(0.91, CEIL - 0.003 - y0, front - DT - wall, white(), { x: 0, y: y0, z: (wall + front - DT) / 2, bottom: true }));
+  fronts(g, -0.455, 0.455, y0, U1, front - DT, [{ kind: 'doors' }], { base: false });
+  return g;
+}
 // Tall black gooseneck pull-down faucet with a side lever, 0.30 high.
 function faucet(x, z) {
   const g = new THREE.Group(), m = M.blackMatte();
@@ -107,7 +144,7 @@ function faucet(x, z) {
 
 // ------------------------------------------------------------------ fridge
 function buildFridge() {
-  const g = new THREE.Group(), W = 0.91, Hh = 1.768, bm = M.blackAppliance(), sb = L.stainlessBlack();
+  const g = new THREE.Group(), W = 0.91, Hh = 1.768, bm = L.fridgeSlate(), sb = L.stainlessBlack();
   const back = -0.39 + 0.03, caseFront = 0.27, doorT = 0.055, gap = 0.006;   // 0.03 air gap to the wall behind
   g.add(box(W, Hh - 0.005, caseFront - back, bm, { r: 0.01, seg: 2, x: 0, y: 0, z: (back + caseFront) / 2, bottom: true }));
   // bottom freezer drawer
@@ -142,8 +179,8 @@ function buildFridge() {
 }
 
 // ------------------------------------------------------------------ west run (side wall: oven / microwave tower)
-// westRunB (real layout): finished end panel + 0.76 slide-in range (hood, cabinet above, finger tile), the 0.76 oven
-// tower, then base + uppers; 2.52 total, so the end panel's 0.018 comes out of the last base cabinet (0.982).
+// Generic side-wall run: optional end panel + 0.76 slide-in range (hood, cabinet above, finger tile), a 0.76 oven
+// tower, then base + uppers.
 function buildWestRun({ P = [-0.85, -0.09], B = [-0.09, 0.85], R = null, end = null } = {}) {
   const g = new THREE.Group(), pf = BACK + 0.60, pcx = (P[0] + P[1]) / 2;
   if (R) {
@@ -184,6 +221,80 @@ function buildWestRun({ P = [-0.85, -0.09], B = [-0.09, 0.85], R = null, end = n
   g.add(quartz(...B, BACK, -BACK));
   g.add(tile(...B, TOP, UP_Y0, BACK, 'sq', [B[0], TOP]));
   upper(g, ...B, UP_Y0, UP_Y1, [{ kind: 'doors' }]);
+  return g;
+}
+
+// ------------------------------------------------------------------ west wall, real layout (g12/g14/g16/g17, pano ee4635b067)
+// Placed with ry = E, so local +x = plan north, local +z = plan east and BACK sits on the wall face x = -3.393.
+// Wall cabinets run 1.40-2.33 with a filler band to the 2.44 ceiling; square tile counter → cabinet bottoms.
+const CEIL = 2.44, U0 = 1.40, U1 = 2.345;
+function crownBand(g, x0, x1, y0 = U1, face = BACK + UP_D) {
+  g.add(box(x1 - x0, CEIL - 0.003 - y0, face - BACK, white(), { x: (x0 + x1) / 2, y: y0, z: (BACK + face) / 2, bottom: true }));
+}
+// westRunB: south wall (plan y -4.606) → wall stub (-1.589), 3.017 long, origin at plan y -3.0975. The south run's
+// blind corner fills the first 0.62; then a 0.09 filler, B1 drawer-over-door, B2 three drawers, the slide-in range
+// centred under the hood cabinet, B3 drawer over two doors ending at the stub. Uppers (g12 widths): two pairs, the
+// wider hood cabinet, one pair, then a 0.063 filler against the stub.
+const WR_Y = -3.0975, wy = (py) => +(py - WR_Y).toFixed(4);
+const WEST_R = { x0: wy(-4.606), x1: wy(-1.589), fill: [wy(-3.986), wy(-3.914)], B1: [wy(-3.914), wy(-3.452)], B2: [wy(-3.452), wy(-3.136)], R: [wy(-3.136), wy(-2.376)], B3: [wy(-2.376), wy(-1.589)],
+  ups: [[wy(-4.598), wy(-3.879)], [wy(-3.879), wy(-3.156)], [wy(-3.156), wy(-2.366)], [wy(-2.366), wy(-1.652)]] };
+function buildWestRunReal(S = WEST_R) {
+  const g = new THREE.Group(), rcx = (S.R[0] + S.R[1]) / 2, [h0, h1] = S.ups[2], uEnd = S.ups[3][1];
+  // bases
+  baseBox(g, S.x0 + 0.62, S.fill[1]);
+  g.add(box(S.fill[1] - S.fill[0] - REV, TOP - CT - KICK, DT, white(), { r: 0.002, seg: 1, x: (S.fill[0] + S.fill[1]) / 2, y: KICK, z: FACE + DT / 2, bottom: true }));
+  baseBox(g, ...S.B1); fronts(g, ...S.B1, KICK, TOP - CT, FACE, [{ h: 0.15, kind: 'drawer' }, { kind: 'door', hinge: 'l' }]);
+  baseBox(g, ...S.B2); fronts(g, ...S.B2, KICK, TOP - CT, FACE, [{ h: 0.15, kind: 'drawer' }, { kind: 'drawer' }, { kind: 'drawer' }]);
+  baseBox(g, ...S.B3); fronts(g, ...S.B3, KICK, TOP - CT, FACE, [{ h: 0.15, kind: 'drawer' }, { kind: 'doors' }]);
+  g.add(range(rcx, FACE + 0.03, BACK + 0.01));
+  g.add(hood(rcx, BACK, L.hoodSteel()));
+  g.add(quartz(S.x0 + 0.62, S.R[0], BACK, -BACK));
+  g.add(quartz(S.R[1], S.x1, BACK, -BACK));
+  // backsplash: finger tile behind the range counter → hood cabinet, square tile counter → uppers elsewhere
+  const o = [S.x0, TOP];
+  g.add(tile(S.x0, h0, TOP, U0, BACK, 'sq', o));
+  g.add(tile(h1, S.x1, TOP, U0, BACK, 'sq', o));
+  g.add(tile(h0, h1, TOP, 1.94, BACK, 'fg', [h0, TOP]));
+  // wall cabinets + filler against the stub
+  S.ups.forEach(([a, b], i) => upper(g, a, b, i === 2 ? 1.94 : U0, U1, [{ kind: 'doors' }]));
+  g.add(box(S.x1 - uEnd, U1 - U0, UP_D, white(), { x: (uEnd + S.x1) / 2, y: U0, z: BACK + UP_D / 2, bottom: true }));
+  crownBand(g, S.x0 + 0.008, S.x1);
+  return g;
+}
+// westRunC: north of the wall stub, origin at plan y -0.38025. Bridge cabinet over the garage-door alcove
+// (stub face -1.4745 → tower -0.658), microwave column 0.82 (3 drawers, plain panel, built-in microwave with the
+// owner's matte-black "chalkboard" panel above it, two-door upper), tall pantry 0.552 (3 drawers, tall doors) ending
+// at -0.714 short of the vestibule door. Tower carcass 0.60 deep.
+const WC_Y = -0.38025, cy = (py) => +(py - WC_Y).toFixed(4);
+const TOWER = { bridge: [cy(-1.4745), cy(-0.658)], mw: [cy(-0.658), cy(0.162)], pan: [cy(0.162), cy(0.714)] };
+const TF = BACK + 0.60;
+function buildTowerReal(S = TOWER) {
+  const g = new THREE.Group(), [b0, b1] = S.bridge, [m0, m1] = S.mw, [p0, p1] = S.pan, mcx = (m0 + m1) / 2;
+  // bridge over the alcove (front 2.09-2.31 in g12): box held 0.02 off the wall so the door casing head runs behind it
+  const BY0 = 2.09, BY1 = 2.31;
+  g.add(box(b1 - b0, CEIL - 0.003 - BY0, TF - BACK - 0.02, white(), { x: (b0 + b1) / 2, y: BY0, z: (BACK + 0.02 + TF) / 2, bottom: true }));
+  { const w = b1 - b0 - REV, h = BY1 - BY0 - REV, fr = shaker(w, h, { dir: 'h', y: -h / 2 + 0.055 }); fr.position.set((b0 + b1) / 2, (BY0 + BY1) / 2, TF); g.add(fr); }
+  // tower carcass + kick, band to the ceiling
+  g.add(box(p1 - m0, CEIL - 0.003 - KICK, TF - BACK, white(), { x: (m0 + p1) / 2, y: KICK, z: (BACK + TF) / 2, bottom: true }));
+  g.add(box(p1 - m0, KICK, TF - BACK - 0.06, white(), { x: (m0 + p1) / 2, y: 0, z: (BACK + TF - 0.06) / 2, bottom: true }));
+  // microwave column: drawers 0.10-0.73, plain panel 0.73-0.89, appliance 0.89-1.36, chalk panel 1.36-1.68,
+  // white rail, two-door upper 1.72-2.33
+  fronts(g, m0, m1, KICK, 0.89, TF, [{ h: 0.16, kind: 'false' }, { kind: 'drawer' }, { kind: 'drawer' }, { kind: 'drawer' }]);
+  fronts(g, m0, m1, 1.72, U1, TF, [{ kind: 'doors' }], { base: false });
+  const aw = 0.76, bm = M.blackAppliance(), az = TF;
+  g.add(box(m1 - m0 - REV, 1.72 - 0.89 - REV, DT * 0.5, white(), { x: mcx, y: 0.89 + REV / 2, z: az + DT * 0.25, bottom: true }));
+  // appliance face: trim + Whirlpool strip on top, black glass door with keypad column at the right
+  g.add(box(aw, 0.47, 0.024, bm, { r: 0.003, seg: 1, x: mcx, y: 0.89, z: az + 0.012, bottom: true }));
+  g.add(box(aw - 0.012, 0.055, 0.004, L.stainlessBlack(), { x: mcx, y: 1.30, z: az + 0.026, bottom: true }));
+  g.add(box(0.05, 0.010, 0.002, L.ventWhite(), { x: mcx, y: 1.322, z: az + 0.0285, bottom: true }));
+  g.add(box(aw - 0.012, 0.395, 0.004, L.glassBlack(), { x: mcx, y: 0.898, z: az + 0.026, bottom: true }));
+  g.add(box(0.58, 0.25, 0.002, L.innerDark(), { x: mcx, y: 0.99, z: az + 0.0285, bottom: true }));
+  g.add(box(0.42, 0.045, 0.002, L.keypad(), { x: mcx, y: 0.915, z: az + 0.0285, bottom: true }));
+  // chalk panel: matte black, flush above the appliance
+  g.add(box(aw, 0.32, 0.016, L.chalk(), { r: 0.002, seg: 1, x: mcx, y: 1.362, z: az + 0.008, bottom: true }));
+  // pantry: three drawers, tall doors (pulls low)
+  fronts(g, p0, p1, KICK, 1.20, TF, [{ h: 0.28, kind: 'drawer' }, { h: 0.40, kind: 'drawer' }, { kind: 'drawer' }]);
+  fronts(g, p0, p1, 1.20, U1, TF, [{ kind: 'doors' }], { base: false });
   return g;
 }
 
@@ -306,10 +417,15 @@ function mulberry(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = 
 const done = (g, meta, collide = true) => { bake(g); describe(g, meta); if (collide) autoCollider(g); return g; };
 export const items = {
   southRun: () => done(buildSouthRun(SOUTH), { id: 'kitchen-south-run', name: 'Sink & range run', zh: '水槽灶台橱柜' }),
-  southRunB: () => { const g = done(buildSouthRun(SOUTH_B), { id: 'kitchen-south-run-b', name: 'Sink run (real layout)', zh: '水槽橱柜（实景布局）', note: `sink centre local x = ${SOUTH_B.sinkX.toFixed(3)}` }); g.userData.sinkX = SOUTH_B.sinkX; g.userData.window = { x0: SOUTH_B.win[0], x1: SOUTH_B.win[1], y0: 0.95, y1: 2.06 }; return g; },
+  southRunB: () => { const g = done(buildSouthRunReal(), { id: 'kitchen-south-run-b', name: 'Sink & dishwasher run', zh: '水槽 · 洗碗机', note: `place at plan (${SR_X}, -4.296), ry = N; sink centre local x = ${SOUTH_R.sinkX.toFixed(3)}` }); g.userData.sinkX = SOUTH_R.sinkX; g.userData.window = { x0: SOUTH_R.win[0], x1: SOUTH_R.win[1], y0: 1.10, y1: 2.0 }; return g; },
   southRunNarrow: () => { const g = done(buildSouthRun(SOUTH_NARROW), { id: 'kitchen-south-run-narrow', name: 'Sink & range run (1.97 m)', zh: '水槽灶台橱柜（窄）', note: `sink centre local x = ${SOUTH_NARROW.sinkX.toFixed(3)}` }); g.userData.sinkX = SOUTH_NARROW.sinkX; g.userData.window = { x0: SOUTH_NARROW.win[0], x1: SOUTH_NARROW.win[1], y0: 0.95, y1: 2.06 }; return g; },
-  fridge: () => done(buildFridge(), { id: 'kitchen-fridge', name: 'French-door refrigerator', zh: '法式对开门冰箱' }),
-  westRunB: () => done(buildWestRun({ end: [-1.26, -1.242], R: [-1.242, -0.482], P: [-0.482, 0.278], B: [0.278, 1.26] }), { id: 'kitchen-west-run-b', name: 'Range, oven tower & counter', zh: '灶台烤箱高柜与台面' }),
+  fridge: () => { const g = buildFridge(); g.add(buildFridgeSurround()); return done(g, { id: 'kitchen-fridge', name: 'French-door refrigerator', zh: '法式对开门冰箱' }); },
+  westRunB: () => done(buildWestRunReal(), { id: 'kitchen-west-run-b', name: 'Range wall', zh: '炉灶墙', note: `place at plan (-3.083, ${WR_Y}), ry = E` }),
+  westRunC: () => {
+    const g = buildTowerReal(), [m0] = TOWER.mw, [, p1] = TOWER.pan;
+    bake(g); describe(g, { id: 'kitchen-west-run-c', name: 'Microwave & pantry tower', zh: '微波炉高柜 · 微波炉上的黑板', note: `place at plan (-3.083, ${WC_Y}), ry = E; bridge cabinet over the garage-door alcove` });
+    return setCollider(g, { w: p1 - m0 - 0.04, d: TF + DT - BACK - 0.04, x: (m0 + p1) / 2, z: (BACK + TF + DT) / 2, h: CEIL });   // tower only: the alcove under the bridge stays walkable
+  },
   westRun: () => done(buildWestRun(), { id: 'kitchen-west-run', name: 'Oven tower & counter', zh: '烤箱高柜与台面' }),
   island: () => done(buildIsland(), { id: 'kitchen-island', name: 'Waterfall island', zh: '瀑布岛台' }),
   stool: () => { const g = buildStool(); bake(g); describe(g, { id: 'kitchen-stool', name: 'Rush counter stool', zh: '藤编吧凳' }); setMovable(g, { mass: 6, radius: 0.26 }); addSeat(g, { y: 0.66, facing: 0, kind: 'stool', back: 0.9 }); return autoCollider(g); },

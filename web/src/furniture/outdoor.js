@@ -2,9 +2,9 @@
 // Sources: refs/outdoor g40/g41/g42 (fire sphere, wicker egg chairs + poufs, the owner's lumber table and slatted
 // cinder-block stools, navy market umbrella), g37/g38/g39/g44 (white moulded patio armchairs), g03/g05/g06 (front yard:
 // low lumber platform bench, white pots, porch sconce), g43 (white rendered planters), rednote dusk shots (white urn).
-import { THREE, M, box, cyl, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow } from '../kit.js';
+import { THREE, M, box, cyl, tube, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow } from '../kit.js';
 import { ss, rng, wickerResin, WEAVE_TILE, pitSteel, galvanized, powderBlack, lumberTop, soil, concreteGrey, cinder, vinylShade, ash, charEnd, lumberPT, barkDark, cushionCream, navyDeep, renderWhite,
-  board, latheM, ringShell, strut, puffPillow, roundCushion, fireScreen, sconceAlpha } from './outdoor_parts.js';
+  board, latheM, ringShell, strut, puffPillow, roundCushion, fireScreen, sconceAlpha, animatedToggle } from './outdoor_parts.js';
 
 const PI = Math.PI;
 const root = (...kids) => group(...kids);
@@ -14,12 +14,14 @@ const root = (...kids) => group(...kids);
 // flat straps, equator flange with a side ring handle, top lift loop, four splayed square legs; logs inside.
 function firePit() {
   const R = 0.32, cy = 0.48, g = root();
+  const steel = pitSteel().clone(), screen = fireScreen().clone();
+  steel.emissive.set(0xff4808); steel.side = THREE.DoubleSide; screen.emissive.set(0xff6514);
   const part = (t0, t1, mat, r = R, seg = 64) => { const geo = new THREE.SphereGeometry(r, seg, 24, 0, 2 * PI, t0, t1 - t0);
     const uv = geo.attributes.uv, p = geo.attributes.position; for (let i = 0; i < p.count; i++) uv.setY(i, 1 - Math.acos(Math.max(-1, Math.min(1, p.getY(i) / r))) / PI);
     const m = new THREE.Mesh(geo, mat); m.position.y = cy; return shadow(m); };
   const tb = THREE.MathUtils.degToRad(123);
-  g.add(part(tb, PI, pitSteel()));                                    // solid bowl
-  const scrLow = part(PI / 2, tb, fireScreen(), R, 64), dome = part(0, PI / 2, fireScreen(), R + 0.004, 64);
+  g.add(part(tb, PI, steel));                                    // solid bowl
+  const scrLow = part(PI / 2, tb, screen, R, 64), dome = part(0, PI / 2, screen, R + 0.004, 64);
   for (const s of [scrLow, dome]) { s.castShadow = false; g.add(s); }
   // flanges: bowl rim, equator (lid lip + band), small top collar
   const ring = (r, y, tube) => { const t = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 8, 72), pitSteel()); t.rotation.x = PI / 2; t.position.y = y; return shadow(t); };
@@ -37,12 +39,82 @@ function firePit() {
     g.add(strut([0.17 * s, cy - 0.27, 0.17 * c], [0.3 * s, 0.012, 0.3 * c], 0.026, 0.026, pitSteel()));
     g.add(box(0.05, 0.012, 0.05, pitSteel(), { x: 0.3 * s, z: 0.3 * c, bottom: true, r: 0.003, ry: a })); }
   // fuel: ash bed + three split logs (bark sides, sawn ends)
-  g.add(cyl(0.2, 0.2, 0.01, ash(), { y: cy - R + 0.07 }));
-  const logGeo = new THREE.CylinderGeometry(0.038, 0.042, 0.36, 10, 1); const mats = [barkDark(), charEnd(), charEnd()];
+  const embers = ash().clone(), bark = barkDark().clone(), ends = charEnd().clone();
+  for (const m of [embers, bark, ends]) m.emissive.set(0xff3b04);
+  g.add(cyl(0.2, 0.2, 0.01, embers, { y: cy - R + 0.07 }));
+  const logGeo = new THREE.CylinderGeometry(0.038, 0.042, 0.36, 10, 1); const mats = [bark, ends, ends];
   [[0, 0.24, 0, 0.3], [0.04, 0.27, 0.05, 1.5], [-0.05, 0.285, -0.02, 2.5]].forEach(([x, y, z, ry], i) => {
     const l = shadow(new THREE.Mesh(logGeo, mats)); l.rotation.set(0, ry, PI / 2 + (i - 1) * 0.12, 'YXZ'); l.position.set(x, y + (cy - 0.48), z); g.add(l); });
+  // One permanent warm light; intensity fades to zero in daylight or when extinguished.
+  const glow = new THREE.PointLight(0xff8b38, 0, 3.5, 2); glow.position.y = 0.55; g.add(glow);
+  const flameMat = new THREE.ShaderMaterial({
+    uniforms: { time: { value: 0 }, strength: { value: 0 } }, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: `attribute float seed; varying vec2 vUv; varying float vSeed; uniform float time;
+      void main() { vUv = uv; vSeed = seed; vec3 p = position;
+        p.x += sin(time * 4.7 + seed * 9.0 + uv.y * 5.0) * 0.014 * uv.y;
+        p.y += sin(time * 6.0 + seed * 13.0) * 0.025 * uv.y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
+    fragmentShader: `varying vec2 vUv; varying float vSeed; uniform float time; uniform float strength;
+      void main() { float y = vUv.y; float x = vUv.x - 0.5;
+        x += sin(y * 9.0 - time * 5.5 + vSeed * 17.0) * (0.025 + y * 0.07);
+        float noise = sin(y * 23.0 - time * 8.0 + vSeed * 11.0) * sin(y * 11.0 + time * 3.0);
+        float width = (1.0 - y) * 0.40 + noise * 0.035;
+        float a = (1.0 - smoothstep(width - 0.10, width, abs(x))) * smoothstep(0.0, 0.12, y) * (1.0 - y);
+        vec3 col = mix(vec3(1.0, 0.72, 0.19), vec3(1.0, 0.12, 0.008), y);
+        gl_FragColor = vec4(col * 2.2, a * strength * 0.8); }`,
+  });
+  // Several crossed tongues share one draw call, so flames read from every standing view.
+  const pos = [], uv = [], seeds = [], indices = [];
+  for (let k = 0; k < 5; k++) for (let cross = 0; cross < 2; cross++) {
+    const a = k * 2.4 + cross * PI / 2, x = Math.sin(k * 2.4) * 0.095, z = Math.cos(k * 2.4) * 0.095;
+    const w = 0.095 + (k % 2) * 0.02, h = 0.29 + (k % 3) * 0.055, base = pos.length / 3;
+    for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+      pos.push(x + (u - 0.5) * w * 2 * Math.cos(a), 0.27 + v * h, z + (u - 0.5) * w * 2 * Math.sin(a));
+      uv.push(u, v); seeds.push(k / 5);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+  const flameGeo = new THREE.BufferGeometry();
+  flameGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  flameGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  flameGeo.setAttribute('seed', new THREE.Float32BufferAttribute(seeds, 1)); flameGeo.setIndex(indices);
+  const flames = new THREE.Mesh(flameGeo, flameMat); flames.userData.allowOverride = false; flames.raycast = () => {}; g.add(flames);
+  // Radial amber wash on the gravel, without a hard disc edge or another light.
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d'), gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255,155,58,0.5)'); gradient.addColorStop(0.35, 'rgba(255,101,20,0.25)'); gradient.addColorStop(1, 'rgba(255,68,0,0)');
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
+  const washMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 });
+  const wash = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), washMat); wash.rotation.x = -PI / 2; wash.position.y = 0.018;
+  wash.userData.allowOverride = false; wash.raycast = () => {}; g.add(wash);
+  const sparkPos = new Float32Array(12 * 3), sparkGeo = new THREE.BufferGeometry(); sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+  const sparkMat = new THREE.PointsMaterial({ color: 0xffb04c, size: 0.012, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sparks = new THREE.Points(sparkGeo, sparkMat); sparks.userData.allowOverride = false; sparks.raycast = () => {}; g.add(sparks);
+  // Collider belongs to the steel footprint, rather than the flame/glow effects.
   describe(g, { id: 'outdoor-fire-pit', name: 'fire sphere', zh: '球形火盆' });
-  return autoCollider(g);
+  setCollider(g, { w: 0.7, d: 0.7, h: 0.83 });
+  g.traverse(o => { if (o.material === steel || o.material === screen || o.material === embers || Array.isArray(o.material)) o.userData.noHighlight = true; });
+  const toggle = animatedToggle(g, {
+    label: { en: 'Light fire pit', zh: '点燃火盆' }, labelOn: { en: 'Extinguish fire pit', zh: '熄灭火盆' }, duration: 1.1,
+    apply(on, t) {
+      const flicker = 0.88 + 0.09 * Math.sin(t * 11.7) + 0.06 * Math.sin(t * 17.3 + 1.2) + 0.04 * Math.sin(t * 7.1);
+      flameMat.uniforms.time.value = t; flameMat.uniforms.strength.value = on;
+      glow.intensity = on * flicker * 2.3;
+      steel.emissiveIntensity = on * flicker * 0.08; screen.emissiveIntensity = on * flicker * 0.12;
+      embers.emissiveIntensity = on * flicker * 2.8; bark.emissiveIntensity = on * flicker * 0.45; ends.emissiveIntensity = on * flicker * 1.7;
+      washMat.opacity = on * flicker * 0.65; sparkMat.opacity = on * 0.85;
+      for (let i = 0; i < 12; i++) {
+        const life = (t * (0.32 + i * 0.011) + i * 0.137) % 1;
+        sparkPos[i * 3] = Math.sin(i * 13.7 + life * 3) * (0.035 + life * 0.12);
+        sparkPos[i * 3 + 1] = 0.36 + life * 0.59;
+        sparkPos[i * 3 + 2] = Math.cos(i * 8.3 + life * 4) * (0.03 + life * 0.1);
+      }
+      sparkGeo.attributes.position.needsUpdate = true;
+    },
+  });
+  g.userData.onTime = (dusk, instant) => toggle.set(dusk, instant);
+  return g;
 }
 
 // ---------------------------------------------------------------- wicker egg chair (g40/g42)
@@ -142,7 +214,7 @@ function lounger() {
   return autoCollider(g);
 }
 
-// ---------------------------------------------------------------- navy market umbrella, furled (g40/g42/g37)
+// ---------------------------------------------------------------- navy market umbrella, furled / open (g40/g42/g37)
 function umbrella() {
   const g = root();
   g.add(latheM([[0, 0], [0.215, 0], [0.225, 0.008], [0.226, 0.06], [0.215, 0.076], [0.19, 0.08], [0.055, 0.082], [0.045, 0.1], [0.034, 0.13], [0.03, 0.14], [0.022, 0.14], [0, 0.14]], concreteGrey(), { seg: 48, tile: 0.6 }));
@@ -151,18 +223,66 @@ function umbrella() {
   // crank housing just under the canopy hem
   g.add(box(0.05, 0.11, 0.05, powderBlack(), { y: 0.98, r: 0.01 }), cyl(0.005, 0.005, 0.09, powderBlack(), { x: 0.06, y: 0.98, rz: PI / 2, seg: 8 }));
   g.add(cyl(0.005, 0.005, 0.07, powderBlack(), { x: 0.105, y: 0.95, seg: 8 }), cyl(0.009, 0.009, 0.04, powderBlack(), { x: 0.105, y: 0.905, seg: 10 }));
-  // canopy: furled bundle with 8 soft folds and a scalloped hem; separate vent tier on top
-  const fold = (phi) => { const c = Math.cos(8 * phi); return Math.sign(c) * Math.pow(Math.abs(c), 0.7); };
-  const warpMain = (r, y, phi) => { const amp = 0.17 * ss(2.32, 2.1, y) + 0.06; let y2 = y; if (y < 1.16) y2 = y - 0.05 * (1 + Math.cos(8 * phi + PI)) * 0.5 * ss(1.16, 1.1, y); return [r * (1 + amp * fold(phi)), y2]; };
-  g.add(latheM([[0.165, 1.1], [0.15, 1.13], [0.118, 1.24], [0.1, 1.42], [0.108, 1.66], [0.122, 1.88], [0.124, 2.02], [0.108, 2.16], [0.075, 2.26], [0.04, 2.32], [0.016, 2.345]], navyDeep(), { seg: 96, tile: 0.5, warp: warpMain }));
-  const warpVent = (r, y, phi) => [r * (1 + 0.14 * fold(phi + PI / 8)), y < 2.18 ? y - 0.025 * (1 + Math.cos(8 * phi)) * 0.5 : y];
-  g.add(latheM([[0.118, 2.16], [0.11, 2.19], [0.085, 2.27], [0.05, 2.33], [0.025, 2.365], [0.012, 2.37]], navyDeep(), { seg: 96, tile: 0.5, warp: warpVent }));
-  // rib tips peeking under the hem, tie strap, finial
-  for (let k = 0; k < 8; k++) { const ph = (k + 0.5) * PI / 4; g.add(cyl(0.006, 0.004, 0.03, powderBlack(), { x: 0.15 * Math.sin(ph), z: 0.15 * Math.cos(ph), y: 1.07, seg: 6 })); }
-  g.add(cyl(0.122, 0.122, 0.03, navyDeep(), { y: 1.62, seg: 32, open: true }));
+  // Eight fabric gores unfold continuously. Interpolation between rib ends makes a true octagon,
+  // with a small catenary dip between ribs and a separate rain vent above the crown.
+  const canopy = (vent = false) => {
+    const nA = 96, nR = vent ? 5 : 16, positions = [], uvs = [], idx = [];
+    for (let j = 0; j <= nR; j++) for (let i = 0; i <= nA; i++) { positions.push(0, 0, 0); uvs.push(i / nA * 8, j / nR); }
+    for (let j = 0; j < nR; j++) for (let i = 0; i < nA; i++) {
+      const a = j * (nA + 1) + i, b = a + nA + 1; idx.push(a, b, b + 1, a, b + 1, a + 1);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); geo.setIndex(idx);
+    const mesh = shadow(new THREE.Mesh(geo, navyDeep())); g.add(mesh);
+    // Fixed bounds avoid rebuilding them as the canopy unfolds.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1.8, 0), 1.45);
+    const update = open => {
+      const p = geo.attributes.position;
+      for (let j = 0; j <= nR; j++) for (let i = 0; i <= nA; i++) {
+        const s = j / nR, phi = i / nA * 2 * PI, sector = i / nA * 8;
+        const k = Math.min(7, Math.floor(sector)), u = sector - k, a = k * PI / 4, b = a + PI / 4;
+        const radius = vent ? 0.29 : 1.22;
+        const ox = radius * s * ((1 - u) * Math.sin(a) + u * Math.sin(b));
+        const oz = radius * s * ((1 - u) * Math.cos(a) + u * Math.cos(b));
+        const oy = (vent ? 2.37 : 2.345) - (vent ? 0.11 : 0.42) * s - (vent ? 0.016 : 0.065) * Math.sin(PI * u) * s - 0.025 * Math.sin(PI * s);
+        const cr = (vent ? 0.012 + 0.106 * Math.sin(s * PI / 2) : 0.016 + 0.11 * Math.sin(s * PI / 2) + 0.039 * s ** 7) * (1 + 0.16 * Math.cos(phi * 8) * s);
+        const cy = (vent ? 2.37 - 0.21 * s : 2.345 - 1.245 * s) - 0.035 * Math.sin(PI * u) * s ** 5;
+        p.setXYZ(j * (nA + 1) + i, cr * Math.sin(phi) * (1 - open) + ox * open, cy * (1 - open) + oy * open, cr * Math.cos(phi) * (1 - open) + oz * open);
+      }
+      p.needsUpdate = true; geo.computeVertexNormals();
+    };
+    return update;
+  };
+  const mainCanopy = canopy(), ventCanopy = canopy(true);
+  const runner = cyl(0.034, 0.034, 0.075, powderBlack(), { y: 1.2, seg: 16 }); g.add(runner);
+  const ribs = [], braces = [], up = new THREE.Vector3(0, 1, 0), start = new THREE.Vector3(0, 2.33, 0);
+  for (let k = 0; k < 8; k++) {
+    const rib = cyl(0.005, 0.005, 1, powderBlack(), { seg: 6 }), brace = cyl(0.004, 0.004, 1, powderBlack(), { seg: 6 });
+    g.add(rib, brace); ribs.push(rib); braces.push(brace);
+  }
+  const tie = cyl(0.122, 0.122, 0.03, navyDeep(), { y: 1.62, seg: 32, open: true }); g.add(tie);
   g.add(cyl(0.022, 0.03, 0.02, powderBlack(), { y: 2.375 }), latheM([[0, 0], [0.012, 0], [0.016, 0.01], [0.013, 0.018], [0, 0.02]], powderBlack(), { seg: 16, y: 2.38 }));
-  describe(g, { id: 'outdoor-umbrella', name: 'navy market umbrella (closed)', zh: '藏青色庭院伞（收起）' });
-  autoCollider(g, 0.07); return g;
+  describe(g, { id: 'outdoor-umbrella', name: 'Navy market umbrella', zh: '藏青色庭院伞' });
+  // Keep the pole/base footprint as the walking collider when the canopy opens overhead.
+  setCollider(g, { w: 0.45, d: 0.45, h: 2.4 });
+  let lastOpen = -1;
+  animatedToggle(g, {
+    label: { en: 'Open umbrella', zh: '撑开庭院伞' }, labelOn: { en: 'Close umbrella', zh: '收起庭院伞' }, duration: 1.1,
+    apply(open) {
+      if (open === lastOpen) return; lastOpen = open;
+      mainCanopy(open); ventCanopy(open);
+      runner.position.y = 1.2 + open * 0.85;
+      tie.scale.setScalar(Math.max(0.001, 1 - open * 8));
+      const pose = (mesh, a, b) => { const d = b.clone().sub(a); mesh.position.copy(a).add(b).multiplyScalar(0.5); mesh.scale.y = d.length(); mesh.quaternion.setFromUnitVectors(up, d.normalize()); };
+      for (let k = 0; k < 8; k++) {
+        const phi = k * PI / 4, r = 0.15 + open * 1.07, y = 1.075 + open * 0.83;
+        const tip = new THREE.Vector3(r * Math.sin(phi), y, r * Math.cos(phi));
+        pose(ribs[k], start, tip);
+        pose(braces[k], new THREE.Vector3(0, runner.position.y, 0), start.clone().lerp(tip, 0.56));
+      }
+    },
+  });
+  return g;
 }
 
 // ---------------------------------------------------------------- white vinyl privacy fence panel (g40/g42/g43)
@@ -245,4 +365,71 @@ function porchLight() {
   return g;
 }
 
-export const items = { firePit, wickerChair, wickerOttoman, benchTable, stoolLumber, lounger, umbrella, fencePanel, plantersBench, potWhiteLarge, potWhiteSmall, planterBox, cushionsOutdoor, porchLight };
+function frontPallet() {
+  const g = root(), L = 2.6, D = .92, t = .035;
+  for (const z of [-.36, .36]) g.add(board(L, t, .16, lumberPT(), { axis: 'x', y: t / 2, z }));
+  for (const x of [-1.15, 0, 1.15]) {
+    for (const z of [-.36, .36]) g.add(board(.16, .12, .16, lumberPT(), { axis: 'y', x, y: .095, z }));
+    g.add(board(.16, t, D, lumberPT(), { axis: 'z', x, y: .172 }));
+  }
+  for (let i = 0; i < 17; i++) {
+    const x = -L / 2 + .075 + i * .153;
+    g.add(board(.14, t, D, lumberTop(), { axis: 'z', x, y: .208, off: i * .21 }));
+    for (const z of [-.36, .36]) g.add(cyl(.003, .003, .002, galvanized(), { x, y: .227, z, seg: 6 }));
+  }
+  describe(g, { id: 'outdoor-front-pallet', name: 'Low lumber pallet platform', zh: '前院木平台' });
+  setCollider(g, { w: L, d: D, h: .45 }); return g;
+}
+function frontRoundPot() {
+  const g = root();
+  g.add(latheM([[0, 0], [.16, 0], [.20, .025], [.27, .15], [.29, .35], [.285, .46], [.265, .46], [.25, .43], [.245, .39], [0, .39]], M.ceramicWhite(), { seg: 48 }));
+  g.add(cyl(.245, .245, .01, soil(), { y: .405, seg: 32 }));
+  return autoCollider(g);
+}
+function frontCube() {
+  const g = root(), w = .5, h = .5, t = .035;
+  for (const x of [-1, 1]) g.add(box(t, h, w, renderWhite(), { x: x * (w - t) / 2, y: h / 2 }));
+  for (const z of [-1, 1]) g.add(box(w - 2 * t, h, t, renderWhite(), { z: z * (w - t) / 2, y: h / 2 }));
+  g.add(box(w - t * 2, .02, w - t * 2, soil(), { y: h - .065 }));
+  return autoCollider(g);
+}
+function frontCurb() {
+  const g = root(box(1, .25, .16, renderWhite(), { y: .115 }), box(1.015, .025, .18, renderWhite(), { y: .245 }));
+  setCollider(g, { w: 1, d: .16, h: .26 }); return g;
+}
+function frontLamp() {
+  const g = root(), white = renderWhite();
+  g.add(latheM([[0, 0], [.11, 0], [.11, .04], [.075, .12], [.055, .19], [.048, 1.43], [.075, 1.45], [.075, 1.49], [.105, 1.52]], white, { seg: 24 }));
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: 0, transparent: true, opacity: .19, roughness: .12, depthWrite: false });
+  const globe = new THREE.Mesh(new THREE.SphereGeometry(.14, 24, 16), glass); globe.position.y = 1.70; globe.scale.y = 1.35; g.add(globe);
+  for (let k = 0; k < 6; k++) {
+    const a = k * PI / 3;
+    g.add(tube([[.075 * Math.sin(a), 1.51, .075 * Math.cos(a)], [.14 * Math.sin(a), 1.63, .14 * Math.cos(a)], [.135 * Math.sin(a), 1.77, .135 * Math.cos(a)], [.065 * Math.sin(a), 1.87, .065 * Math.cos(a)]], .008, white, { seg: 12, radial: 6 }));
+  }
+  g.add(latheM([[0, 1.87], [.08, 1.87], [.1, 1.90], [.04, 1.94], [.025, 1.98], [0, 2.03]], white, { seg: 24 }));
+  g.add(cyl(.017, .017, .2, white, { y: 1.65 }), cyl(.025, .025, .16, white, { x: .1, y: 1.0, rz: PI / 2 }));
+  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 0, roughness: .3 });
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.036, 16, 12), bulbMat); bulb.position.y = 1.72; g.add(bulb);
+  g.userData.onTime = (dusk, instant) => { bulbMat.emissiveIntensity = dusk ? 2.5 : 0; glass.emissiveIntensity = dusk ? .18 : 0; };
+  setCollider(g, { w: .16, d: .16, h: 2.03 });
+  describe(g, { id: 'outdoor-front-lamp', name: 'White glass carriage lantern', zh: '白色花园灯柱' }); return g;
+}
+
+function frontFence() {
+  const g = root(), w = 5.9, h = 1.8, mat = lumberPT().clone(); mat.color.set(0x6e4834);
+  for (let i = 0; i < 40; i++) g.add(board(.145, h, .025, mat, { axis: 'y', x: -w / 2 + .075 + i * .1475, y: h / 2, off: i * .17 }));
+  for (const x of [-2.95, -2.15, -.85, 2.95]) g.add(box(.1, h + .07, .1, mat, { x, y: (h + .07) / 2 }));
+  for (const y of [.35, 1.4]) g.add(box(w, .07, .055, mat, { y, z: -.055 }));
+  for (const y of [.4, 1.4]) g.add(box(.24, .045, .025, M.blackMatte(), { x: -2.02, y, z: .03 }));
+  g.add(box(.025, .15, .04, M.blackMatte(), { x: -.99, y: .9, z: .04 }));
+  setCollider(g, { w, d: .14, h }); return g;
+}
+function frontCondenser() {
+  const g = root(), mat = concreteGrey();
+  g.add(box(1.04, .06, 1.0, mat, { y: .03 }), box(.94, 1.0, .9, mat, { y: .56, r: .018 }));
+  g.add(cyl(.35, .35, .02, powderBlack(), { y: 1.07, seg: 32 }));
+  for (let i = 0; i < 21; i++) for (const z of [-.455, .455]) g.add(box(.88, .013, .012, powderBlack(), { y: .19 + i * .039, z }));
+  setCollider(g, { w: 1.04, d: 1.0, h: 1.08 }); return g;
+}
+
+export const items = { frontFence, frontCondenser, frontPallet, frontRoundPot, frontCube, frontCurb, frontLamp, firePit, wickerChair, wickerOttoman, benchTable, stoolLumber, lounger, umbrella, fencePanel, plantersBench, potWhiteLarge, potWhiteSmall, planterBox, cushionsOutdoor, porchLight };

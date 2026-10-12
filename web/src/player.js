@@ -1,8 +1,8 @@
 // First-person player: pointer-lock mouse look, WASD, capsule-vs-AABB sliding collision, sitting with eased camera.
 import { THREE } from './kit.js';
-import { getColliders } from './house.js';
+import { getColliders, CEIL } from './house.js';
 
-const EYE_STAND = 1.62, RADIUS = 0.17, SPEED = 2.4, RUN = 4.2;
+const EYE_STAND = 1.62, RADIUS = 0.17, SPEED = 2.4, RUN = 4.2, GRAVITY = 9.8, JUMP = Math.sqrt(2 * GRAVITY * 0.45);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const smooth = (x) => x * x * (3 - 2 * x);
 
@@ -17,8 +17,9 @@ export class Player {
     this.bob = 0; this.eye = EYE_STAND; this.eyeHeight = EYE_STAND;
     this.enabled = true; this.touch = null; this.lookVel = { x: 0, y: 0 };
     this.extraColliders = () => [];
-    this.onStand = null;
-    dom.addEventListener('mousemove', (e) => { if (!this.locked || !this.enabled) return; this.yaw -= e.movementX * 0.0022; this.pitch = clamp(this.pitch - e.movementY * 0.0022, -1.45, 1.45); });
+    this.onStand = null; this.jumpVel = 0; this.grounded = true; this.bobGain = 1;
+    this._forward = new THREE.Vector3(); this._right = new THREE.Vector3(); this._want = new THREE.Vector3(); this._step = new THREE.Vector3();
+    dom.addEventListener('mousemove', (e) => { if (!this.locked || (!this.enabled && !window.__app?.viewpoints?.panoActive)) return; this.yaw -= e.movementX * 0.0022; this.pitch = clamp(this.pitch - e.movementY * 0.0022, -1.45, 1.45); });
     addEventListener('keydown', (e) => { if (e.target?.tagName === 'INPUT') return; this.keys.add(e.code); if (this.seat && ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) this.stand(); });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -26,23 +27,31 @@ export class Player {
   }
   lock() { if (!this.locked) this.dom.requestPointerLock?.({ unadjustedMovement: true })?.catch?.(() => this.dom.requestPointerLock()); }
   unlock() { if (this.locked) document.exitPointerLock(); }
-  teleport(x, z, yawDeg = null, pitch = 0) { this.pos.set(x, 0, z); if (yawDeg !== null) this.yaw = THREE.MathUtils.degToRad(-yawDeg); this.pitch = pitch; this.vel.set(0, 0, 0); if (this.seat) { this.seat = null; this.eye = EYE_STAND; } }
+  teleport(x, z, yawDeg = null, pitch = 0) { this.resetJump(); this.viewEye = null; this.pos.set(x, 0, z); if (yawDeg !== null) this.yaw = THREE.MathUtils.degToRad(-yawDeg); this.pitch = pitch; this.vel.set(0, 0, 0); if (this.seat) { this.seat = null; this.eye = EYE_STAND; } }
   get heading() { return (-THREE.MathUtils.radToDeg(this.yaw) % 360 + 360) % 360; }   // plan heading, 0 = north, clockwise
   forward() { return new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
   eyePos() { return this.camera.position.clone(); }
 
   sit(seat) {   // seat: {position: Vector3 (seat top, world), facing: yaw radians (world), kind, root}
     if (this.seat) return;
-    this.seat = seat; this.sitT = 0; this.sitFrom = { pos: this.pos.clone(), eye: this.eye, yaw: this.yaw, pitch: this.pitch };
+    this.resetJump(); this.viewEye = null; this.seat = seat; this.sitT = 0; this.sitFrom = { pos: this.pos.clone(), eye: this.eye, yaw: this.yaw, pitch: this.pitch };
     this.vel.set(0, 0, 0);
   }
   stand() { if (!this.seat) return; const s = this.seat; this.seat = null; this.sitT = 0; this.standFrom = { pos: this.pos.clone(), eye: this.eye }; this.pos.copy(s.exitPos ?? this.pos); this.eye = this.eyeHeight; this.onStand?.(s); }
 
+  resetJump() { this.pos.y = 0; this.jumpVel = 0; this.grounded = true; this.bobGain = 0; }
+  jump() {
+    if (!this.enabled || this.driven || window.__app?.tourCtl?.active || window.__app?.viewpoints?.fly || window.__app?.viewpoints?.panoActive) return;
+    if (this.seat) { this.stand(); return; }
+    if (!this.grounded) return;
+    this.viewEye = null; this.jumpVel = JUMP; this.grounded = false; this.bobGain = 0;
+  }
   update(dt) {
     dt = Math.min(dt, 0.1);
+    if (this.driven) { this.resetJump(); this.vel.set(0, 0, 0); return; }   // a fly-to or the tour owns the camera this frame
     if (this.seat) { this.updateSit(dt); return; }
     // movement input
-    const f = this.forward(), r = new THREE.Vector3(f.z, 0, -f.x);
+    const f = this._forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)), r = this._right.set(-f.z, 0, f.x);
     let ix = 0, iz = 0;
     if (this.enabled) {
       if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) iz += 1; if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) iz -= 1;
@@ -51,19 +60,27 @@ export class Player {
       this.yaw -= this.lookVel.x * dt; this.pitch = clamp(this.pitch - this.lookVel.y * dt, -1.45, 1.45);
     }
     const run = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight');
-    const want = new THREE.Vector3().addScaledVector(f, iz).addScaledVector(r, ix);
+    const want = this._want.set(0, 0, 0).addScaledVector(f, iz).addScaledVector(r, ix);
+    if (want.lengthSq() > 0) this.viewEye = null;
     if (want.lengthSq() > 1) want.normalize();
     want.multiplyScalar(run ? RUN : SPEED);
     // accelerate / decelerate (ease-out feel per motion-lab: enter fast, settle)
-    const k = want.lengthSq() > 0 ? 10 : 14;
+    const k = want.lengthSq() > 0 ? 10 : this.grounded ? 14 : 1.5;
     this.vel.lerp(want, 1 - Math.exp(-k * dt));
-    const step = this.vel.clone().multiplyScalar(dt);
-    this.move(step);
+    const step = this._step.copy(this.vel).multiplyScalar(dt);
+    if (this.viewEye == null || step.lengthSq() > 1e-10) this.move(step);
+    if (!this.grounded) {
+      this.pos.y += this.jumpVel * dt - 0.5 * GRAVITY * dt * dt; this.jumpVel -= GRAVITY * dt;
+      const top = Math.max(0, CEIL - this.eyeHeight - RADIUS);
+      if (this.pos.y > top) { this.pos.y = top; this.jumpVel = Math.min(0, this.jumpVel); }
+      if (this.pos.y <= 0) this.resetJump();
+    }
+    this.bobGain = this.grounded ? Math.min(1, this.bobGain + dt / 0.25) : 0;
     // head bob
     const speed = this.vel.length();
     this.bob += dt * speed * 3.4;
-    const bobY = Math.sin(this.bob) * 0.012 * Math.min(1, speed / SPEED);
-    const eyeTarget = this.eyeHeight + bobY;
+    const bobY = Math.sin(this.bob) * 0.012 * Math.min(1, speed / SPEED) * this.bobGain;
+    const eyeTarget = (this.viewEye ?? this.eyeHeight) + bobY;
     this.eye += (eyeTarget - this.eye) * Math.min(1, dt * 12);
     this.camera.position.set(this.pos.x, this.pos.y + this.eye, this.pos.z);
     this.camera.rotation.set(0, 0, 0, 'YXZ'); this.camera.rotation.y = this.yaw; this.camera.rotation.x = this.pitch;
@@ -79,8 +96,8 @@ export class Player {
     // arc: dip slightly then rise so it feels like lowering into the seat
     cam.y -= Math.sin(t * Math.PI) * 0.05;
     this.camera.position.copy(cam);
-    const yawTarget = Math.atan2(fwd.x, fwd.z); // yaw such that forward() = fwd: forward = (-sin yaw, -cos yaw) -> yaw = atan2(-fwd.x, -fwd.z)
-    const yawT = Math.atan2(-fwd.x, -fwd.z);
+    // view yaw: forward() = (-sin yaw, -cos yaw) must equal the look direction (sin look, cos look)
+    const look = s.look ?? facing, yawT = Math.atan2(-Math.sin(look), -Math.cos(look));
     let dy = yawT - this.sitFrom.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
     const lookFree = this.sitT >= 1;
     if (!lookFree) { this.yaw = this.sitFrom.yaw + dy * t; this.pitch = this.sitFrom.pitch * (1 - t) + (-0.05) * t; }

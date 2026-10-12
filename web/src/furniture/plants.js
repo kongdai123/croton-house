@@ -5,7 +5,7 @@
 import { THREE, M, lathe, describe, setCollider, autoCollider, shadow } from '../kit.js';
 import {
   TAU, GOLD, lcg, rr, tint, texBanana, texFan, texStrap, texCroton, CROTON_CELLS, texSprig, texPine, texColeus, texHeart,
-  texPlume, texBananaStem, texCactus, texBoot, leafMat, plainMat, orient, dirOf, cardGeo, fanGeo, stemGeo, Batch,
+  texPlume, texBananaStem, texCactus, texBoot, paint, leafMat, plainMat, orient, dirOf, cardGeo, fanGeo, stemGeo, Batch,
   pivotAt, addSway, swayAnimate,
 } from './plants_parts.js';
 
@@ -355,7 +355,108 @@ function potPlant(seed = 1) {
   return finish(root, sw, { id: 'plants-potPlant', name: 'Pothos in white pot', zh: '小盆栽', note: '0.35 m houseplant, Ø0.16 white ceramic pot' });
 }
 
+// Front terrace specimens, kept separate from the back garden's established species.
+function birdPaddle(seed = 1) {
+  const r = lcg(seed * 127 + 9), root = new THREE.Group(), sw = [], stems = new Batch(), leaves = new Batch();
+  for (let i = 0; i < 15; i++) {
+    const yaw = i * GOLD + rr(r, -.15, .15), h = rr(r, .65, 1.35), rad = rr(r, .12, .35), A = [Math.sin(yaw) * rad, .02, Math.cos(yaw) * rad];
+    const E = [A[0] + Math.sin(yaw) * .32, h, A[2] + Math.cos(yaw) * .32];
+    stems.add(stemGeo([A, add3(A, [Math.sin(yaw) * .12, h * .55, Math.cos(yaw) * .12]), E], [.025, .013], { seg: 6, radial: 6 }), { tint: lin('#79964f') });
+    leaves.add(cardGeo(rr(r, .38, .58), rr(r, 1.1, 1.55), { sx: 4, sy: 12, bend: .24 + (i % 4) * .18, fold: .16, twist: rr(r, -.2, .2) }), { pos: E, q: orient(yaw, rr(r, .15, .9), 0), tint: tint(r, .14) });
+  }
+  root.add(stems.mesh(plainMat('frontPetiole', 0xffffff, { rough: .62 })));
+  const [pv, inn] = pivotAt(root, [0, .3, 0]); inn.add(leaves.mesh(leafMat('frontPaddle', texBanana(false), { rough: .52 }))); addSway(sw, pv, seed, .015, .65);
+  setCollider(root, { w: .45, d: .45, h: 2.5 });
+  return finish(root, sw, { id: 'plants-bird-paddle', name: 'Giant bird of paradise', zh: '天堂鸟' });
+}
+function cordyline(seed = 1) {
+  const r = lcg(seed * 173 + 8), root = new THREE.Group(), sw = [], stems = new Batch(), leaves = new Batch();
+  for (let j = 0; j < 4; j++) {
+    const a = j * GOLD, h = .3 + j * .28, C = [Math.sin(a) * .15, h, Math.cos(a) * .15];
+    stems.add(stemGeo([[C[0], 0, C[2]], [C[0] * 1.1, h * .6, C[2]], C], [.021, .014], { seg: 4, radial: 6 }), { tint: lin('#745944') });
+    for (let i = 0; i < 14; i++) {
+      const yaw = i * GOLD + a, t = i / 13;
+      leaves.add(cardGeo(rr(r, .11, .17), rr(r, .55, .82), { sx: 2, sy: 8, bend: .3 + t * .9, fold: -.18, twist: rr(r, -.4, .4) }), { pos: add3(C, [0, -.13 * t, 0]), q: orient(yaw, .15 + t * 1.35, 0), tint: tint(r, .2) });
+    }
+  }
+  root.add(stems.mesh(plainMat('frontTiStem', 0xffffff, { rough: .9 })));
+  const [pv, inn] = pivotAt(root, [0, .2, 0]); inn.add(leaves.mesh(leafMat('frontTi', texStrap('frontTi', '#6c293e', '#39212e', '#995655'), { rough: .42 }))); addSway(sw, pv, seed, .017, .8);
+  setCollider(root, { w: .35, d: .35, h: 1.8 });
+  return finish(root, sw, { id: 'plants-cordyline', name: 'Burgundy cordyline', zh: '朱蕉' });
+}
+function arecaClump(seed = 1, dense = false) {
+  const r = lcg(seed * 197 + 3), root = new THREE.Group(), sw = [], stems = new Batch(), leaves = new Batch();
+  const pinna = cardGeo(dense ? .085 : .055, dense ? .64 : .47, { sx: 1, sy: 5, bend: .5, fold: .12 });
+  for (let j = 0; j < (dense ? 7 : 5); j++) {
+    const a = j * GOLD, h = rr(r, dense ? .65 : .45, dense ? 1.35 : 1.1), C = [Math.sin(a) * .22, h, Math.cos(a) * .22];
+    stems.add(stemGeo([[C[0] * .6, 0, C[2] * .6], [C[0], h * .55, C[2]], C], [.022, .014], { seg: 5, radial: 6 }), { tint: lin('#a19f46') });
+    for (let f = 0; f < (dense ? 8 : 6); f++) {
+      const yaw = a + f * GOLD, L = rr(r, f < 2 ? .65 : 1.05, f < 2 ? .95 : 1.48), rise = rr(r, f < 2 ? 1.3 : .6, f < 2 ? 1.6 : 1.0);
+      const F = f === 5 ? [C[0], .16, C[2]] : C;
+      const at = t => add3(F, [Math.sin(yaw) * L * t, rise * Math.sin(t * Math.PI * .72), Math.cos(yaw) * L * t]);
+      stems.add(stemGeo([0, .25, .5, .75, 1].map(at), [.009, .002], { seg: 12, radial: 4 }), { tint: lin('#9d9d43') });
+      for (let k = 1; k <= 21; k++) for (const side of [-1, 1]) {
+        const t = k / 22, len = (.45 + .5 * Math.sin(t * Math.PI)) * rr(r, .9, 1.1);
+        leaves.add(pinna, { pos: at(t), q: orient(yaw + side * 1.12, 1.0 + t * .65, side * .2), s: [1, len, 1], tint: lin(dense ? (k % 4 ? '#67913f' : '#8da94b') : (k % 4 ? '#95a64c' : '#b0b459')) });
+      }
+    }
+  }
+  const [pv, inn] = pivotAt(root, [0, .1, 0]); inn.add(stems.mesh(plainMat('frontPalmStem', 0xffffff, { rough: .78 })), leaves.mesh(leafMat('frontPalmPinna', texStrap('frontPalmPinna', '#769641', '#b3bc63', '#6a8e36'), { rough: .65 }))); addSway(sw, pv, seed, .012, .6);
+  if (dense) root.scale.set(.76, 1, .76);
+  setCollider(root, { w: .45, d: .45, h: 2.2 });
+  return finish(root, sw, { id: 'plants-areca', name: 'Clumping feathery palm', zh: '散尾葵' });
+}
+function muhlyFront(seed = 1) {
+  const root = grassClump(seed), r = lcg(seed * 137 + 2), b = new Batch();
+  for (let i = 0; i < 110; i++) {
+    const a = r() * TAU, rad = Math.sqrt(r()) * .65;
+    b.add(cardGeo(.16, rr(r, .28, .46), { sy: 3, bend: .2 }), { pos: [Math.sin(a) * rad, rr(r, .6, .85), Math.cos(a) * rad], q: orient(a, rr(r, .1, .55), r() * TAU), tint: tint(r, .15) });
+  }
+  const cloud = paint('frontMuhlyCloudFine', 256, 256, (g, W, H, rnd) => {
+    g.lineWidth = .55;
+    for (let i = 0; i < 95; i++) {
+      const a = rnd() * TAU, rad = Math.sqrt(rnd()), x = W * (.5 + Math.sin(a) * rad * .44), y = H * (.45 + Math.cos(a) * rad * .4);
+      g.strokeStyle = i % 3 ? '#cbb3a2' : '#dbc4bc';
+      g.beginPath(); g.moveTo(W * .5, H * .96); g.quadraticCurveTo(W * .5 + (x - W * .5) * .4, y + 15, x, y); g.stroke();
+      g.fillStyle = '#dfc8be'; g.fillRect(x, y, 1, 1);
+    }
+  });
+  root.children[0].add(b.mesh(leafMat('frontMuhly', cloud, { rough: .9 })));
+  root.scale.set(1.3, 1.2, 1.3); return root;
+}
+
+// Low spreading sprigs close the gaps under the front specimens, sharing the hedge material.
+function frontCover(seed = 1) {
+  const r = lcg(seed * 233 + 4), root = new THREE.Group(), b = new Batch();
+  const tex = texSprig('shrub2', { n: 38, len: [44, 64], wid: [18, 26], rx: .33, ry: .36, dark: .65, base: '#2d5c25', hi: '#78aa50' });
+  const geo = cardGeo(.24, .34, { sy: 2, bend: .65 });
+  for (let k = 0; k < 86; k++) {
+    const a = k * GOLD, rad = Math.sqrt(r()) * .62;
+    b.add(geo, { pos: [Math.sin(a) * rad, rr(r, .015, .11), Math.cos(a) * rad * .7], q: orient(a, rr(r, .45, 1.4), rr(r, -.4, .4)), s: rr(r, .65, 1.1), tint: tint(r, .23) });
+  }
+  root.add(b.mesh(leafMat('shrub', tex, { rough: .7, soft: true })));
+  describe(root, { id: 'plants-front-cover', name: 'Tropical groundcover', zh: '地被植物' }); return root;
+}
+function frontQueen(seed = 1) {
+  const r = lcg(seed * 239 + 3), root = new THREE.Group(), stems = new Batch(), leaves = new Batch(), H = rr(r, 3.8, 4.5);
+  root.add(new Batch().add(stemGeo([[0, 0, 0], [.06, H * .4, 0], [.12, H * .8, -.04], [.14, H, -.08]], [.14, .095], { seg: 16, radial: 10 }), { tint: lin('#a9a18a') }).mesh(M.bark()));
+  const pinna = cardGeo(.075, .7, { sy: 5, bend: .65, fold: .12 });
+  for (let f = 0; f < 15; f++) {
+    const yaw = f * GOLD, L = rr(r, 1.55, 2.15), rise = f < 4 ? 1.65 : rr(r, .65, 1.1), drop = f < 4 ? .3 : .95;
+    const at = t => [.14 + Math.sin(yaw) * L * t, H + rise * Math.sin(t * Math.PI * .8) - drop * t * t, -.08 + Math.cos(yaw) * L * t];
+    stems.add(stemGeo([0, .25, .5, .75, 1].map(at), [.024, .003], { seg: 12, radial: 5 }), { tint: lin('#8a9456') });
+    for (let k = 1; k < 26; k++) for (const side of [-1, 1]) {
+      const t = k / 26;
+      leaves.add(pinna, { pos: at(t), q: orient(yaw + side * 1.1, 1.1 + t * .9, side * .2), s: [1, .5 + .55 * Math.sin(t * Math.PI), 1], tint: lin(k % 4 ? '#82a45e' : '#a5b47c') });
+    }
+  }
+  root.add(stems.mesh(plainMat('frontPalmStem', 0xffffff, { rough: .78 })), leaves.mesh(leafMat('frontPalmPinna', texStrap('frontPalmPinna', '#769641', '#b3bc63', '#6a8e36'), { rough: .65 })));
+  setCollider(root, { w: .3, d: .3, h: H }); describe(root, { id: 'plants-front-queen', name: 'Queen palm', zh: '皇后葵' }); return root;
+}
+
 export const items = {
+  frontCover, frontQueen, frontAreca: (seed = 1) => arecaClump(seed, true),
+  birdPaddle, cordyline, arecaClump, muhlyFront,
   banana: (seed = 1) => banana(seed),
   palmFan: (seed = 1) => palmFan(seed),
   bromeliad: (seed = 1, variant = 'red') => bromeliad(seed, variant),

@@ -44,8 +44,9 @@ const once = (fn) => { let v; return () => (v ??= fn()); };
 export const M = {
   // engineered white-oak wide plank, 1.9 m planks across ~0.19 m boards; scan tile ~2 m
   floorOak: once(() => pbr('laminate_floor_02', { scale: 1.6, color: 0xf3e7d4, roughness: 0.7, normalScale: 0.5 })),
-  wallPaint: once(() => new THREE.MeshStandardMaterial({ color: 0xf7f5f1, roughness: 0.94 })),   // flat painted drywall
-  ceiling: once(() => new THREE.MeshStandardMaterial({ color: 0xfbfbf9, roughness: 0.96 })),
+  // Daylight reflectance is ~0.8 linear; keep the photographed dusk finish.
+  wallPaint: once(() => Object.assign(new THREE.MeshStandardMaterial({ color: 0xf7f5f1, roughness: 0.94 }), { userData: { daylightPaint: 0.86 } })),
+  ceiling: once(() => Object.assign(new THREE.MeshStandardMaterial({ color: 0xfbfbf9, roughness: 0.96 }), { userData: { daylightPaint: 0.84 } })),
   stucco: once(() => pbr('white_stucco', { scale: 3.0, color: 0xf7f6f1, roughness: 0.88, normalScale: 0.3 })),
   trim: once(() => new THREE.MeshStandardMaterial({ color: 0xf6f6f4, roughness: 0.55 })),
   doorWhite: once(() => new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.5 })),
@@ -61,7 +62,7 @@ export const M = {
   asphalt: once(() => new THREE.MeshStandardMaterial({ color: 0x5b5b5a, roughness: 0.95 })),
   mulch: once(() => pbr('palm_tree_bark', { scale: 1.1, color: 0x4a2f1f, roughness: 1, normalScale: 1.0 })),
   // Glass: thin transparent physical material; `transmission` would cost a lot with this many panes.
-  glass: once(() => new THREE.MeshPhysicalMaterial({ color: 0xdfeaf0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.2, side: THREE.DoubleSide, depthWrite: false })),
+  glass: once(() => Object.assign(new THREE.MeshPhysicalMaterial({ color: 0xdfeaf0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.2, side: THREE.DoubleSide, depthWrite: false }), { userData: { daylightOpacity: 0.035 } })),
   mirror: once(() => Object.assign(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.02, metalness: 1.0 }), { name: 'mirror' })),
   aluminum: once(() => new THREE.MeshStandardMaterial({ color: 0xdedfe0, roughness: 0.35, metalness: 0.9 })),
   ironBlack: once(() => new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.55, metalness: 0.7 })),
@@ -112,6 +113,79 @@ export const M = {
   screen: once(() => new THREE.MeshStandardMaterial({ map: proc.screen(), roughness: 0.3, emissive: 0xffffff, emissiveMap: proc.screen(), emissiveIntensity: 0.6 })),
 };
 
-export function setEnvironment(envMap, intensity = 1) {
-  for (const k of Object.keys(M)) { const m = M[k](); m.envMap = envMap; m.envMapIntensity = intensity; m.needsUpdate = true; }
+export function setEnvironment(envMap, intensity = 1, materials = null) {
+  // An explicit set covers local furniture materials as well as shared M.* ones.
+  // Exposure adaptation only changes uniforms; do not recompile every frame.
+  const targets = materials ?? Object.values(M).map(create => create());
+  for (const material of targets) {
+    const changed = material.envMap !== envMap;
+    material.envMap = envMap; material.envMapIntensity = intensity;
+    if (changed) material.needsUpdate = true;
+  }
 }
+
+// ---- Garden ground. The leafy_grass scan's albedo is mostly brown leaf litter, so turf gets a painted St. Augustine
+//      canopy (broad blades, deep to bright greens) over the scan's normal map, plus a slow macro tint so big lawns
+//      don't show the 1.1 m tile. Bed mulch is darker than M.mulch: it should only read as shade between plants.
+function canvasTex(size, paint) {
+  const c = document.createElement('canvas'); c.width = c.height = size; paint(c.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy; return t;
+}
+function lcgRand(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function turfAlbedo() {
+  const t = canvasTex(512, (g, S) => {
+    const r = lcgRand(2513);
+    g.fillStyle = '#2f4a1d'; g.fillRect(0, 0, S, S);
+    const cols = ['#38561f', '#41622a', '#4b6f2c', '#557a30', '#618636', '#6d913b', '#4e7436', '#7e9c44', '#8fa64c'];
+    g.lineCap = 'round';
+    for (let i = 0; i < 9000; i++) {
+      const x = r() * S, y = r() * S, a = r() * Math.PI * 2, L = 4 + r() * 9, w = 1.4 + r() * 2.0, k = Math.min(cols.length - 1, Math.floor(Math.pow(r(), 0.85) * cols.length));
+      g.strokeStyle = cols[k]; g.lineWidth = w; g.globalAlpha = 0.6 + r() * 0.4;
+      const dx = Math.cos(a) * L, dy = Math.sin(a) * L;
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        const px = x + ox, py = y + oy; if (px < -L || px > S + L || py < -L || py > S + L) continue;
+        g.beginPath(); g.moveTo(px, py); g.lineTo(px + dx, py + dy); g.stroke();
+      }
+    }
+  });
+  t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function macroNoise() {   // smooth tileable value noise
+  return canvasTex(64, (g, S) => {
+    const r = lcgRand(77), N = 8, v = [...Array(N * N)].map(() => r()), at = (i, j) => v[(j % N) * N + (i % N)], img = g.createImageData(S, S);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const fx = x / S * N, fy = y / S * N, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+      const val = (at(ix, iy) * (1 - sx) + at(ix + 1, iy) * sx) * (1 - sy) + (at(ix, iy + 1) * (1 - sx) + at(ix + 1, iy + 1) * sx) * sy;
+      const o = (y * S + x) * 4; img.data[o] = img.data[o + 1] = img.data[o + 2] = val * 255; img.data[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  });
+}
+Object.assign(M, {
+  turf: once(() => {
+    const rep = 1 / 1.1, map = turfAlbedo(); map.repeat.set(rep, rep);
+    const m = new THREE.MeshStandardMaterial({ map, normalMap: tex('leafy_grass_nor.jpg', { repeat: rep }), normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95, metalness: 0 });
+    const uMacro = { value: macroNoise() };
+    m.onBeforeCompile = (s) => {
+      s.uniforms.uMacro = uMacro;
+      s.fragmentShader = 'uniform sampler2D uMacro;\n' + s.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+  float macroV = texture2D(uMacro, vMapUv * 0.055).r * 0.65 + texture2D(uMacro, vMapUv * 0.17 + 0.37).r * 0.35;
+  diffuseColor.rgb *= mix(vec3(0.78, 0.84, 0.74), vec3(1.12, 1.1, 0.92), macroV);`);
+    };
+    m.customProgramCacheKey = () => 'turf-macro';
+    m.name = 'turf'; return m;
+  }),
+  bedMulch: once(() => pbr('palm_tree_bark', { scale: 0.8, color: 0x33241a, roughness: 1, normalScale: 1.2 })),
+  // Crushed white shell (g37-g47 read ~#d6d3ce): the shell_floor scan is brown gravel, so keep its grain but remap its
+  // luminance to white with grey specks.
+  shellWhite: once(() => {
+    const m = pbr('shell_floor_01', { scale: 0.75, roughness: 0.88, normalScale: 1.1 });
+    m.onBeforeCompile = (s) => {
+      s.fragmentShader = s.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+  float shellL = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+  diffuseColor.rgb = mix(vec3(0.70, 0.69, 0.665) * clamp(0.45 + 2.2 * shellL, 0.35, 1.25), diffuseColor.rgb * 2.4, 0.08);`);
+    };
+    m.customProgramCacheKey = () => 'shell-white';
+    m.name = 'shellWhite'; return m;
+  }),
+});

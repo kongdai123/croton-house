@@ -2,8 +2,8 @@
 web/node_modules/
 web/dist/
 web/build/
-web/assets/tex/
-web/assets/hdr/
+# commercial album track; not published
+web/assets/audio/*.m4a
 compare/*_3d.png
 .DS_Store
 __pycache__/

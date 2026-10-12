@@ -9,6 +9,21 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="warming" class="hidden" role="status" aria-live="polite">
+  <div class="wm">
+    <header class="wm-head"><span class="wm-studio">Studio Hu Dwelling</span><span class="wm-place" data-i18n="place">Sarasota, Florida</span><span class="wm-addr">No. 2513 Croton Ave</span></header>
+    <figure class="wm-window"><i class="wm-plane wm-blue"></i><i class="wm-plane wm-ochre"></i><img src="assets/landing/ribbon.jpg" alt=""></figure>
+    <div class="wm-row">
+      <div class="wm-text">
+        <div class="wm-title" data-i18n="warming">Preparing the rooms…</div>
+        <div class="wm-sub" data-i18n="warmingSub">Setting up the light and materials. The first visit takes a few seconds.</div>
+      </div>
+      <div class="wm-measure" aria-hidden="true"><span style="--h:244"></span><span class="r" style="--h:206"></span><span style="--h:95"></span><span style="--h:76"></span><span style="--h:45"></span></div>
+    </div>
+    <div class="wm-progress"><div class="wm-bar"><i id="warmbar"></i></div><span id="warmcount"></span></div>
+  </div>
+</div>
+</div>
 <div id="title" class="overlay">
   <div class="lc">
     <header class="lc-head">
@@ -46,8 +61,37 @@
   </div>
 </div>
 <div id="hud">
+  <div id="firststeps" class="hidden" role="dialog" aria-labelledby="fsIntroTitle">
+    <section class="fs-card fs-intro" aria-labelledby="fsIntroTitle">
+      <figure class="fs-photos">
+        <img class="fs-main" src="assets/rednote/6a02916b00_image_01.jpg" alt="The house at dusk, seen from the garden" fetchpriority="low">
+        <img src="assets/rednote/69fd344f00_image_01.jpg" alt="The office with its glass doors folded open" fetchpriority="low">
+        <img src="assets/rednote/6ab7b98000_image_01.jpg" alt="The window seat in whitewashed pine" fetchpriority="low">
+        <i class="fs-plane" aria-hidden="true"></i>
+      </figure>
+      <div class="fs-kicker" data-i18n="fsKicker">Sarasota, Florida · Studio Hu</div>
+      <h2 class="fs-title" id="fsIntroTitle">2513 Croton Ave</h2>
+      <ol class="fs-lines">
+        <li><em>01</em><span data-i18n="fsI1">A 1962 block house, kept rather than replaced.</span></li>
+        <li><em>02</em><span data-i18n="fsI2">Twenty feet of folding glass. Opened, the garden becomes the living room.</span></li>
+        <li><em>03</em><span data-i18n="fsI3">The overhang reaches out sixty centimetres, to let the shadows of the trees in.</span></li>
+        <li><em>04</em><span data-i18n="fsI4">Bed, window seat, counters: pine and oak, made by hand.</span></li>
+      </ol>
+      <p class="fs-sign" data-i18n="fsSign">Three bedrooms, an office, a garden. Lot 95 × 110 ft. Design and build: Studio Hu.</p>
+    </section>
+    <section class="fs-card fs-controls" aria-labelledby="fsTitle">
+      <div class="fs-title" id="fsTitle" data-i18n="fsTitle">First steps</div>
+      <ul>
+        <li><span class="fs-keys fs-desk"><svg class="fs-mouse" viewBox="0 0 24 34" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="31" rx="10.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span class="fs-desk" data-i18n="fsLook">Look around with the mouse</span><span class="fs-touch" data-i18n="fsLookTouch">Swipe on the right to look around</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="fs-desk" data-i18n="fsWalk">Walk around</span><span class="fs-touch" data-i18n="fsWalkTouch">Use the stick, bottom left, to walk</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>T</kbd></span><span class="fs-desk" data-i18n="fsTour">Take the guided tour</span><span class="fs-touch" data-i18n="fsTourTouch">Tap Tour for the guided tour</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>H</kbd></span><span class="fs-desk" data-i18n="fsViews">Show viewpoints: photos, panoramas, RedNote</span><span class="fs-touch" data-i18n="fsViewsTouch">Show viewpoints from Map legends</span></li>
+      </ul>
+      <div class="fs-foot"><span class="fs-desk" data-i18n="fsStart">Click anywhere to start · I for this introduction · ? for all controls</span><span class="fs-touch" data-i18n="fsStartTouch">Tap anywhere to start</span></div>
+    </section>
+  </div>
   <div id="topbar">
-    <div class="brand"><b>2513</b> Croton Ave</div>
+    <button id="brand" class="brand" type="button" data-i18n-title="introTip" title="Introduction · I"><b>2513</b> Croton Ave</button>
     <div class="spacer"></div>
     <div id="legends">
       <button class="chip" id="btn-legends" aria-expanded="false" aria-controls="legendsPanel"><span data-i18n="mapLegends">Map legends</span><span class="caret" aria-hidden="true">▾</span></button>
@@ -77,7 +121,7 @@
   <div id="crosshair"></div>
   <div id="label"></div>
   <div id="toast"></div>
-  <canvas id="minimap" width="220" height="220"></canvas>
+  <canvas id="minimap" width="190" height="190"></canvas>
   <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">Click any blue/green/red dot to go there · M to close</div></div>
   <aside id="panel" class="hidden"><div id="panelHead"><span id="panelTitle"></span><button id="panelClose">×</button></div><div id="panelBody"></div></aside>
   <div id="compare" class="hidden"><img id="compareImg" alt=""><input id="compareSlider" type="range" min="0" max="100" value="55"><div id="compareHint" data-i18n="comparehint">Drag to compare with the photo · C to toggle · Q to exit</div></div>

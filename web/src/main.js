@@ -18,6 +18,7 @@ import { batchStatic, updateSwayLod, updateRoomVisibility } from './batch.js';
 import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
 import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
+import { Stats } from './stats.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -25,7 +26,14 @@ const detected = detectTier();
 const preset = TIERS[detected.tier];
 const texSet = detectTexSet(detected.tier);
 setAnisotropy(Math.min(8, preset.anisotropy)); setTextureCap(preset.textureCap); setTextureSet(texSet);
-const pixelRatio = p => Math.min(devicePixelRatio, p.pixelRatio);
+// Render at most 1440p: the drawing buffer's short side stays within 1440 device pixels and its area within 2560 × 1440,
+// so an ultrawide screen keeps its full height budget spread over the width. The canvas still covers the viewport and
+// the browser upsamples the frame to the screen.
+const MAX_SHORT = 1440, MAX_PIXELS = 2560 * 1440;
+const pixelRatio = p => {
+  const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  return Math.min(devicePixelRatio, p.pixelRatio, MAX_SHORT / Math.min(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
+};
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: detected.tier === 'hq', powerPreference: 'high-performance', preserveDrawingBuffer: true });
 renderer.setPixelRatio(pixelRatio(preset));
@@ -34,16 +42,28 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 3
 scene.add(camera);
 // Size the drawing buffer from the canvas box (CSS keeps #gl covering the viewport; setSize(..., false) writes no inline size).
 // Registered before any await so viewport changes during the loading screen still reach the canvas; composer joins once lighting exists.
-let post = null;
+let post = null, activePreset = preset;
 function fitView() {
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
+  const pr = pixelRatio(activePreset);
+  if (pr !== renderer.getPixelRatio()) { renderer.setPixelRatio(pr); post?.setPixelRatio(pr); }
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h, false); post?.setSize(w, h);
 }
 fitView();
-new ResizeObserver(fitView).observe(canvas);
-addEventListener('resize', fitView);
-visualViewport?.addEventListener('resize', fitView);
+// Resizes arrive in bursts while a window edge is dragged, and each fitView reallocates the drawing buffer and every
+// post-processing target. Apply at most one every 500 ms, plus a trailing one when the burst ends, so the final size is
+// always exact; in between the browser stretches the last frame.
+const FIT_EVERY_MS = 500;
+let fitTimer = 0, fitLast = -Infinity;
+function scheduleFit() {
+  const wait = FIT_EVERY_MS - (performance.now() - fitLast);
+  if (wait <= 0 && !fitTimer) { fitLast = performance.now(); fitView(); return; }
+  if (!fitTimer) fitTimer = setTimeout(() => { fitTimer = 0; fitLast = performance.now(); fitView(); }, Math.max(wait, 0));
+}
+new ResizeObserver(scheduleFit).observe(canvas);
+addEventListener('resize', scheduleFit);
+visualViewport?.addEventListener('resize', scheduleFit);
 
 const state = { dusk: Q.has('dusk'), tier: detected.tier, texSet, gpu: detected.gpu, tierSource: detected.source, quality: detected.tier, qualityHigh: qualityPair(detected.tier).find(q => q !== 'mobile') ?? 'mobile', ready: false, loaded: 0, total: 1, mode: 'walk', onLock: null };
 const ui = new UI(state);
@@ -51,6 +71,8 @@ const house = await (await fetch('data/house.json')).json();
 const points = await (await fetch('data/floorplan_points.json')).json();
 const tour = await (await fetch('data/tour.json')).json();
 const posts = await (await fetch('data/rednote_posts.json')).json();
+// The precomputed daylight bake (see daylight.js); ?daylight=live ignores it, which tools/bake_daylight.mjs uses.
+const daylightFile = Q.get('daylight') === 'live' ? Promise.resolve(null) : fetch('data/daylight.bin').then(r => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
 const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json() : []).catch(() => []);
 
 // ---- Lighting: daylight openings, practical fixtures and separate room / sky reflections.
@@ -122,7 +144,7 @@ const mirrorsOn = () => TIERS[state.quality].mirrors;
 function setQuality(name) {
   const p = TIERS[name]; state.quality = name;
   garden.setQuality(p.grass); lighting.setQuality(p);
-  renderer.setPixelRatio(pixelRatio(p)); composer.setPixelRatio(renderer.getPixelRatio()); fitView();
+  activePreset = p; fitView();
   if (p.mirrors && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
   ui.syncLegends();
 }
@@ -142,7 +164,11 @@ const lap = (k, t) => { warmup[k] = Math.round(performance.now() - t); return pe
 let lapStart = warmupStart;
 await applyTime(); lapStart = lap('time', lapStart);
 await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
-// Enter turns on before the shaders exist, so a slow compile never leaves the button disabled.
+// Enter turns on before the shaders exist, so a slow compile never leaves the button disabled. Entering before the
+// first frame is drawn shows a loading screen over the empty canvas until the warm draw below has put a frame on it.
+const warming = document.getElementById('warming');
+let firstFrameDrawn = false;
+document.getElementById('enter').addEventListener('click', () => { if (!firstFrameDrawn) warming.classList.remove('hidden'); });
 state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
 await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 lapStart = lap('yield2', lapStart);
@@ -156,10 +182,32 @@ lapStart = lap('yield2', lapStart);
 renderer.setRenderTarget(composer.readBuffer);
 const compiling = renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err));
 renderer.setRenderTarget(null);
+// Real progress for the loading screen: KHR_parallel_shader_compile answers "is this program linked yet?" without
+// blocking, so the bar counts finished programs out of all of them. Without the extension the bar stays indeterminate.
+const stopCompileProgress = (() => {
+  const gl = renderer.getContext(), ext = gl.getExtension('KHR_parallel_shader_compile'), programs = renderer.info.programs || [];
+  const bar = document.getElementById('warmbar'), count = document.getElementById('warmcount');
+  if (!ext || !programs.length || !bar) return () => {};
+  const tick = () => {
+    let done = 0; for (const p of programs) if (gl.getProgramParameter(p.program, ext.COMPLETION_STATUS_KHR)) done++;
+    warming.dataset.known = ''; bar.style.width = `${Math.round(4 + 88 * done / programs.length)}%`;
+    count.textContent = `${t('warmCount')} ${done} / ${programs.length}`;
+  };
+  tick(); const id = setInterval(tick, 120); return () => { clearInterval(id); tick(); };
+})();
 // compileAsync has queued every link, so the GPU process is busy on all cores: the daylight bake (~2 s of CPU ray
 // tests) runs now, overlapping the compile instead of adding to the load. Its textures upload before the warm draw.
-lighting.bakeDaylight(); lapStart = lap('bake', lapStart);
+// Use the shipped bake when it matches this build's walls, furniture and windows; otherwise run the ray tests here.
+{ // The file was requested at startup and is normally long here; never let a stalled request hold the load.
+  const file = await Promise.race([daylightFile, new Promise(resolve => setTimeout(() => resolve(null), 4000))]);
+  if (!lighting.daylight?.load(file)) {
+    if (file) console.info('data/daylight.bin is from another layout; baking live. Regenerate with: node tools/bake_daylight.mjs');
+    lighting.bakeDaylight();
+  }
+  state.daylightSource = lighting.daylight?.source; }
+lapStart = lap('bake', lapStart);
 await Promise.race([compiling, new Promise(resolve => setTimeout(resolve, 120000))]);
+stopCompileProgress(); document.getElementById('warmbar').style.width = '94%';
 lapStart = lap('compile', lapStart);
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);
@@ -170,6 +218,9 @@ try {
   try { renderer.render(scene, camera); } catch (_) {}
 }
 lapStart = lap('draw', lapStart);
+firstFrameDrawn = true;
+document.getElementById('warmbar').style.width = '100%';
+if (!warming.classList.contains('hidden')) { warming.classList.add('done'); setTimeout(() => warming.classList.add('hidden'), 450); }
 state.lightingWarmupMs = performance.now() - warmupStart;
 // The other time of day (HDR download, CPU tint, PMREM and room bounce) waits until the walkthrough is up.
 // Both skies share the CubeUV environment layout and fixed light counts, so a dusk toggle reuses the compiled programs.
@@ -185,6 +236,7 @@ const clock = new THREE.Clock(); let simT = 0;
 const toggled = layout.animated.filter(o => o.userData.toggle).map(o => ({ toggle: o.userData.toggle, value: o.userData.toggle.value }));
 const togglesMoving = () => toggled.reduce((any, t) => { const v = t.toggle.value, changed = t.toggle.moving || v !== t.value; t.value = v; return any || changed; }, false);
 function frame(dt) {
+  stats.begin();
   simT += dt;
   tourCtl.update(dt);
   viewpoints.update(dt);
@@ -205,9 +257,15 @@ function frame(dt) {
     if (!state.composerFailed) { state.composerFailed = true; console.warn('composer', err); }
     try { renderer.render(scene, camera); } catch (_) {}
   }
+  stats.end();
 }
+// Stats for nerds (hidden): the right-click menu's last item, the ` key, or ?stats=1.
+const stats = new Stats({ renderer, camera, player, state, lighting, pets, canvas });
+addEventListener('crotonstats', () => stats.toggle());
+addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && e.target?.tagName !== 'INPUT') stats.toggle(); });
+if (Q.has('stats')) stats.toggle(true);
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
+window.__app = { stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
 // Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
 // Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
 // cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.

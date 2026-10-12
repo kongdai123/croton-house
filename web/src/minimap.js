@@ -5,6 +5,8 @@ import { getLang, t } from './ui.js';
 
 const VB = [-8.246258596094643, -5.699660161646401, 16.50411768657405, 11.778618533436845];   // svg viewBox (image y = -plan y)
 const LOT = { x0: -14.5, x1: 14.5, y0: -14.2, y1: 19.5 };
+// The radar's CSS size at the 1440 × 900 design size (style.css #minimap, scaled by --u on larger windows).
+const MAP_CSS = 190;
 export class Minimap {
   constructor(player, layout, points, tour, posts, ui, goTo) {
     this.player = player; this.layout = layout; this.points = points; this.tour = tour; this.posts = posts; this.ui = ui; this.goTo = goTo;
@@ -12,7 +14,10 @@ export class Minimap {
     this.big = document.getElementById('bigmap'); this.bigCanvas = document.getElementById('bigmapCanvas'); this.bctx = this.bigCanvas.getContext('2d');
     this.img = new Image(); this.img.src = 'data/floor_shape.svg'; this.imgReady = false; this.img.onload = () => { this.imgReady = true; };
     this.radiusM = 7.5;   // metres from centre to the rim
-    this.dpr = Math.min(devicePixelRatio, 2); this.canvas.width = 220 * this.dpr; this.canvas.height = 220 * this.dpr;
+    this.dpr = Math.min(devicePixelRatio, 2);
+    // The radar's CSS size grows with large windows (style.css --u); keep its buffer at display resolution.
+    const fit = () => { const w = Math.round((this.canvas.clientWidth || MAP_CSS) * this.dpr); if (this.canvas.width !== w) { this.canvas.width = w; this.canvas.height = w; } };
+    fit(); new ResizeObserver(fit).observe(this.canvas);
     this.blips = [];
     this.rebuildBlips();
     this.bigCanvas.addEventListener('click', (e) => this.bigClick(e));
@@ -34,7 +39,7 @@ export class Minimap {
   setExtra(blips) { this.extraBlips = blips; this.rebuildBlips(); }
   // plan -> canvas px for the small radar (heading-up, centred on the player)
   draw() {
-    const c = this.ctx, S = this.canvas.width, R = S / 2, pxPerM = R / this.radiusM;
+    const c = this.ctx, S = this.canvas.width, R = S / 2, pxPerM = R / this.radiusM, mapScale = S / MAP_CSS;  // buffer px per design px: blips, arrow and labels keep their size
     const px = this.player.pos.x, py = -this.player.pos.z, yaw = this.player.yaw;  // plan heading up: rotate world by heading
     c.save(); c.clearRect(0, 0, S, S);
     c.beginPath(); c.arc(R, R, R - 1, 0, Math.PI * 2); c.clip();
@@ -53,14 +58,14 @@ export class Minimap {
     // floor plan image (svg) over the house
     if (this.imgReady) { const [ix, iy] = toC(VB[0], -VB[1]); c.drawImage(this.img, ix, iy, VB[2] * k, VB[3] * k); }
     // blips
-    for (const b of this.blips) { if (!this.isVisible(b.kind)) continue; const [x, y] = toC(b.x, b.y); if (x * x + y * y > (R * 1.4) ** 2) continue; c.beginPath(); c.arc(x, y, 3.2 * this.dpr, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = this.dpr; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke(); }
+    for (const b of this.blips) { if (!this.isVisible(b.kind)) continue; const [x, y] = toC(b.x, b.y); if (x * x + y * y > (R * 1.4) ** 2) continue; c.beginPath(); c.arc(x, y, 3.2 * mapScale, 0, Math.PI * 2); c.fillStyle = b.kind === 'pano' ? '#2f6fe0' : b.kind === 'photo' ? '#2fa66a' : '#e0383a'; c.fill(); c.lineWidth = mapScale; c.strokeStyle = 'rgba(255,255,255,.9)'; c.stroke(); }
     // player arrow (always at centre, pointing up)
     c.restore(); c.save(); c.translate(R, R + R * 0.18);
     c.rotate(0);
-    c.beginPath(); c.moveTo(0, -9 * this.dpr); c.lineTo(6.5 * this.dpr, 7 * this.dpr); c.lineTo(0, 3.5 * this.dpr); c.lineTo(-6.5 * this.dpr, 7 * this.dpr); c.closePath(); c.fillStyle = '#fff'; c.fill(); c.strokeStyle = 'rgba(0,0,0,.5)'; c.stroke();
+    c.beginPath(); c.moveTo(0, -9 * mapScale); c.lineTo(6.5 * mapScale, 7 * mapScale); c.lineTo(0, 3.5 * mapScale); c.lineTo(-6.5 * mapScale, 7 * mapScale); c.closePath(); c.fillStyle = '#fff'; c.fill(); c.strokeStyle = 'rgba(0,0,0,.5)'; c.stroke();
     // north tick on the rim
     c.restore(); c.save(); c.translate(R, R); c.rotate(this.player.yaw);
-    c.fillStyle = '#fff'; c.font = `${11 * this.dpr}px sans-serif`; c.textAlign = 'center'; c.fillText('N', 0, -R + 14 * this.dpr);
+    c.fillStyle = '#fff'; c.font = `${11 * mapScale}px sans-serif`; c.textAlign = 'center'; c.fillText('N', 0, -R + 14 * mapScale);
     c.restore();
     // vignette rim
     c.save(); const g = c.createRadialGradient(R, R, R * 0.7, R, R, R); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.35)'); c.fillStyle = g; c.fillRect(0, 0, S, S); c.restore();

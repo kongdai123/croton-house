@@ -135,12 +135,13 @@ export class Interact {
     const items = [];
     if (root && this.moved(root)) items.push({ label: `${t('putBack')} · ${this.name(root)}`, run: () => this.putBack([root]) });
     items.push(all.length ? { label: `${t('putAll')} (${all.length})`, run: () => this.putBack(all) } : { label: t('nothingMoved'), disabled: true });
+    items.push({ label: t('statsForNerds'), sep: true, run: () => dispatchEvent(new Event('crotonstats')) });
     const wasLocked = this.player.locked;
     const x = wasLocked ? innerWidth / 2 : e.clientX, y = wasLocked ? innerHeight / 2 : e.clientY;
     this.player.unlock?.();
     this.menu.innerHTML = '';
     for (const it of items) {
-      const b = document.createElement('button'); b.textContent = it.label; b.disabled = !!it.disabled;
+      const b = document.createElement('button'); b.textContent = it.label; b.disabled = !!it.disabled; if (it.sep) b.className = 'sep';
       b.addEventListener('click', (ev) => { ev.stopPropagation(); it.run?.(); this.closeMenu(); if (wasLocked) this.player.lock(); });
       this.menu.appendChild(b);
     }

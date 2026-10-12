@@ -269,6 +269,18 @@ export class Interact {
   }
   setHighlight(root, on) {
     if (!root || root.userData.lightSwitch) return;
-    root.traverse(o => { if (!o.isMesh || !o.material?.emissive || o.userData.noHighlight) return; if (on) { if (!o.userData.hl) { o.userData.hl = o.material; o.material = o.material.clone(); o.material.emissive.set(0xffffff); o.material.emissiveIntensity = 0.06; } } else if (o.userData.hl) { o.material.dispose(); o.material = o.userData.hl; o.userData.hl = null; } });
+    root.traverse(o => {
+      if (!o.isMesh || !o.material?.emissive || o.userData.noHighlight) return;
+      if (on) {
+        if (!o.userData.hl) {
+          const base = o.material, hl = base.clone();
+          // clone() drops the shader hooks (daylight, HQ shadow, lighting chunk), which would give the highlight its own
+          // program: a fresh compile on first hover, several seconds on Windows, and a look without the daylight tint.
+          hl.onBeforeCompile = base.onBeforeCompile; hl.customProgramCacheKey = base.customProgramCacheKey; hl.onBeforeRender = base.onBeforeRender;
+          hl.emissive.set(0xffffff); hl.emissiveIntensity = 0.06;
+          o.userData.hl = base; o.material = hl;
+        }
+      } else if (o.userData.hl) { o.material.dispose(); o.material = o.userData.hl; o.userData.hl = null; }
+    });
   }
 }

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { M } from './materials.js';
 
 const NX = 57, NZ = 41, NY = 9;
+const UNIT = { value: 1 };
 const MIN = new THREE.Vector3(-8.1, 0, -5.62), SIZE = new THREE.Vector3(16.2, 2.44, 11.56);
 function texture(data, depth) {
   const t = new THREE.Data3DTexture(data, NX, NZ, depth);
@@ -95,8 +96,12 @@ export function bakeDaylight(root, lights) {
       ${lookup}
       return 1.0;
     }`;
-  function patch(shader, paint = 1) {
-    shader.uniforms.uInteriorDay = day; shader.uniforms.uDaylightAmbient = ambient; shader.uniforms.uDaylightWindows = window;
+  // `paint` and the options are uniform objects ({ value }) so one compiled program serves every paint tint and both the
+  // interior (day = the shared day flag) and exterior (day = 0, bounce = pavement bounce) regions. A number is accepted too.
+  function patch(shader, paint = 1, { day: dayFlag = day, bounce = UNIT } = {}) {
+    shader.uniforms.uInteriorDay = dayFlag; shader.uniforms.uDaylightAmbient = ambient; shader.uniforms.uDaylightWindows = window;
+    shader.uniforms.uDaylightPaint = typeof paint === 'number' ? { value: paint } : paint;
+    shader.uniforms.uExteriorBounce = bounce;
     shader.vertexShader = 'varying vec3 vDaylightPosition;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vec4 daylightPosition = vec4(transformed, 1.0);
       #ifdef USE_BATCHING
@@ -106,14 +111,14 @@ export function bakeDaylight(root, lights) {
         daylightPosition = instanceMatrix * daylightPosition;
       #endif
       vDaylightPosition = (modelMatrix * daylightPosition).xyz;`);
-    shader.fragmentShader = declarations + '\n' + shader.fragmentShader;
-    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, ${paint.toFixed(3)}, uInteriorDay);`);
+    shader.fragmentShader = 'uniform float uDaylightPaint; uniform float uExteriorBounce;\n' + declarations + '\n' + shader.fragmentShader;
+    shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, uDaylightPaint, uInteriorDay);');
     shader.fragmentShader = shader.fragmentShader.replace('vec3 geometryPosition = - vViewPosition;', `vec3 geometryPosition = - vViewPosition;
       vec3 daylightCoords = daylightUv(normal);
       vec3 ambientCoords = (daylightCoords * vec3(${NX - 1}.0, ${NZ - 1}.0, ${NY - 1}.0) + 0.5) / vec3(${NX}.0, ${NZ}.0, ${NY}.0);
       float daylightFill = mix(1.0, texture(uDaylightAmbient, ambientCoords).r, uInteriorDay);`);
     shader.fragmentShader = shader.fragmentShader.replace('rectAreaLight = rectAreaLights[ i ];', 'rectAreaLight = rectAreaLights[ i ];\nrectAreaLight.color *= daylightWindow(rectAreaLight.position, daylightCoords);');
-    shader.fragmentShader = shader.fragmentShader.replace('getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )', 'mix(1.0, 0.28, uInteriorDay) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
+    shader.fragmentShader = shader.fragmentShader.replace('getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )', 'uExteriorBounce * mix(1.0, 0.28, uInteriorDay) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\niblIrradiance *= daylightFill; radiance *= mix(1.0, sqrt(daylightFill), uInteriorDay);');
   }
   return { day, patch, bakeMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };

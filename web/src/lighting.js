@@ -17,13 +17,23 @@ const DAY = 'drakensberg_solitary_mountain_puresky';
 const DUSK = 'belfast_sunset_puresky';
 const smooth = (a, b, v) => THREE.MathUtils.smoothstep(v, a, b);
 const mix = THREE.MathUtils.lerp;
+// Constant uniforms for the shared interior/exterior program (see collectMaterials).
+const NO_DAY = { value: 0 }, UNIT = { value: 1 };
 // Three still evaluates the BRDF/LTC for zero-intensity lights. Keep its static
 // light arrays, but skip those calculations behind a uniform-only branch.
+// The point and rect-area loops also stay real loops instead of three's unrolled copies: twelve unrolled LTC
+// evaluations are what makes each program take ~9 s to compile through Direct3D's fxc on Windows (a rolled loop
+// takes ~1.2 s, measured on an RTX 3070 laptop); Metal and Vulkan drivers never cared. The spot loop stays
+// unrolled because spot light maps index a sampler array, which GLSL ES only allows with a constant.
+// UNROLLED_LOOP_INDEX becomes 0 inside the rolled loops: this scene has no point-light shadows, which is the
+// only place three uses it there (point shadows would need the unrolled form back).
 const lightingChunk = THREE.ShaderChunk.lights_fragment_begin.replace(
-  /(for \( int i = 0; i < NUM_(POINT|SPOT|RECT_AREA)_LIGHTS; i \+\+ \) \{)([\s\S]*?)(\n\t\}\n\t#pragma unroll_loop_end)/g,
-  (_, loop, kind, body, end) => {
+  /(#pragma unroll_loop_start\n\t)(for \( int i = 0; i < NUM_(POINT|SPOT|RECT_AREA)_LIGHTS; i \+\+ \) \{)([\s\S]*?)(\n\t\}\n\t)(#pragma unroll_loop_end)/g,
+  (_, start, loop, kind, body, close, end) => {
     const array = { POINT: 'pointLights', SPOT: 'spotLights', RECT_AREA: 'rectAreaLights' }[kind];
-    return `${loop}\n\t\tif ( any( notEqual( ${array}[ i ].color, vec3( 0.0 ) ) ) ) {${body}\n\t\t}${end}`;
+    const guarded = `${loop}\n\t\tif ( any( notEqual( ${array}[ i ].color, vec3( 0.0 ) ) ) ) {${body}\n\t\t}${close}`;
+    if (kind === 'SPOT') return `${start}${guarded}${end}`;
+    return guarded.replace(/UNROLLED_LOOP_INDEX/g, '0');
   });
 
 // Unlike a studio HDR, this has no luminous softboxes reflected in leather or glass.
@@ -222,22 +232,18 @@ export function createLighting(renderer, scene, camera, house, preset) {
           const previousCompile = uses.compile;
           const previousKey = uses.key;
           const exterior = materialRegion === exteriorMaterials;
+          // Both regions and every paint tint share one program: the daylight volume, the paint tint and the pavement
+          // bounce are uniforms (exterior: day flag 0, bounce on; interior: the shared day flag, bounce 1). Baking them
+          // into the source split the same material features into two or three programs each, and every program is
+          // a ~90 KB shader that Windows compiles slowly.
+          const paint = { value: local.userData.daylightPaint ?? 1 };
           local.onBeforeCompile = function (shader, renderer) {
             previousCompile.call(this, shader, renderer);
             if (!shader.uniforms.uHQShadow) hqEffects.patch(shader);
-            if (exterior) {
-              shader.uniforms.uExteriorBounce = exteriorBounce;
-              shader.fragmentShader = 'uniform float uExteriorBounce;\n' + shader.fragmentShader;
-            }
             shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightingChunk);
-            // A shared interior material's retained callback may already have
-            // expanded the chunk. Apply exterior bounce to that source as well.
-            if (exterior) shader.fragmentShader = shader.fragmentShader.replace(
-              'getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )',
-              'uExteriorBounce * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
-            else daylight.patch(shader, local.userData.daylightPaint ?? 1);
+            daylight.patch(shader, paint, { day: exterior ? NO_DAY : daylight.day, bounce: exterior ? exteriorBounce : UNIT });
           };
-          local.customProgramCacheKey = () => previousKey + '|hq-shadow|skip-dark-lights' + (exterior ? '|exterior-bounce' : `|daylight|${local.userData.daylightPaint ?? 1}`);
+          local.customProgramCacheKey = () => previousKey + '|hq-shadow|skip-dark-lights|daylight';
           uses.set(materialRegion, local); materialRegion.add(local);
           if (local.userData.daylightOpacity !== undefined && materialRegion === interiorMaterials) glass.set(local, local.opacity);
         }

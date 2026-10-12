@@ -151,10 +151,14 @@ lapStart = lap('yield2', lapStart);
 // programs one at a time on a single core, which on Windows blocks the tab for minutes (measured on an RTX 3070
 // laptop: 89 s blocked and Ready at 124 s on Vulkan, D3D11 never finished in 7 min; with this, 11 s and 46 s).
 // The race guards drivers whose completion poll never flips: after the timeout the warm draw finishes the compile.
+// Compile with the composer's buffer bound: three bakes "render target or screen" into each program (tone mapping,
+// output colour space), so compiling for the screen here would compile every material twice.
+renderer.setRenderTarget(composer.readBuffer);
 await Promise.race([
   renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err)),
   new Promise(resolve => setTimeout(resolve, 120000)),
 ]);
+renderer.setRenderTarget(null);
 lapStart = lap('compile', lapStart);
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);

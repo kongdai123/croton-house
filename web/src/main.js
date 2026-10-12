@@ -142,11 +142,20 @@ const lap = (k, t) => { warmup[k] = Math.round(performance.now() - t); return pe
 let lapStart = warmupStart;
 await applyTime(); lapStart = lap('time', lapStart);
 await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
-// Enter cannot wait on compileAsync. Its compile() freezes the tab (the bar sits at 96%), and on some
-// Windows drivers the ready-poll never resolves, so the scene is built and the button stays disabled.
+// Enter turns on before the shaders exist, so a slow compile never leaves the button disabled.
 state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
 await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 lapStart = lap('yield2', lapStart);
+// Link every program before the first draw. With KHR_parallel_shader_compile (ANGLE exposes it on D3D11, Vulkan and
+// Metal) the GPU process compiles on all cores while this polls; drawing first instead links and waits for the ~100
+// programs one at a time on a single core, which on Windows blocks the tab for minutes (measured on an RTX 3070
+// laptop: 89 s blocked and Ready at 124 s on Vulkan, D3D11 never finished in 7 min; with this, 11 s and 46 s).
+// The race guards drivers whose completion poll never flips: after the timeout the warm draw finishes the compile.
+await Promise.race([
+  renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err)),
+  new Promise(resolve => setTimeout(resolve, 120000)),
+]);
+lapStart = lap('compile', lapStart);
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);
   composer.render();

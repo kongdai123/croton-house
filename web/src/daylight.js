@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { M } from './materials.js';
 
 const NX = 57, NZ = 41, NY = 9;
+// Bump when the bake's maths changes (sample offsets, ray lengths, the bounce curve): the fingerprint only covers its inputs.
+const FORMAT = 1, MAGIC = 0x4c444843 /* 'CHDL' */, HEADER = 20;
 const UNIT = { value: 1 };
 const MIN = new THREE.Vector3(-8.1, 0, -5.62), SIZE = new THREE.Vector3(16.2, 2.44, 11.56);
 function texture(data, depth) {
@@ -65,11 +67,39 @@ export function bakeDaylight(root, lights) {
   });
   const obstacles = walls.concat(contacts);
   const ambientTexture = texture(bounce, NY), windowTexture = texture(visibility, NY * windows.length);
-  let bakeMs = 0, baked = false;
+  let bakeMs = 0, baked = false, source = 'none';
+  // A precomputed result ships as data/daylight.bin (tools/bake_daylight.mjs). Its fingerprint hashes every input of the
+  // ray tests (walls, fixed furniture boxes, window samples, grid), so a file from an older layout is ignored and the
+  // live bake runs instead: a stale file can cost time, never correctness.
+  const fingerprint = (() => {
+    let h = 0x811c9dc5;
+    const add = (n) => { const v = Math.round(n * 1000) | 0; for (let s = 0; s < 32; s += 8) { h ^= (v >>> s) & 255; h = Math.imul(h, 0x01000193); } };
+    [FORMAT, NX, NZ, NY, directions.length, walls.length, contacts.length, windows.length].forEach(add);
+    for (const box of obstacles) box.forEach(add);
+    for (const w of windows) { w.center.toArray().forEach(add); add(w.inward.x); add(w.inward.y); add(w.inward.z); add(w.area); for (const s of w.samples) s.forEach(add); }
+    return h >>> 0;
+  })();
+  const header = () => [MAGIC, FORMAT, fingerprint, count, windows.length];
+  function load(buffer) {
+    if (baked || !buffer || buffer.byteLength !== HEADER + visibility.length + bounce.length) return false;
+    const view = new DataView(buffer);
+    if (header().some((v, i) => view.getUint32(i * 4, true) !== v)) return false;
+    visibility.set(new Uint8Array(buffer, HEADER, visibility.length));
+    bounce.set(new Uint8Array(buffer, HEADER + visibility.length, bounce.length));
+    ambientTexture.needsUpdate = true; windowTexture.needsUpdate = true; baked = true; source = 'file';
+    return true;
+  }
+  function serialize() {
+    if (!baked) bake();
+    const buffer = new ArrayBuffer(HEADER + visibility.length + bounce.length), view = new DataView(buffer);
+    header().forEach((v, i) => view.setUint32(i * 4, v, true));
+    new Uint8Array(buffer, HEADER).set(visibility); new Uint8Array(buffer, HEADER + visibility.length).set(bounce);
+    return buffer;
+  }
   // The ~2 s of ray tests run in bake(), which main.js calls while the GPU process compiles the shaders, so the bake
   // overlaps the compile instead of adding to the load. The textures start as zeros and upload again once filled.
   function bake() {
-    if (baked) return; baked = true;
+    if (baked) return; baked = true; source = 'live';
     const t0 = performance.now();
     for (let iy = 0; iy < NY; iy++) for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
     const x = MIN.x + SIZE.x * ix / (NX - 1), y = SIZE.y * iy / (NY - 1), z = MIN.z + SIZE.z * iz / (NZ - 1);
@@ -131,5 +161,5 @@ export function bakeDaylight(root, lights) {
     shader.fragmentShader = shader.fragmentShader.replace('getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )', 'uExteriorBounce * mix(1.0, 0.28, uInteriorDay) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\niblIrradiance *= daylightFill; radiance *= mix(1.0, sqrt(daylightFill), uInteriorDay);');
   }
-  return { day, patch, bake, get bakeMs() { return bakeMs; }, collectMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
+  return { day, patch, bake, load, serialize, fingerprint, get source() { return source; }, get bakeMs() { return bakeMs; }, collectMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
 }

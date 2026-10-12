@@ -70,8 +70,12 @@ export class UI {
   ready() {
     const bar = document.getElementById('loadbar');
     this.isReady = true; this.pct = 100;
-    bar.style.transition = 'none'; bar.style.width = '100%'; document.getElementById('loadtext').textContent = t('ready');
-    this.enterBtn.disabled = false;
+    if (bar) { bar.style.transition = 'none'; bar.style.width = '100%'; }
+    const text = document.getElementById('loadtext');
+    if (text) text.textContent = t('ready');
+    const btn = document.getElementById('enter');
+    this.enterBtn = btn || this.enterBtn;
+    if (this.enterBtn) { this.enterBtn.disabled = false; this.enterBtn.removeAttribute('disabled'); }
   }
   bind({ player, viewpoints, rednote, markers, tour, minimap, pets, toggleDusk, toggleQuality }) {
     this.player = player; this.viewpoints = viewpoints; this.rednote = rednote; this.markers = markers; this.toggleDusk = toggleDusk; this.toggleQuality = toggleQuality;

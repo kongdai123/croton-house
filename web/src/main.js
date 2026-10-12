@@ -135,22 +135,28 @@ if (Q.has('fast')) setQuality('mobile');
 if (mirrorsOn()) { layout.prepareMirrors(); mirrorsReady = true; }
 await step(0.93, 'textures');
 await during(0.93, 0.955, 'textures', texturesDecoded);
-// One time of day, one compile, one warm draw (shadow map, post passes, mirrors when on) under the loading screen.
+// One time of day under the loading screen. Enter turns on before the warm draw: a Windows shader compile must not leave the button disabled.
 await step(0.955, 'lighting');
 const warmupStart = performance.now(), warmup = state.warmupSteps = {};
 const lap = (k, t) => { warmup[k] = Math.round(performance.now() - t); return performance.now(); };
 let lapStart = warmupStart;
 await applyTime(); lapStart = lap('time', lapStart);
 await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
-await during(0.96, 0.98, 'shaders', () => renderer.compileAsync(scene, camera)); lapStart = lap('compile', lapStart);
-await step(0.985, 'first frame'); lapStart = lap('yield2', lapStart);
-layout.updateMirrors(camera, mirrorsOn(), renderer);
-composer.render();
-if (mirrorsOn()) layout.warmMirrors(renderer);
-lapStart = lap('draw', lapStart);
-await new Promise(resolve => requestAnimationFrame(resolve)); lap('present', lapStart);
-state.lightingWarmupMs = performance.now() - warmupStart;
+// Enter cannot wait on compileAsync. Its compile() freezes the tab (the bar sits at 96%), and on some
+// Windows drivers the ready-poll never resolves, so the scene is built and the button stays disabled.
 state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
+await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+lapStart = lap('yield2', lapStart);
+try {
+  layout.updateMirrors(camera, mirrorsOn(), renderer);
+  composer.render();
+  if (mirrorsOn()) layout.warmMirrors(renderer);
+} catch (err) {
+  console.warn('warmup', err);
+  try { renderer.render(scene, camera); } catch (_) {}
+}
+lapStart = lap('draw', lapStart);
+state.lightingWarmupMs = performance.now() - warmupStart;
 // The other time of day (HDR download, CPU tint, PMREM and room bounce) waits until the walkthrough is up.
 // Both skies share the CubeUV environment layout and fixed light counts, so a dusk toggle reuses the compiled programs.
 const idle = cb => (window.requestIdleCallback ? requestIdleCallback(cb, { timeout: 4000 }) : setTimeout(cb, 1500));
@@ -179,7 +185,12 @@ function frame(dt) {
   garden.update(simT);
   minimap.draw();
   lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
-  if (viewpoints.panoActive) renderer.render(scene, camera); else composer.render();
+  try {
+    if (viewpoints.panoActive || state.composerFailed) renderer.render(scene, camera); else composer.render();
+  } catch (err) {
+    if (!state.composerFailed) { state.composerFailed = true; console.warn('composer', err); }
+    try { renderer.render(scene, camera); } catch (_) {}
+  }
 }
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
 window.__app = { tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };

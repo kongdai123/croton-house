@@ -23,7 +23,8 @@ export class Markers {
     for (const p of rednote.posts) { const s = rednote.spotOf(p.slug); if (s) sources.push({ kind: 'rn', post: p, spot: s, target: { ...s, kind: 'rn', id: p.slug }, src: `assets/rednote/${p.media[0] || `${p.slug}_cover.jpg`}` }); }
     for (const v of viewpoints.targets) if (v.quality !== 'poor') sources.push(this.sourceOf(v));
     for (const kind of ['rn', 'pano', 'photo']) {
-      this.enabled[kind] = (localStorage.getItem(STORE[kind]) ?? (kind === 'rn' ? localStorage.getItem('croton-pins') : null)) !== '0';
+      const stored = localStorage.getItem(STORE[kind]) ?? (kind === 'rn' ? localStorage.getItem('croton-pins') : null);
+      this.enabled[kind] = stored === '1';
       const root = new THREE.Group(); root.name = `${kind}-pins`; this.root.add(root);
       const pins = sources.filter(p => p.kind === kind), color = COLORS[kind];
       const solid = new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });

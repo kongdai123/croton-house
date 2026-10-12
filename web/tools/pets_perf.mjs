@@ -6,7 +6,7 @@ const poses = [['living', 1.0, 1.4, 180, [[0.75, 2.5], [1.35, 2.75]]], ['garden'
 async function run(extra) {
   const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
-  await page.goto(`http://127.0.0.1:8780/index.html?x=0&y=0&h=0&pins=0&petseed=2${hq ? '' : '&fast=1'}${extra}`, { waitUntil: 'load' });
+  await page.goto(`http://127.0.0.1:8780/index.html?fps=0&x=0&y=0&h=0&pins=0&petseed=2${hq ? '' : '&fast=1'}${extra}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
   await page.waitForTimeout(1500);
   const out = {};

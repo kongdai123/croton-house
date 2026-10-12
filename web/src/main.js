@@ -194,6 +194,16 @@ function frame(dt) {
 }
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
 window.__app = { tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
-let readyFrames = 0;
-const loop = () => { const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true; requestAnimationFrame(loop); };
+// Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
+// Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
+// cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.
+const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && Number.isFinite(+fpsParam) ? Math.max(0, +fpsParam) : 30;
+const framePeriod = fpsCap > 0 ? 1000 / fpsCap : 0;
+state.fpsCap = fpsCap;
+let readyFrames = 0, nextFrameAt = 0;
+const loop = (now) => {
+  requestAnimationFrame(loop);
+  if (framePeriod) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
+  const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true;
+};
 requestAnimationFrame(loop);

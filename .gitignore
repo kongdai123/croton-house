@@ -3,7 +3,7 @@ web/node_modules/
 web/dist/
 web/build/
 # commercial album track; not published
-web/assets/audio/*.m4a
+web/assets/audio/brush-i.m4a
 compare/*_3d.png
 .DS_Store
 __pycache__/

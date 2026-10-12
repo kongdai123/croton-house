@@ -95,7 +95,7 @@ export const PLACEMENTS = [
   { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -2.84, ry: W }, { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -5.06, ry: W, light: false },
   { m: 'bedrooms', i: 'dresserDark', x: 4.6, y: -5.5, ry: N, zh: '炭黑五斗柜', n: 'Charcoal dresser' },
   { m: 'bedrooms', i: 'rugCheck', x: 5.8, y: -3.95, ry: E },
-  { m: 'decor', i: 'cellularShadeNarrow', x: 5.95, y: -5.68, h: -0.08, ry: N }, { m: 'decor', i: 'recessedLight', x: 6.0, y: -3.95 },
+  { m: 'decor', i: 'cellularShadeNarrow', x: 5.955, y: -5.68, h: -0.08, ry: N }, { m: 'decor', i: 'recessedLight', x: 6.0, y: -3.95 },
   // Front bedroom reach-in closet: white shelf, guest wardrobe and floor storage, facing south.
   { m: 'closet', i: 'fitout', x: 6.51, y: -1.70 },
   { m: 'closet', i: 'hanging', x: 6.51, y: -1.70 },
@@ -353,6 +353,19 @@ function frontBounds(obj, p) {
   if (dx || dy) { p.x = +(p.x + dx).toFixed(3); p.y = +(p.y + dy).toFixed(3); obj.position.set(p.x, p.h || 0, -p.y); }
 }
 
+// Foundation planting under the front bedroom windows: slide anything whose leaves cross the stucco face
+// (x 3.97..8.03, y -6.0) back into the bed, with room for sway, so no foliage draws inside bedroom 3.
+const BED3_FACE = { x0: 3.97, x1: 8.03, y: -6.0003 - 0.04 };
+function bedroomFrontClearance(obj, p) {
+  if (!['plants', 'flowers', 'props_garden'].includes(p.m) || p.y > BED3_FACE.y || p.y < -9 || p.x < 2.5 || p.x > 9.5) return;
+  obj.updateMatrixWorld(true); const q = new THREE.Vector3(); let maxY = -Infinity;
+  obj.traverse(m => {
+    if (!m.isMesh || m.isInstancedMesh) return; const a = m.geometry.attributes.position;
+    for (let i = 0; i < a.count; i++) { q.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (q.x > BED3_FACE.x0 && q.x < BED3_FACE.x1 && q.y < 2.7) maxY = Math.max(maxY, -q.z); }
+  });
+  if (maxY > BED3_FACE.y) { p.y = +(p.y - (maxY - BED3_FACE.y)).toFixed(3); obj.position.z = -p.y; }
+}
+
 // Correct only geometry that crosses edging, condensers or fences, after the
 // seeded scatter is complete. No RNG calls/rejections: other plants stay put.
 function plantClearance(obj, p) {
@@ -400,7 +413,7 @@ export class Layout {
       try { obj = p.seed !== undefined ? builder(p.seed) : builder(); } catch (e) { console.error('build failed', p.m, p.i, e); continue; }
       if (p.zone === 'frontDense' && obj.userData.animate) { obj.userData.animate(0); delete obj.userData.animate; }
       obj.position.set(p.x, p.h || 0, -p.y); obj.rotation.y = p.ry || 0; if (p.sx) obj.scale.x = p.sx; if (p.sy) obj.scale.y *= p.sy; if (p.sz) obj.scale.z = p.sz; if (p.scale) obj.scale.multiplyScalar(p.scale);
-      frontBounds(obj, p);
+      frontBounds(obj, p); bedroomFrontClearance(obj, p);
       if (generated.has(p)) plantClearance(obj, p);
       obj.userData.placement = p; if (p.zh) obj.userData.zh = p.zh; if (p.n) obj.userData.name = p.n;
       this.root.add(obj); this.placed.push(obj);
@@ -436,7 +449,7 @@ export class Layout {
     if (spec.type === 'spot') { l = new THREE.SpotLight(spec.color ?? 0xfff1dc, spec.intensity ?? 2, spec.distance ?? 7, spec.angle ?? 0.6, 0.5, 1.2); l.position.copy(wp); l.target.position.set(wp.x, 0, wp.z); this.fixtures.add(l.target); }
     else if (spec.type === 'rect') { l = new THREE.RectAreaLight(spec.color ?? 0xfff1dc, spec.intensity ?? 5, spec.w ?? 1, spec.h ?? 0.1); l.position.copy(wp); l.rotation.copy(obj.rotation); l.rotateX(-Math.PI / 2); }
     else { l = new THREE.PointLight(spec.color ?? 0xffe7c0, spec.intensity ?? 1, spec.distance ?? 6, 1.6); l.position.copy(wp); }
-    l.userData.base = l.intensity; this.fixtures.add(l); this.lightCount++;
+    l.userData.base = l.intensity; if (spec.day !== undefined) l.userData.day = spec.day; this.fixtures.add(l); this.lightCount++;
   }
   // One reflection per cabinet, preserving the door seams and round mirror outline.
   addMirrors(obj) {

@@ -82,6 +82,7 @@ export class Interact {
   }
   doorLabel(d) { return doorName(d, this.camera.position.x, -this.camera.position.z, getLang()); }
   press() {
+    if (document.body.classList.contains('touring')) return;
     const h = this.pick();
     // sitting only gives up furniture grabs; a pet in front of the seat can still be petted
     if (this.player.seat) { if (h?.pet) this.pets.pet(h.pet); return; }
@@ -127,6 +128,7 @@ export class Interact {
     }
   }
   contextMenu(e) {
+    if (document.body.classList.contains('touring')) return;
     this.togglePress = null;
     if (this.player.seat) return;
     const h = this.pick(), root = h?.root?.userData.movable ? h.root : null, all = this.movedAll();
@@ -219,6 +221,14 @@ export class Interact {
       r.root.position.lerpVectors(r.from, r.to, e); r.root.rotation.y = r.fromRy + (r.toRy - r.fromRy) * e; r.root.userData.onMove?.(r.root);
     }
     this.returning = this.returning.filter(r => r.t < 1);
+    // The tour owns the view. No crosshair, label, or emissive hover, and a moving camera must not turn a click into a drag.
+    if (document.body.classList.contains('touring')) {
+      this.pending = null; this.togglePress = null; this.grab = null;
+      if (this.hover) { this.setHighlight(this.hover, false); this.hover = null; }
+      if (this.markers) this.markers.hover = null;
+      this.ui.setLabel('');
+      return;
+    }
     if (this.pending && this.camera.position.distanceTo(this.pending.cam) > 0.15) this.startGrab(this.pending.root);
     // dragging: project the pointer ray onto the floor plane and ease the piece toward it
     if (this.grab) {

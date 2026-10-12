@@ -260,10 +260,10 @@ function curtainSheer() {
 }
 
 // ================================================================ CELLULAR SHADE
-// Top-down cellular shade (g08/g09): head rail inside the window head, honeycomb pleats lowered 0.45 m, bottom rail.
-function cellularShade(w = 1.84, id = 'decor-cellular-shade', name = 'Cellular shade 1.84 m') {
+// Top-down cellular shade (g08/g09): head rail inside the window head, honeycomb pleats lowered `drop` m, bottom rail.
+function cellularShade(w = 1.84, id = 'decor-cellular-shade', name = 'Cellular shade 1.84 m', drop = 0.45) {
   const root = new THREE.Group(), W = L.white(), S = L.shade();
-  const railTop = 2.08, railBot = 2.03, drop = 0.45, n = 15, ph = drop / n;
+  const railTop = 2.08, railBot = 2.03, n = Math.round(drop / 0.03), ph = drop / n;
   root.add(box(w, railTop - railBot, 0.05, W, { r: 0.006, y: (railTop + railBot) / 2 }));
   for (const s of [-1, 1]) root.add(box(0.008, 0.048, 0.052, L.plateWhite(), { r: 0.002, x: s * (w / 2 - 0.004), y: (railTop + railBot) / 2 }));
   const cell = box(w - 0.012, ph + 0.006, 0.03, S, { r: 0.007, seg: 2 });
@@ -275,10 +275,11 @@ function cellularShade(w = 1.84, id = 'decor-cellular-shade', name = 'Cellular s
   const bottom = new THREE.Group(); root.add(bottom);
   bottom.add(box(w - 0.004, 0.022, 0.04, W, { r: 0.007, y: yb - 0.011 }));
   bottom.add(box(0.06, 0.016, 0.012, W, { r: 0.004, y: yb - 0.014, z: 0.025 }));     // finger pull on the room side
-  animatedToggle(root, {
+  const toggle = animatedToggle(root, {
     label: { en: 'Raise shade', zh: '升起蜂巢帘' }, labelOn: { en: 'Lower shade', zh: '放下蜂巢帘' },
     apply(raised) { pleats.scale.y = 1 - raised * 0.86; bottom.position.y = drop * raised * 0.86; },
   });
+  toggle.set(true, true);
   return finish(root, { id, name, zh: '蜂巢帘', note: 'inside-mount; window head 2.06, rail 2.03-2.08, glass at -Z' }, false);
 }
 
@@ -499,7 +500,8 @@ export const items = {
   recessedLight,
   curtainSheer,
   cellularShade: () => cellularShade(1.84),
-  cellularShadeNarrow: () => cellularShade(0.81, 'decor-cellular-shade-narrow', 'Cellular shade 0.81 m'),
+  // Front bedroom window: fills the 1.20 m jamb opening and drops to the stool (placed at h -0.08).
+  cellularShadeNarrow: () => cellularShade(1.19, 'decor-cellular-shade-narrow', 'Cellular shade 1.19 m', 0.97),
   thermostat,
   ironColumn: () => ironColumn(false),
   ironColumnMirror: () => ironColumn(true),

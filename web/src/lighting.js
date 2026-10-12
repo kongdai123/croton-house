@@ -108,10 +108,6 @@ export function createLighting(renderer, scene, camera, house, preset) {
   const hemi = new THREE.HemisphereLight(0xf0f4ff, 0xe6dfd2, 0.4);
   scene.add(hemi);
   const fixtures = new THREE.Group(); fixtures.name = 'Practical lights'; scene.add(fixtures);
-  for (const [x, z] of [[-6, 1.5], [-6, 3.8]]) {
-    const light = new THREE.PointLight(0xffe4be, 2.2, 7, 1.5);
-    light.position.set(x, 2.35, z); light.userData.base = 2.2; light.userData.always = true; fixtures.add(light);
-  }
 
   const windowLights = [];
   for (const o of house.openings) {
@@ -321,7 +317,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     for (const light of fixtures.children) if (light.isLight) {
       const toggle = light.userData.lightSwitch;
       if (toggle?.manual) continue;
-      const auto = light.userData.exterior ? (dusk ? 1 : 0) : dusk ? (light.userData.always ? 1 : 5) : (indoor > 0.01 ? 0.2 : 0);
+      const auto = light.userData.exterior ? (dusk ? 1 : 0) : dusk ? (light.userData.always ? 1 : 5) : (indoor > 0.01 ? light.userData.day ?? 0.2 : 0);
       light.intensity = light.userData.base * auto * (toggle?.value ?? 1);
     }
     if (!dusk) for (const light of windowLights) {

@@ -417,7 +417,7 @@ function shopLight() {
     root.add(box(0.016, 0.046, w + 0.004, G.ledCap(), { r: 0.005, x: s * (Lf / 2 - 0.008), y: top - 0.025 }));
     root.add(cyl(0.0035, 0.0035, 0.002, M.steel(), { x: s * (Lf / 2 + 0.0005), y: top - 0.025, rz: PI / 2, seg: 10 }));
   }
-  root.userData.light = { type: 'rect', w: 1.1, h: 0.08, intensity: 6, y: 2.4, color: 0xfff4e6 };
+  root.userData.light = { type: 'rect', w: 1.1, h: 0.08, intensity: 120, y: 2.4, color: 0xfff4e6, day: 2.5 };
   return describe(root, { id: 'garage-shopLight', name: 'LED linear shop light 1.2 m', zh: 'LED 条形吸顶灯' });
 }
 

@@ -198,7 +198,7 @@ export const G = {
   // LED shop light
   ledHousing: once(() => std({ color: 0xf4f4f1, roughness: 0.32, metalness: 0.35 })),
   ledCap: once(() => phys({ color: 0xefefec, roughness: 0.4, clearcoat: 0.2 })),
-  ledDiffuser: once(() => std({ color: 0xffffff, emissive: 0xfff4e6, emissiveIntensity: 2.2, roughness: 0.6 })),
+  ledDiffuser: once(() => std({ color: 0xffffff, emissive: 0xfff4e6, emissiveIntensity: 4.5, roughness: 0.6 })),
   // ping-pong (g49 / g04): slate top, white steel frame, black net
   slateTop: once(() => phys({ map: slateTopTex(), roughness: 0.5, clearcoat: 0.22, clearcoatRoughness: 0.45, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
   slateBoard: once(() => phys({ color: 0x55626d, roughness: 0.55, clearcoat: 0.15 })),

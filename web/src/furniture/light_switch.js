@@ -3,7 +3,7 @@ import { THREE } from '../kit.js';
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
 const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 
-function switchLight(root, meshes, lights, { name, zh, exterior = false, always = false } = {}) {
+function switchLight(root, meshes, lights, { name, zh, exterior = false, always = false, day = false } = {}) {
   const materials = new Map(), glows = [];
   for (const mesh of meshes) {
     const original = mesh.material;
@@ -36,12 +36,12 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
     apply() {
       const e = this.manual ? this.t * this.t * (3 - 2 * this.t) : 1;
       for (const { material, base, wash, from } of glows) {
-        const power = wash ? base : always ? base : this.dusk ? base * 1.8 : 0.12;
+        const power = wash ? base : always ? base : this.dusk ? base * 1.8 : day ? base : 0.12;
         material[wash ? 'opacity' : 'emissiveIntensity'] = this.manual ? THREE.MathUtils.lerp(from, power * +this.on, e) : power * this.value;
       }
       for (const light of lights) {
         const base = light.userData.base ?? light.userData.switchBase;
-        const factor = always || exterior || light.userData.always ? 1 : this.dusk ? 5 : 0.2;
+        const factor = always || exterior || light.userData.always ? 1 : this.dusk ? 5 : light.userData.day ?? 0.2;
         if (this.manual) light.intensity = THREE.MathUtils.lerp(light.userData.switchFrom, base * factor * +this.on, e);
         else if (light.userData.base === undefined) light.intensity = base * this.value;
       }
@@ -84,10 +84,6 @@ export function collectLightSwitches(scene, fixtures) {
       lights = practicals.filter(l => !assigned.has(l) && l.position.distanceTo(p) < 0.01);
     }
     if (niche) fixture.traverse(o => { if (o.isLight) lights.push(o); });
-    if (fixture.userData.id === 'garage-shopLight') {
-      const p = fixture.getWorldPosition(new THREE.Vector3());
-      lights.push(...practicals.filter(l => l.userData.always && Math.abs(l.position.z - p.z) < 0.3));
-    }
     if (fixture.userData.id === 'decor-wall-light-black') lights.push(...practicals.filter(l => l.name === 'Porch sconce source'));
     lights.forEach(l => assigned.add(l));
     const exterior = /porch|wall-light-black/.test(fixture.userData.id || '');
@@ -104,7 +100,7 @@ export function collectLightSwitches(scene, fixtures) {
     owner.traverse(o => { if (glowing(o) || o.material?.blending === THREE.AdditiveBlending) meshes.push(o); });
     if (meshes.length) entries.push(switchLight(owner, meshes, lights, {
       name: niche ? 'Alcove recessed can' : owner !== fixture ? 'Rattan bedside lamp' : fixture.userData.lightFixture?.name,
-      zh: niche ? '壁龛筒灯' : owner !== fixture ? '藤编床头灯' : fixture.userData.lightFixture?.zh, exterior, always: niche,
+      zh: niche ? '壁龛筒灯' : owner !== fixture ? '藤编床头灯' : fixture.userData.lightFixture?.zh, exterior, always: niche, day: spec?.day !== undefined,
     }));
   }
   return entries;

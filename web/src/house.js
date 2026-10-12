@@ -22,6 +22,7 @@ export const PATIO = { x0: -2.4, x1: 4.2, y0: 5.47, y1: 10.2 };
 export const COURT_A = { x0: -6.2, x1: -2.4, y0: 5.47, y1: 8.6 };
 export const COURT_B = { x0: 4.2, x1: 8.3, y0: 5.47, y1: 8.6 };
 export const PORCH = { x0: -3.507, x1: 3.97, y0: -5.85, y1: -4.72 };           // recessed between the garage and bedroom 3, under the main roof
+const GARAGE_XE = -3.393;                                                      // outer face of the garage's porch-side block wall
 export const WALK = { x0: -0.65, x1: 0.65, y0: -7.85, y1: -6.0 };
 export const DRIVE = { x0: -8.17, x1: -4.9, y0: -14.2, y1: -6.0 };
 export const PAD = { x0: -11.5, x1: -8.17, y0: -7.2, y1: 0.15 };              // parking pad along the garage's west wall (g07)
@@ -129,6 +130,8 @@ export function buildHouse(house, mods, opts = {}) {
     if (outside(p)) {
       // exterior skin: stucco, 0.15 thick, flush with the openings
       const s = skinRect(p, EXT_FP, 0.15);
+      // the kitchen's porch wall skin starts at the garage block wall, not inside it: its end cap would show on the garage face
+      if (s && p.dir === 'H' && s.x0 < GARAGE_XE && s.x1 > GARAGE_XE && s.y1 <= PORCH.y1 + 1e-3) s.x0 = GARAGE_XE;
       if (s) interior.add(wallBox(s.x0, s.x1, s.y0, s.y1, p.z0, p.z1 + (p.z1 >= CEIL - 1e-3 ? 0.12 : 0), M.stucco(), p.kind === 'solid' || p.kind === 'sill'));
     }
   }
@@ -221,7 +224,7 @@ function cutOpenings(pieces, extra) {
 function buildAnnex(g, house) {
   const st = M.stucco(), dark = GM.wall(), white = M.wallPaint(), pine = M.pine(), SK = 0.15, HX = CEIL + 0.12;
   const W = (x0, x1, y0, y1, h0, h1, m, c = true) => g.add(wallBox(x0, x1, y0, y1, h0, h1, m, c));
-  const xo = -8.0176, yo = -5.8503, xe = -3.393;            // outer faces of the west, front and porch-side block walls
+  const xo = -8.0176, yo = -5.8503, xe = GARAGE_XE;       // outer faces of the west, front and porch-side block walls
   const { y0: sd0, y1: sd1 } = SIDE_DOOR, { x0: gd0, x1: gd1, h: gdh } = GARAGE_DOOR;
   // west wall + skin, side door to the parking pad
   for (const [a, b] of [[yo, sd0], [sd1, LAUNDRY.y1]]) { W(xo, GARAGE.x0, a, b, 0, CEIL, dark); W(xo - SK, xo, a, b, 0, HX, st); }
@@ -241,7 +244,9 @@ function buildAnnex(g, house) {
   // porch-side wall (the garage's east face, under the main roof) + skin
   W(GARAGE.x1, xe, yo, PORCH.y1, 0, CEIL, dark); W(xe, xe + SK, yo, PORCH.y1, 0, HX, st);
   // chocolate paint over the kitchen wall's garage face, stopping at the door casing
-  W(GARAGE.x1 - 0.016, GARAGE.x1 - 0.012, PORCH.y1, -1.423, 0, CEIL, dark, false);
+  W(GARAGE.x1 - 0.016, GARAGE.x1, PORCH.y1, -1.423, 0, CEIL, dark, false);
+  // ...and over the header above the casing, up to the linen closet's south wall
+  W(GARAGE.x1 - 0.016, GARAGE.x1, -1.423, LINEN.y0 - 0.118, house.doorHeight + 0.07, CEIL, dark, false);
 
   // linen closet (louvered bifold off the vestibule): west + south walls, pine shelving at the back
   const T = 0.114, ls0 = LINEN.y0 - T;
@@ -492,8 +497,8 @@ function buildRoof() {
 
 function buildPorch(mods) {
   const g = new THREE.Group();
-  // porch slab
-  g.add(box(PORCH.x1 - PORCH.x0, 0.12, PORCH.y1 - PORCH.y0, M.concrete(), { x: (PORCH.x0 + PORCH.x1) / 2, y: -0.06 + 0.02, z: -(PORCH.y0 + PORCH.y1) / 2 }));
+  // porch slab, from the garage block wall's outer face (its 2 cm lip would show on the garage face)
+  g.add(box(PORCH.x1 - GARAGE_XE, 0.12, PORCH.y1 - PORCH.y0, M.concrete(), { x: (GARAGE_XE + PORCH.x1) / 2, y: -0.06 + 0.02, z: -(PORCH.y0 + PORCH.y1) / 2 }));
   // front step
   g.add(box(WALK.x1 - WALK.x0 + 0.5, 0.14, 0.4, M.concrete(), { x: (WALK.x0 + WALK.x1) / 2, y: -0.14 / 2 - 0.02, z: -(PORCH.y0 - 0.2) }));
   return g;

@@ -8,6 +8,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { M } from './materials.js';
 import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
@@ -85,7 +86,12 @@ export function createLighting(renderer, scene, camera, house, preset) {
   const blendQuad = new FullScreenQuad(blendMaterial);
   let lastSkyMix = -1;
   const skies = new Map(), readySkies = new Map();
-  let dusk = false, indoor = 0, exposure = 1, wasMoving = false, envRotation = 0;
+  let dusk = false, indoor = 0, exposure = 1, wasMoving = false, envRotation = 0, shadowClock = 1;
+  // Exposure targets (tone-mapping exposure) outdoors and indoors, by time of day.
+  // Indoor day exposure is set like a bracketed listing photo (bright rooms, windows allowed to glow), fitted against the
+  // g10 / g14 / g20 photo spots for brightness, saturation and ceiling level.
+  // Dusk indoors: lamps run at 5x, so exposure drops and the white balance cools toward warm cream (chosen from a grid).
+  const tune = { dayOutdoor: 1.0, dayIndoor: 1.7, duskOutdoor: 1.1, duskIndoor: 0.75, duskBalance: [0.9, 1.06, 1.45] };
   const interiorMaterials = new Set(), exteriorMaterials = new Set();
   const emissives = new Map();
   const glass = new Map();
@@ -152,13 +158,37 @@ export function createLighting(renderer, scene, camera, house, preset) {
   const hqEffects = createHQ(renderer, composer, gtao, preset);
   const smaa = new SMAAPass(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio());
   // SMAA needs display-referred input; apply tone mapping / output conversion first.
-  composer.addPass(new OutputPass()); composer.addPass(smaa);
+  // Photographic grade on the display-referred image, before SMAA: saturation, contrast around mid-grey, and a lift that
+  // opens the shadows the way bracketed listing photos do. One full-screen pass.
+  const grade = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, saturation: { value: 1 }, contrast: { value: 1 }, lift: { value: 0.04 }, balance: { value: new THREE.Vector3(1, 1, 1) } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float saturation, contrast, lift; uniform vec3 balance; varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(tDiffuse, vUv);
+        c.rgb = min(c.rgb * balance, vec3(1.0));
+        float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        vec3 g = mix(vec3(l), c.rgb, saturation);
+        g = (g - 0.5) * contrast + 0.5;
+        g = g + lift * (1.0 - g);
+        gl_FragColor = vec4(clamp(g, 0.0, 1.0), c.a);
+      }`,
+  });
+  composer.addPass(new OutputPass()); composer.addPass(grade); composer.addPass(smaa);
   smaa.enabled = preset.smaa;
+  // Multisampled composer buffers (GTAO still reads their resolved depth). Changing the count reallocates them.
+  function setMsaa(samples = 0) {
+    for (const target of [composer.renderTarget1, composer.renderTarget2]) if (target.samples !== samples) { target.samples = samples; target.dispose(); }
+  }
+  setMsaa(preset.msaa);
 
-  async function loadSky(isDusk = false) {
+  // `gate` (optional) returns a promise for a quiet moment: the download starts at once, but the CPU tint and the PMREM
+  // convolution (together a ~150 ms hitch) wait for it. A later ungated call shares the same pending sky.
+  async function loadSky(isDusk = false, gate = null) {
     const name = isDusk ? DUSK : DAY;
     if (!skies.has(name)) {
-      const pending = new RGBELoader().setDataType(THREE.HalfFloatType).loadAsync(`assets/hdr/${name}_2k.hdr`).then(hdr => {
+      const pending = new RGBELoader().setDataType(THREE.HalfFloatType).loadAsync(`assets/hdr/${name}_2k.hdr`).then(async hdr => {
+        if (gate) await gate();
         if (isDusk) {
           // Preserve the photographed cloud structure, shift sunset to blue hour.
           const data = hdr.image.data;
@@ -309,9 +339,14 @@ export function createLighting(renderer, scene, camera, house, preset) {
     const alpha = snap ? 1 : 1 - Math.exp(-dt * 3);
     indoor = mix(indoor, target, alpha);
     // Moderate photographic adaptation: preserve the bright garden in window views.
-    const targetExposure = dusk ? mix(1.1, 1.05, indoor) : mix(1.0, 1.12, indoor);
+    const targetExposure = dusk ? mix(tune.duskOutdoor, tune.duskIndoor, indoor) : mix(tune.dayOutdoor, tune.dayIndoor, indoor);
     exposure = mix(exposure, targetExposure, alpha);
     renderer.toneMappingExposure = exposure;
+    // White balance: at dusk every interior light is a warm lamp, and an uncorrected frame goes uniformly orange. A camera
+    // would partly correct it, so indoors at dusk the grade cools toward warm cream (tune.duskBalance), easing in with
+    // `indoor` like the exposure does.
+    const wb = dusk ? indoor : 0, b = tune.duskBalance;
+    grade.uniforms.balance.value.set(mix(1, b[0], wb), mix(1, b[1], wb), mix(1, b[2], wb));
     // Keep the light-count shader defines stable outdoors and across time changes.
     // Zero intensity preserves the original contribution of hidden day fixtures.
     for (const light of fixtures.children) if (light.isLight) {
@@ -335,12 +370,16 @@ export function createLighting(renderer, scene, camera, house, preset) {
     }
     // Refresh during interactions and once when they stop, including the final
     // door/object pose. applyTime also invalidates the changed sun projection.
-    if (moving || wasMoving) sun.shadow.needsUpdate = true;
+    // Moving casters (doors, the garage door, a dragged chair) refresh the sun shadow at most 10 times a second: the full
+    // 4096 map with every caster cost ~25 ms a frame for the whole of the arrival door's swing. The frame after movement
+    // stops still refreshes, so the resting shadow is exact.
+    shadowClock += dt;
+    if ((moving && shadowClock >= 0.1) || (!moving && wasMoving)) { sun.shadow.needsUpdate = true; shadowClock = 0; }
     wasMoving = moving;
   }
 
   function setQuality(next) {
-    hqEffects.setQuality(next); smaa.enabled = next.smaa;
+    hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa);
     const size = shadowSize(next);
     if (sun.shadow.mapSize.x !== size) {
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -348,7 +387,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     }
   }
   // Download and convolve a sky (plus its room bounce) without showing it: the other time of day, after loading.
-  async function prepareTime(isDusk) { await loadSky(isDusk); roomFor(isDusk); }
+  async function prepareTime(isDusk, gate = null) { await loadSky(isDusk, gate); if (gate) await gate(); roomFor(isDusk); }
   // Pets are created after collectMaterials, so they miss the room/sky split. Each one
   // carries its own indoor flag: room bounce and the daylight volume inside, the sky outside.
   function attachPet(material) {
@@ -382,5 +421,5 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  return { fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  return { tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

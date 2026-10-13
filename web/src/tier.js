@@ -1,10 +1,12 @@
 // Device tier, chosen before the renderer, shadow map and composer exist. ?tier=hq|laptop|mobile overrides detection.
+// msaa: samples in the composer's buffers. The canvas's own antialias flag does nothing once a composer renders
+// offscreen, so this is the real geometric antialiasing; SMAA after it only cleans what MSAA cannot see.
 // hq: Apple M-series Max / Ultra. laptop: other Apple M GPUs, NVIDIA and every unrecognised desktop GPU.
 // mobile: iPhone, iPad (including iPadOS reporting a Mac with touch points), coarse pointers, software rasterisers.
 export const TIERS = {
-  hq: { name: 'hq', pixelRatio: 2, shadowMap: 4096, hqShadow: true, gtao: { samples: 16, pd: 16 }, smaa: true, anisotropy: 16, grass: 'hq', mirrors: true, textureCap: Infinity },
-  laptop: { name: 'laptop', pixelRatio: 1.25, shadowMap: 2048, hqShadow: true, gtao: { samples: 6, pd: 6 }, smaa: false, anisotropy: 4, grass: 'laptop', mirrors: false, textureCap: 2048 },
-  mobile: { name: 'mobile', pixelRatio: 1, shadowMap: 1024, hqShadow: false, gtao: null, smaa: false, anisotropy: 1, grass: 'fast', mirrors: false, textureCap: 1024 },
+  hq: { name: 'hq', pixelRatio: 2, shadowMap: 4096, hqShadow: true, gtao: { samples: 16, pd: 16 }, smaa: true, msaa: 4, anisotropy: 16, grass: 'hq', mirrors: true, textureCap: Infinity },
+  laptop: { name: 'laptop', pixelRatio: 1.25, shadowMap: 2048, hqShadow: true, gtao: { samples: 6, pd: 6 }, smaa: false, msaa: 2, anisotropy: 4, grass: 'laptop', mirrors: false, textureCap: 2048 },
+  mobile: { name: 'mobile', pixelRatio: 1, shadowMap: 1024, hqShadow: false, gtao: null, smaa: false, msaa: 0, anisotropy: 1, grass: 'fast', mirrors: false, textureCap: 1024 },
 };
 
 // Scanned texture set for this visit, chosen before any texture request so the browser downloads only that set.

@@ -23,8 +23,9 @@ const juteChunky = once(() => { const m = M.jute().clone(), w = weaveMaps({ kind
 const ruffleBlack = once(() => new THREE.MeshStandardMaterial({ color: 0x161514, roughness: 0.8 }));
 // Pine for the owner's built-ins: pale blond (towers/bench), warmer slats, honey solid-wood sill and side bench.
 // (The shared M.pineWhitewash / M.plywoodSlats read as chalk-white with blotchy waves next to the photos.)
-const pineBlond = once(() => new THREE.MeshStandardMaterial({ map: pineTexture({ base: '#e8c995', late: '#c08b4c', seed: 3, contrast: 1.1 }), roughness: 0.62 }));
-const slatVariants = once(() => [['#e6c28a', '#b98142', 8], ['#eac897', '#c08c4d', 9], ['#e2bb80', '#b27a3a', 10]].map(([base, late, seed]) => new THREE.MeshStandardMaterial({ map: pineTexture({ base, late, seed, contrast: 1.1 }), roughness: 0.6 })));
+const pineBlond = once(() => new THREE.MeshStandardMaterial({ map: pineTexture({ base: '#ebdbc1', late: '#cdab82', seed: 3, contrast: 0.95 }), roughness: 0.62 }));
+// Pale natural pine, as in g08–g10 (the earlier golden tones read as mustard once the room was exposed like the photos).
+const slatVariants = once(() => [['#ecdcc3', '#cfae86', 8], ['#efe0c9', '#d3b48e', 9], ['#e9d8bd', '#caa880', 10]].map(([base, late, seed]) => new THREE.MeshStandardMaterial({ map: pineTexture({ base, late, seed, contrast: 0.95 }), roughness: 0.6 })));
 const pineSlat = (i = 0) => slatVariants()[((i % 3) + 3) % 3];
 const pineHoney = once(() => new THREE.MeshStandardMaterial({ map: pineTexture({ base: '#e6bd80', late: '#b07434', seed: 5, contrast: 1.2, rings: 40 }), roughness: 0.5 }));
 const dryGrass = once(() => new THREE.MeshStandardMaterial({ color: 0x72765c, roughness: 0.9, side: THREE.DoubleSide }));

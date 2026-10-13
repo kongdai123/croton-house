@@ -137,14 +137,30 @@ function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kin
 ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
 
 // ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA, per tier preset. J toggles quality.
-function toggleDusk() { state.dusk = !state.dusk; ui.syncLegends(); applyTime(); }
+// Toggling dusk needs the other sky now, so it opens the background preparation's quiet-moment gate (see below).
+let skyUrgent = false;
+function toggleDusk() { skyUrgent = true; state.dusk = !state.dusk; ui.syncLegends(); applyTime(); }
 // Mirror reflections exist only in the hq preset; their proxy scenes are built the first time it is used.
+// Foliage antialiasing. Leaves are alpha-tested cut-outs, which MSAA cannot smooth on its own; alpha-to-coverage lets the
+// cut-out edge use the multisample coverage instead. Mipmaps average a leaf's alpha down at distance, which thins
+// canopies under alpha-to-coverage, so the cutoff drops to 45% of its original while it is on. Without MSAA,
+// alpha-to-coverage would draw whole leaf cards, so it follows the tier's sample count.
+const foliageMaterials = new Set();
+scene.traverse(o => { for (const m of [].concat(o.material ?? [])) if (m.alphaTest > 0 && !m.transparent) foliageMaterials.add(m); });
+function setFoliageAA(on) {
+  for (const m of foliageMaterials) {
+    m.userData.cutoff ??= m.alphaTest;
+    const cutoff = on ? m.userData.cutoff * 0.45 : m.userData.cutoff;
+    if (m.alphaToCoverage !== on || m.alphaTest !== cutoff) { m.alphaToCoverage = on; m.alphaTest = cutoff; m.needsUpdate = true; }
+  }
+}
+setFoliageAA(preset.msaa > 0);
 let mirrorsReady = false;
 const mirrorsOn = () => TIERS[state.quality].mirrors;
 function setQuality(name) {
   const p = TIERS[name]; state.quality = name;
   garden.setQuality(p.grass); lighting.setQuality(p);
-  activePreset = p; fitView();
+  activePreset = p; setFoliageAA(p.msaa > 0); fitView();
   if (p.mirrors && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
   ui.syncLegends();
 }
@@ -168,7 +184,7 @@ await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
 // first frame is drawn shows a loading screen over the empty canvas until the warm draw below has put a frame on it.
 const warming = document.getElementById('warming');
 let firstFrameDrawn = false;
-document.getElementById('enter').addEventListener('click', () => { if (!firstFrameDrawn) warming.classList.remove('hidden'); });
+document.getElementById('enter').addEventListener('click', () => { state.enteredAt ??= performance.now(); if (!firstFrameDrawn) warming.classList.remove('hidden'); });
 state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
 await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 lapStart = lap('yield2', lapStart);
@@ -208,6 +224,12 @@ const stopCompileProgress = (() => {
 lapStart = lap('bake', lapStart);
 await Promise.race([compiling, new Promise(resolve => setTimeout(resolve, 120000))]);
 stopCompileProgress(); document.getElementById('warmbar').style.width = '94%';
+// The first draw below blocks the page for a moment (texture uploads, shadow maps, the last shader links). Name that step and
+// let it paint first, so a visitor already on the loading screen sees "Lighting the rooms" rather than a stalled count.
+if (!warming.classList.contains('hidden')) {
+  document.getElementById('warmcount').textContent = t('warmDraw');
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
 lapStart = lap('compile', lapStart);
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);
@@ -224,8 +246,14 @@ if (!warming.classList.contains('hidden')) { warming.classList.add('done'); setT
 state.lightingWarmupMs = performance.now() - warmupStart;
 // The other time of day (HDR download, CPU tint, PMREM and room bounce) waits until the walkthrough is up.
 // Both skies share the CubeUV environment layout and fixed light counts, so a dusk toggle reuses the compiled programs.
+// Its CPU and GPU steps cost a ~150 ms hitch, so they run while the visitor is still on the landing page, or, once they
+// have entered, no sooner than 8 s after entering and only while they stand still: never on the reveal, never mid-walk.
 const idle = cb => (window.requestIdleCallback ? requestIdleCallback(cb, { timeout: 4000 }) : setTimeout(cb, 1500));
-idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other).then(() => { state.otherSkyMs = performance.now() - t0; }); });
+const titleShown = () => !document.getElementById('title').classList.contains('hidden');
+const quietMoment = () => titleShown() || (performance.now() - (state.enteredAt ?? 0) > 8000 && player.keys.size === 0 && !tourCtl.active && !viewpoints.fly);
+// The download starts right away; each heavy step waits for whenQuiet() (or for a dusk toggle, which needs it now).
+const whenQuiet = () => new Promise(resolve => { const check = () => (skyUrgent || quietMoment() ? idle(resolve) : setTimeout(check, 500)); check(); });
+idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other, whenQuiet).then(() => { state.otherSkyMs = performance.now() - t0; }); });
 if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); fitView(); }
 document.getElementById('enter').addEventListener('click', fitView);
 

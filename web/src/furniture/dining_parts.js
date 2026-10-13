@@ -220,8 +220,9 @@ export const fernTex = once(() => {
 
 // ---------------------------------------------------------------- local materials
 export const MAT = {
-  ashTop: once(() => { const t = grainTex({ W: 1024, H: 2048, mu: 0.95, mv: 2.2, boards: 6, seed: 11, base: '#c49a62', late: '#6e4726', rings: 52, contrast: 1.15 }); t.repeat.set(1 / 0.95, 1 / 2.2); t.offset.set(0.5, 0.5); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, bumpMap: t, bumpScale: 0.6 }); }),
-  ash: once(() => { const t = grainTex({ mu: 1, mv: 1, boards: 7, seed: 5, base: '#c39960', late: '#6e4726', rings: 100, contrast: 1.2 }); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.52, bumpMap: t, bumpScale: 0.4 }); }),
+  // Light honey oak with soft grain (g19–g21); the earlier orange base and dark late-wood read as loud once exposed like the photos.
+  ashTop: once(() => { const t = grainTex({ W: 1024, H: 2048, mu: 0.95, mv: 2.2, boards: 6, seed: 11, base: '#d8b78a', late: '#a27a4f', rings: 52, contrast: 0.95 }); t.repeat.set(1 / 0.95, 1 / 2.2); t.offset.set(0.5, 0.5); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, bumpMap: t, bumpScale: 0.6 }); }),
+  ash: once(() => { const t = grainTex({ mu: 1, mv: 1, boards: 7, seed: 5, base: '#d4b083', late: '#9a7048', rings: 100, contrast: 1.0 }); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.52, bumpMap: t, bumpScale: 0.4 }); }),
   chairAsh: once(() => { const t = grainTex({ mu: 1, mv: 1, boards: 9, seed: 8, base: '#c3925a', late: '#6b4522', rings: 120, contrast: 0.9 }); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.48, bumpMap: t, bumpScale: 0.3 }); }),
   oakLeg: once(() => { const t = grainTex({ mu: 1, mv: 1, boards: 8, seed: 23, base: '#d7b07a', late: '#9c6e3c', rings: 140 }); return new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 }); }),
   cordSeat: once(() => new THREE.MeshStandardMaterial({ map: cordSeatTex(), bumpMap: cordSeatTex(), bumpScale: 2, roughness: 0.9, side: THREE.DoubleSide })),

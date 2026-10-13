@@ -13,6 +13,28 @@ import { M } from './materials.js';
 import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
+import { ReflectionPass, markReflective } from './reflections.js';
+
+// Tone curve: Khronos PBR Neutral (the daylight look, fitted to the listing photos), whose final step pulls bright
+// highlights toward white. uHuePreserve scales that step away, so at dusk warm lamps stay amber instead of bleaching.
+// Patched into the chunk at load, before any program compiles; only the output pass uses it.
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+  'vec3 CustomToneMapping( vec3 color ) { return color; }',
+  `uniform float uHuePreserve;
+vec3 CustomToneMapping( vec3 color ) {
+	const float StartCompression = 0.8 - 0.04; const float Desaturation = 0.15;
+	color *= toneMappingExposure;
+	float x = min( color.r, min( color.g, color.b ) );
+	float offset = x < 0.08 ? x - 6.25 * x * x : 0.04;
+	color -= offset;
+	float peak = max( color.r, max( color.g, color.b ) );
+	if ( peak < StartCompression ) return color;
+	float d = 1. - StartCompression;
+	float newPeak = 1. - d * d / ( peak + d - StartCompression );
+	color *= newPeak / peak;
+	float g = 1. - 1. / ( Desaturation * ( peak - newPeak ) + 1. );
+	return mix( color, vec3( newPeak ), g * ( 1. - uHuePreserve ) );
+}`);
 
 const DAY = 'drakensberg_solitary_mountain_puresky';
 const DUSK = 'belfast_sunset_puresky';
@@ -68,7 +90,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
   // r183 converts PCFSoft to PCF on first render; use that effective mode now
   // so shadow setup does not invalidate the programs compiled during loading.
   renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMapping = THREE.CustomToneMapping;   // Neutral, with the dusk hue preservation above
   renderer.toneMappingExposure = 1;
   RectAreaLightUniformsLib.init();
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -91,7 +113,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
   // Indoor day exposure is set like a bracketed listing photo (bright rooms, windows allowed to glow), fitted against the
   // g10 / g14 / g20 photo spots for brightness, saturation and ceiling level.
   // Dusk indoors: lamps run at 5x, so exposure drops and the white balance cools toward warm cream (chosen from a grid).
-  const tune = { dayOutdoor: 1.0, dayIndoor: 1.7, duskOutdoor: 1.1, duskIndoor: 0.75, duskBalance: [0.9, 1.06, 1.45] };
+  const tune = { dayOutdoor: 1.0, dayIndoor: 1.5, duskOutdoor: 1.1, duskIndoor: 0.75, duskBalance: [0.9, 1.06, 1.45] };
   const interiorMaterials = new Set(), exteriorMaterials = new Set();
   const emissives = new Map();
   const glass = new Map();
@@ -144,6 +166,10 @@ export function createLighting(renderer, scene, camera, house, preset) {
     target.depthTexture = new THREE.DepthTexture(target.width, target.height, THREE.UnsignedIntType);
   }
   composer.addPass(new RenderPass(scene, camera));
+  // reflections on the oak floor and quartz counters (high tier), straight after the scene render so GTAO keeps its depth
+  markReflective(M.floorOak(), 0.32); markReflective(M.quartz(), 0.55);
+  const reflections = new ReflectionPass(camera); reflections.enabled = !!preset.ssr;
+  composer.addPass(reflections);
   const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
   gtao.output = GTAOPass.OUTPUT.Default;
   const renderAo = gtao.render.bind(gtao);
@@ -161,9 +187,9 @@ export function createLighting(renderer, scene, camera, house, preset) {
   // Photographic grade on the display-referred image, before SMAA: saturation, contrast around mid-grey, and a lift that
   // opens the shadows the way bracketed listing photos do. One full-screen pass.
   const grade = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, saturation: { value: 1 }, contrast: { value: 1 }, lift: { value: 0.04 }, balance: { value: new THREE.Vector3(1, 1, 1) } },
+    uniforms: { tDiffuse: { value: null }, saturation: { value: 1 }, contrast: { value: 1 }, lift: { value: 0.04 }, balance: { value: new THREE.Vector3(1, 1, 1) }, grain: { value: 0.012 }, seed: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform sampler2D tDiffuse; uniform float saturation, contrast, lift; uniform vec3 balance; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float saturation, contrast, lift, grain, seed; uniform vec3 balance; varying vec2 vUv;
       void main() {
         vec4 c = texture2D(tDiffuse, vUv);
         c.rgb = min(c.rgb * balance, vec3(1.0));
@@ -171,10 +197,14 @@ export function createLighting(renderer, scene, camera, house, preset) {
         vec3 g = mix(vec3(l), c.rgb, saturation);
         g = (g - 0.5) * contrast + 0.5;
         g = g + lift * (1.0 - g);
+        // light film grain: breaks the banding in smooth walls and skies (a fresh pattern each frame, mid-tones most)
+        float n = fract(sin(dot(gl_FragCoord.xy + seed * vec2(37.0, 17.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+        g += n * grain * (0.6 + 0.4 * (1.0 - abs(dot(g, vec3(0.333)) * 2.0 - 1.0)));
         gl_FragColor = vec4(clamp(g, 0.0, 1.0), c.a);
       }`,
   });
-  composer.addPass(new OutputPass()); composer.addPass(grade); composer.addPass(smaa);
+  const outputPass = new OutputPass(); outputPass.uniforms.uHuePreserve = { value: 0 };
+  composer.addPass(outputPass); composer.addPass(grade); composer.addPass(smaa);
   smaa.enabled = preset.smaa;
   // Multisampled composer buffers (GTAO still reads their resolved depth). Changing the count reallocates them.
   function setMsaa(samples = 0) {
@@ -342,6 +372,8 @@ export function createLighting(renderer, scene, camera, house, preset) {
     const targetExposure = dusk ? mix(tune.duskOutdoor, tune.duskIndoor, indoor) : mix(tune.dayOutdoor, tune.dayIndoor, indoor);
     exposure = mix(exposure, targetExposure, alpha);
     renderer.toneMappingExposure = exposure;
+    outputPass.uniforms.uHuePreserve.value = dusk ? 1 : 0;
+    grade.uniforms.seed.value = (grade.uniforms.seed.value + 1) % 97;
     // White balance: at dusk every interior light is a warm lamp, and an uncorrected frame goes uniformly orange. A camera
     // would partly correct it, so indoors at dusk the grade cools toward warm cream (tune.duskBalance), easing in with
     // `indoor` like the exposure does.
@@ -379,7 +411,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
 
   function setQuality(next) {
-    hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa);
+    hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa); reflections.enabled = !!next.ssr;
     const size = shadowSize(next);
     if (sun.shadow.mapSize.x !== size) {
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -421,5 +453,5 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  return { tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  return { reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

@@ -122,7 +122,7 @@ export function bakeDaylight(root, lights) {
     ambientTexture.needsUpdate = true; windowTexture.needsUpdate = true;
     bakeMs = performance.now() - t0;
   }
-  const day = { value: 1 }, ambient = { value: ambientTexture }, window = { value: windowTexture };
+  const day = { value: 1 }, ambient = { value: ambientTexture }, window = { value: windowTexture }, floorBounce = { value: 0.4 };   // fitted with tune.dayIndoor 1.5 against g10 / g14 / g20
   const lookup = windows.map(({ center }, i) => `if ( distance( worldLight, vec3(${center.toArray().map(n => n.toFixed(5)).join(',')}) ) < 0.08 ) return texture( uDaylightWindows, vec3( uv.xy, (${i}.0 * ${NY}.0 + uv.z * ${NY - 1}.0 + 0.5) / ${NY * windows.length}.0 ) ).r;`).join('\n');
   const declarations = `uniform float uInteriorDay; uniform highp sampler3D uDaylightAmbient; uniform highp sampler3D uDaylightWindows; varying vec3 vDaylightPosition;
     vec3 daylightWorldDirection(vec3 v) { return vec3(dot(viewMatrix[0].xyz, v), dot(viewMatrix[1].xyz, v), dot(viewMatrix[2].xyz, v)); }
@@ -141,7 +141,7 @@ export function bakeDaylight(root, lights) {
   function patch(shader, paint = 1, { day: dayFlag = day, bounce = UNIT } = {}) {
     shader.uniforms.uInteriorDay = dayFlag; shader.uniforms.uDaylightAmbient = ambient; shader.uniforms.uDaylightWindows = window;
     shader.uniforms.uDaylightPaint = typeof paint === 'number' ? { value: paint } : paint;
-    shader.uniforms.uExteriorBounce = bounce;
+    shader.uniforms.uExteriorBounce = bounce; shader.uniforms.uFloorBounce = floorBounce;
     shader.vertexShader = 'varying vec3 vDaylightPosition;\n' + shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vec4 daylightPosition = vec4(transformed, 1.0);
       #ifdef USE_BATCHING
@@ -151,7 +151,7 @@ export function bakeDaylight(root, lights) {
         daylightPosition = instanceMatrix * daylightPosition;
       #endif
       vDaylightPosition = (modelMatrix * daylightPosition).xyz;`);
-    shader.fragmentShader = 'uniform float uDaylightPaint; uniform float uExteriorBounce;\n' + declarations + '\n' + shader.fragmentShader;
+    shader.fragmentShader = 'uniform float uDaylightPaint; uniform float uExteriorBounce; uniform float uFloorBounce;\n' + declarations + '\n' + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(1.0, uDaylightPaint, uInteriorDay);');
     shader.fragmentShader = shader.fragmentShader.replace('vec3 geometryPosition = - vViewPosition;', `vec3 geometryPosition = - vViewPosition;
       vec3 daylightCoords = daylightUv(normal);
@@ -159,7 +159,12 @@ export function bakeDaylight(root, lights) {
       float daylightFill = mix(1.0, texture(uDaylightAmbient, ambientCoords).r, uInteriorDay);`);
     shader.fragmentShader = shader.fragmentShader.replace('rectAreaLight = rectAreaLights[ i ];', 'rectAreaLight = rectAreaLights[ i ];\nrectAreaLight.color *= daylightWindow(rectAreaLight.position, daylightCoords);');
     shader.fragmentShader = shader.fragmentShader.replace('getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )', 'uExteriorBounce * mix(1.0, 0.28, uInteriorDay) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal )');
-    shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\niblIrradiance *= daylightFill; radiance *= mix(1.0, sqrt(daylightFill), uInteriorDay);');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n'
+      // floor bounce: a sunlit floor throws light back up, onto ceilings, the undersides of shelves and counters, and (half as
+      // much) onto the lower faces of walls and cabinets. Scaled by the baked fill, so dark corners stay darker.
+      + 'float daylightUp = daylightWorldDirection(normal).y;\n'
+      + 'iblIrradiance *= 1.0 + uFloorBounce * uInteriorDay * (max(-daylightUp, 0.0) + 0.35 * (1.0 - abs(daylightUp)));\n'
+      + 'iblIrradiance *= daylightFill; radiance *= mix(1.0, sqrt(daylightFill), uInteriorDay);');
   }
-  return { day, patch, bake, load, serialize, fingerprint, get source() { return source; }, get bakeMs() { return bakeMs; }, collectMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
+  return { floorBounce, day, patch, bake, load, serialize, fingerprint, get source() { return source; }, get bakeMs() { return bakeMs; }, collectMs: performance.now() - start, wallCount: walls.length, contactCount: contacts.length };
 }

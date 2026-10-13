@@ -2,6 +2,7 @@
 // Clicking a pin flies to the spot it was shot from and floats the post's photo (or video) beside the view as a framed card.
 import { THREE } from './kit.js';
 import { getLang, t } from './ui.js';
+import { OVERLAY_LAYER } from './viewpoints.js';
 
 const COLORS = { rn: '#ff2442', pano: '#2f6fe0', photo: '#2fa66a' }, STORE = { rn: 'croton-pins-rn', pano: 'croton-pins-pano', photo: 'croton-pins-photo' };
 const HEAD_Y = 1.32, CARD_H = 0.66;
@@ -15,7 +16,7 @@ export class Markers {
     this.root = new THREE.Group(); this.root.name = 'view-pins'; scene.add(this.root);
     this.pins = []; this.card = null; this.hover = null; this.t = 0;
     this.visible = true; this.enabled = {}; this.layers = []; this.heads = []; this.fading = []; this.instance = new THREE.Object3D();
-    this.ray = new THREE.Raycaster(); this.ray.far = 40; this.hits = []; this.blocks = [];
+    this.ray = new THREE.Raycaster(); this.ray.far = 40; this.ray.layers.enable(OVERLAY_LAYER); this.hits = []; this.blocks = [];   // the ray also sees the overlay card, so clicks still find it
     const ringGeo = new THREE.RingGeometry(0.15, 0.19, 32).rotateX(-Math.PI / 2), pulseGeo = new THREE.RingGeometry(0.17, 0.19, 32).rotateX(-Math.PI / 2);
     const arrowGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-0.07, 0, -0.24), new THREE.Vector3(0.07, 0, -0.24), new THREE.Vector3(0, 0, -0.36)]);
     const stemGeo = new THREE.CylinderGeometry(0.004, 0.004, HEAD_Y - 0.16, 6).translate(0, (HEAD_Y - 0.16) / 2 + 0.02, 0);
@@ -98,6 +99,9 @@ export class Markers {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat); mesh.renderOrder = 1000;
     const shade = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false, depthTest: false })); shade.renderOrder = 999;
     shade.position.set(0.012, -0.016, -0.004); mesh.add(shade);
+    // Drawn as an overlay after post-processing: inside the composer, ambient occlusion from the room behind showed through
+    // the white frame and the tone curve shifted the photo's colours.
+    mesh.layers.set(OVERLAY_LAYER); shade.layers.set(OVERLAY_LAYER);
     const group = new THREE.Group(); group.add(mesh);
     const cam = this.camera, fwd = new THREE.Vector3(), right = new THREE.Vector3();
     cam.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); right.set(-fwd.z, 0, fwd.x);
@@ -135,6 +139,7 @@ export class Markers {
     card.ready = true;
   }
   nextImage() { const c = this.card; if (!c || c.n < 2) return; c.i = (c.i + 1) % c.n; this.drawCard(c); }
+  get overlayActive() { return !!this.card || this.fading.length > 0; }
   closeCard() { const c = this.card; if (!c) return; c.out = true; this.card = null; this.fading.push(c); }
   disposeCard(c) { c.video?.pause(); this.scene.remove(c.group); c.mesh.geometry.dispose(); c.shade.geometry.dispose(); c.mat.dispose(); c.shade.material.dispose(); c.tex.dispose(); }
   update(dt) {

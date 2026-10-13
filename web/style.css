@@ -153,9 +153,13 @@ button.primary:disabled { opacity:.4; cursor:default }
 #crosshair { position:absolute; left:50%; top:50%; width:calc(6 * var(--u)); height:calc(6 * var(--u)); margin:calc(-3 * var(--u)); border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 0 1px rgba(0,0,0,.4) }
 #label { position:absolute; left:50%; top:calc(50% + calc(26 * var(--u))); transform:translateX(-50%); font-size:calc(18 * var(--u)); line-height:1.45; padding:calc(9 * var(--u)) calc(16 * var(--u)); border-radius:calc(10 * var(--u)); background:var(--glass); backdrop-filter:blur(calc(8 * var(--u))); text-shadow:0 1px calc(3 * var(--u)) rgba(0,0,0,.7); max-width:calc(100vw - calc(32 * var(--u))); width:max-content; text-align:center; opacity:0; transition:opacity .15s }
 #label.show { opacity:1 }
-body.touring #crosshair, body.touring #label { display:none }
+body.touring #crosshair, body.touring #label, body.in-pano #crosshair, body.in-pano #label { display:none }
 #toast { position:absolute; left:50%; bottom:calc(92 * var(--u)); transform:translateX(-50%); font-size:calc(13 * var(--u)); padding:calc(8 * var(--u)) calc(14 * var(--u)); border-radius:calc(9 * var(--u)); background:var(--glass); opacity:0; transition:opacity .3s; max-width:70vw; text-align:center }
 #toast.show { opacity:1 }
+/* Panorama loading: a glass pill in the middle of the view with the download percentage and a hairline bar. */
+#panoload { position:absolute; left:50%; top:calc(50% - calc(28 * var(--u))); transform:translate(-50%,-100%); display:flex; flex-direction:column; align-items:center; gap:calc(9 * var(--u)); min-width:calc(220 * var(--u)); padding:calc(14 * var(--u)) calc(20 * var(--u)) calc(13 * var(--u)); border-radius:calc(12 * var(--u)); background:var(--glass); backdrop-filter:blur(10px); color:var(--paper); font-size:calc(14 * var(--u)); font-variant-numeric:tabular-nums; pointer-events:none; z-index:8 }
+#panoload i { position:relative; display:block; width:100%; height:2px; overflow:hidden; background:rgba(255,255,255,.2) }
+#panoload b { position:absolute; inset:0; background:var(--paper); transform-origin:left; transform:scaleX(.04); transition:transform .15s linear }
 #ctxmenu { position:fixed; z-index:50; display:flex; flex-direction:column; min-width:200px; padding:5px; border-radius:10px; background:var(--glass); border:1px solid rgba(255,255,255,.16); backdrop-filter:blur(10px); box-shadow:0 8px 28px rgba(0,0,0,.35) }
 #ctxmenu.hidden { display:none }
 #ctxmenu button { font:inherit; font-size:13px; text-align:left; color:var(--paper); background:none; border:0; border-radius:7px; padding:8px 12px; cursor:pointer; white-space:nowrap }

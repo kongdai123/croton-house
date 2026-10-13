@@ -7,7 +7,7 @@ import { Player } from './player.js';
 import { Layout } from './layout.js';
 import { Interact } from './interact.js';
 import { Minimap } from './minimap.js';
-import { Viewpoints } from './viewpoints.js';
+import { Viewpoints, OVERLAY_LAYER } from './viewpoints.js';
 import { RedNote } from './rednote.js';
 import { Tour } from './tour.js';
 import { buildGrid } from './nav.js';
@@ -247,12 +247,23 @@ function frame(dt) {
   markers.update(dt);
   updateSwayLod(batch.lod, camera.position);
   updateRoomVisibility(batch.rooms, camera.position);
-  layout.animate(simT); layout.updateMirrors(camera, mirrorsOn(), renderer);
+  layout.animate(simT); if (!viewpoints.panoOpaque) layout.updateMirrors(camera, mirrorsOn(), renderer);
   garden.update(simT);
   minimap.draw();
   lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
   try {
-    if (viewpoints.panoActive || state.composerFailed) renderer.render(scene, camera); else composer.render();
+    // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
+    // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
+    // second, screen-target variant of every material on the spot (a 0.1-0.4 s freeze on entering a panorama).
+    if (!viewpoints.panoOpaque) { if (state.composerFailed) renderer.render(scene, camera); else composer.render(); }
+    // Overlay pass: the panorama sphere and the floating photo cards, on top of the finished frame.
+    if (viewpoints.panoActive || markers.overlayActive) {
+      // The scene's sky background would otherwise be drawn again over the finished frame, so it is lifted for this pass.
+      const mask = camera.layers.mask, autoClear = renderer.autoClear, background = scene.background;
+      camera.layers.set(OVERLAY_LAYER); renderer.autoClear = viewpoints.panoOpaque; scene.background = null;
+      renderer.render(scene, camera);
+      camera.layers.mask = mask; renderer.autoClear = autoClear; scene.background = background;
+    }
   } catch (err) {
     if (!state.composerFailed) { state.composerFailed = true; console.warn('composer', err); }
     try { renderer.render(scene, camera); } catch (_) {}
@@ -275,7 +286,8 @@ state.fpsCap = fpsCap;
 let readyFrames = 0, nextFrameAt = 0;
 const loop = (now) => {
   requestAnimationFrame(loop);
-  if (framePeriod) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
+  // The cap is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo at 30 fps judders.
+  if (framePeriod && !viewpoints.panoOpaque) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
   const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

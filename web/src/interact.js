@@ -16,6 +16,8 @@ function easeDoor(d, dt, get, set, goal, span) {
 }
 export const doorIsOpen = (d) => d.kind === 'french' || d.kind === 'bifold' ? d.target > 0.5 : d.kind === 'slider' ? d.open > 0.3 : Math.abs(d.target ?? 0) > 0.1;
 
+// The guided tour and an open panorama both own the view: nothing in the house can be aimed at, clicked or dragged.
+const viewOwned = () => document.body.classList.contains('touring') || document.body.classList.contains('in-pano');
 export class Interact {
   constructor(scene, camera, player, layout, ui, human) {
     this.scene = scene; this.camera = camera; this.player = player; this.layout = layout; this.ui = ui; this.human = human;
@@ -82,7 +84,7 @@ export class Interact {
   }
   doorLabel(d) { return doorName(d, this.camera.position.x, -this.camera.position.z, getLang()); }
   press() {
-    if (document.body.classList.contains('touring')) return;
+    if (viewOwned()) return;
     const h = this.pick();
     // sitting only gives up furniture grabs; a pet in front of the seat can still be petted
     if (this.player.seat) { if (h?.pet) this.pets.pet(h.pet); return; }
@@ -128,7 +130,7 @@ export class Interact {
     }
   }
   contextMenu(e) {
-    if (document.body.classList.contains('touring')) return;
+    if (viewOwned()) return;
     this.togglePress = null;
     if (this.player.seat) return;
     const h = this.pick(), root = h?.root?.userData.movable ? h.root : null, all = this.movedAll();
@@ -222,8 +224,8 @@ export class Interact {
       r.root.position.lerpVectors(r.from, r.to, e); r.root.rotation.y = r.fromRy + (r.toRy - r.fromRy) * e; r.root.userData.onMove?.(r.root);
     }
     this.returning = this.returning.filter(r => r.t < 1);
-    // The tour owns the view. No crosshair, label, or emissive hover, and a moving camera must not turn a click into a drag.
-    if (document.body.classList.contains('touring')) {
+    // The tour or a panorama owns the view. No crosshair, label, or emissive hover, and a moving camera must not turn a click into a drag.
+    if (viewOwned()) {
       this.pending = null; this.togglePress = null; this.grab = null;
       if (this.hover) { this.setHighlight(this.hover, false); this.hover = null; }
       if (this.markers) this.markers.hover = null;

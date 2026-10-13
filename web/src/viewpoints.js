@@ -39,6 +39,9 @@ const TRIM = { '26bd39e7b7': 10, '954f8388b8': 15, d5e1aedcc0: 25, ee4635b067: -
 // Outdoor panoramas are not on the Zillow plan; placed from their content (patio by the office doors, backyard by the fire pit)
 const EXTRA_PANO = { f393dd3f56: { x: 0.9, y: 7.4, title: 'Patio' }, '24094ad9a5': { x: 6.0, y: 12.8, title: 'Backyard' } };
 
+// Overlay layer: drawn after post-processing, on top of the finished frame (main.js). The panorama sphere and the floating
+// photo cards live here, so ambient occlusion and the tone curve never touch them.
+export const OVERLAY_LAYER = 7, PANO_LAYER = OVERLAY_LAYER;
 export class Viewpoints {
   constructor(scene, camera, player, points, tour, ui, renderer, photoSpots = []) {
     this.scene = scene; this.camera = camera; this.player = player; this.points = points; this.tour = tour; this.ui = ui; this.renderer = renderer;
@@ -47,9 +50,11 @@ export class Viewpoints {
     this.panoYaw = {}; this.calibratePanos();
     this.targets = this.buildTargets();
     // pano sphere
-    this.sphere = new THREE.Mesh(new THREE.SphereGeometry(30, 64, 32), new THREE.MeshBasicMaterial({ side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false }));
+    this.sphere = new THREE.Mesh(new THREE.SphereGeometry(30, 64, 32), new THREE.MeshBasicMaterial({ side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false })); this.sphere.layers.set(PANO_LAYER);   // drawn by main.js as an overlay, never inside the house render
     this.sphere.scale.x = -1; this.sphere.visible = false; this.sphere.renderOrder = 999; scene.add(this.sphere);
-    this.texCache = new Map(); this.loader = new THREE.TextureLoader();
+    this.texCache = new Map(); this.loader = new THREE.TextureLoader(); this.renderer = renderer;
+    this.panoProgress = new Map(); this.panoReady = new Set();
+    this.panoLoadEl = document.getElementById('panoload'); this.panoLoadText = document.getElementById('panoloadText'); this.panoLoadBar = document.getElementById('panoloadBar');
     this.compare = document.getElementById('compare'); this.compareImg = document.getElementById('compareImg'); this.slider = document.getElementById('compareSlider');
     const bar = document.createElement('div'); bar.className = 'bar'; this.compare.appendChild(bar); this.bar = bar;
     this.slider.oninput = () => this.setWipe(+this.slider.value);
@@ -70,8 +75,8 @@ export class Viewpoints {
   buildTargets() {
     const list = [];
     const byId = Object.fromEntries(this.tour.panos.map(p => [p.id, p]));
-    for (const p of [...this.points.panorama].sort((a, b) => a.order - b.order)) { const [x, y] = toPlan(p.x, p.y); list.push({ kind: 'pano', id: p.id, x, y, heading: this.panoYaw[p.id] ?? 0, title: p.title, thumb: `assets/panos/${p.id}.jpg`, order: p.order }); }
-    for (const [id, e] of Object.entries(EXTRA_PANO)) list.push({ kind: 'pano', id, x: e.x, y: e.y, heading: this.panoYaw[id] ?? 0, title: e.title, thumb: `assets/panos/${id}.jpg`, order: 20 });
+    for (const p of [...this.points.panorama].sort((a, b) => a.order - b.order)) { const [x, y] = toPlan(p.x, p.y); list.push({ kind: 'pano', id: p.id, x, y, heading: this.panoYaw[p.id] ?? 0, title: p.title, thumb: `assets/pano_thumbs/${p.id}.webp`, order: p.order }); }
+    for (const [id, e] of Object.entries(EXTRA_PANO)) list.push({ kind: 'pano', id, x: e.x, y: e.y, heading: this.panoYaw[id] ?? 0, title: e.title, thumb: `assets/pano_thumbs/${id}.webp`, order: 20 });
     const order = this.points.photo.slice().sort((a, b) => a.gallery - b.gallery);
     for (const p of order) {
       const [x, y] = toPlan(p.x, p.y), id = `g${String(p.gallery).padStart(2, '0')}`;
@@ -108,6 +113,7 @@ export class Viewpoints {
   goTo(target, opts = {}) {
     if (!target) return;
     this.exitPano(); this.closeCompare(); this.markers?.closeCard();
+    if (target.kind === 'pano') this.loadPano(target.id);
     this.player.resetJump(); this.player.viewEye = null;
     const full = target.kind === 'point' ? target : (this.targets.find(v => v.id === target.id) || target);
     const from = { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw, pitch: this.player.pitch, eye: this.player.eye };
@@ -179,7 +185,52 @@ export class Viewpoints {
       if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].some(k => this.player.keys.has(k))) this.exitPano();
     }
   }
+  // Panoramas are 4096 x 2048. Decoding one with an <img> and uploading it on first draw froze the tab for 0.2–0.9 s, so
+  // they decode off the main thread (createImageBitmap, flipped like a TextureLoader image) and upload ahead of time.
+  // Arriving at a panorama's viewpoint, or flying to one, starts this in the background, so C opens it at once.
+  loadPano(id) {
+    let job = this.texCache.get(id);
+    if (job) return job;
+    const finish = (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 8; tex.needsUpdate = true; try { this.renderer?.initTexture(tex); } catch (_) {} return tex; };
+    const viaImage = () => this.loader.loadAsync(`assets/panos/${id}.jpg`).then(finish);
+    // Read the download in chunks so the loading indicator can show real progress (Content-Length is always sent for JPEGs).
+    const download = async () => {
+      const r = await fetch(`assets/panos/${id}.jpg`);
+      if (!r.ok) throw new Error(String(r.status));
+      const total = +r.headers.get('content-length') || 0;
+      if (!r.body || !total) return r.blob();
+      const reader = r.body.getReader(), chunks = []; let got = 0;
+      for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; this.panoProgress.set(id, Math.min(1, got / total)); }
+      return new Blob(chunks, { type: 'image/jpeg' });
+    };
+    job = (typeof createImageBitmap === 'function'
+      ? download()
+        .then(blob => createImageBitmap(blob, { imageOrientation: 'flipY', premultiplyAlpha: 'none', colorSpaceConversion: 'none' }))
+        .then(bitmap => { const tex = new THREE.Texture(bitmap); tex.flipY = false; return finish(tex); })
+        .catch(viaImage)
+      : viaImage());
+    job.then(() => this.panoReady.add(id), () => this.texCache.delete(id));
+    this.texCache.set(id, job);
+    return job;
+  }
+  // Loading indicator: a small glass pill in the middle of the view with the real download percentage, then "decoding".
+  showPanoLoading(id, request) {
+    const el = this.panoLoadEl; if (!el) return;
+    this.panoLoadRequest = request; el.classList.remove('hidden');
+    const tick = () => {
+      if (this.panoLoadRequest !== request || el.classList.contains('hidden')) return;
+      const p = this.panoProgress.get(id) ?? 0;
+      this.panoLoadText.textContent = p >= 1 ? t('panoDecoding') : `${t('panoLoading')} ${Math.round(p * 100)}%`;
+      this.panoLoadBar.style.transform = `scaleX(${Math.max(0.04, p)})`;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  hidePanoLoading(request) { if (request === undefined || this.panoLoadRequest === request) { this.panoLoadEl?.classList.add('hidden'); this.panoLoadRequest = 0; } }
+  // Once the panorama has faded in it covers everything: main.js then draws only the sphere and lifts the frame cap.
+  get panoOpaque() { return this.panoActive && this.sphere.material.opacity >= 1; }
   arrived(v) {
+    if (v.kind === 'pano') this.loadPano(v.id);
     if (v.kind === 'photo' || v.kind === 'pano') this.markers?.openTargetCard(v);
   }
   openCompare(src) { this.markers?.closeCard(); this.compareImg.src = src; this.compare.classList.remove('hidden'); this.compareOpen = true; this.setWipe(+this.slider.value); this.player.unlock(); this.syncExit(); }
@@ -196,16 +247,20 @@ export class Viewpoints {
   async enterPano(v) {
     this.markers?.closeCard(); this.player.resetJump();
     const request = this.panoRequest = (this.panoRequest || 0) + 1;
-    let tex = this.texCache.get(v.id);
-    if (!tex) { tex = await this.loader.loadAsync(`assets/panos/${v.id}.jpg`); tex.colorSpace = THREE.SRGBColorSpace; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.anisotropy = 8; this.texCache.set(v.id, tex); }
+    const job = this.loadPano(v.id);
+    if (!this.panoReady.has(v.id)) this.showPanoLoading(v.id, request);
+    const tex = await job.catch(() => null);
+    this.hidePanoLoading(request);
+    if (!tex) { this.ui.toast(t('panoFailed')); return; }
     if (this.panoRequest !== request || this.fly || window.__app?.tourCtl?.active) return;
     this.sphere.material.map = tex; this.sphere.material.needsUpdate = true; this.sphere.material.opacity = 0; this.sphere.visible = true;
     // Orientation: the texture's centre column should look toward plan heading `v.heading`. With scale.x=-1 the sphere's
     // u=0.5 faces +Z (world south, heading 180). Rotate so it faces the calibrated heading instead.
     this.sphere.rotation.y = THREE.MathUtils.degToRad(180 - v.heading) + (this.panoTrim || 0);
     this.panoActive = true; this.panoPos = { x: v.x, z: -v.y }; this.panoTarget = v; this.syncExit();
+    document.body.classList.add('in-pano');   // hides the crosshair and aim label; interact.js stops aiming at the hidden house
     this.ui.toast(`${t('pano')} · ${t(v.title)} · ${t('panoCard')}`, 3500);
     this.player.lock();
   }
-  exitPano() { this.panoRequest = (this.panoRequest || 0) + 1; if (!this.panoActive) return; this.panoActive = false; this.sphere.visible = false; this.sphere.material.opacity = 0; this.player.enabled = true; this.syncExit(); }
+  exitPano() { this.panoRequest = (this.panoRequest || 0) + 1; this.hidePanoLoading(); if (!this.panoActive) return; this.panoActive = false; document.body.classList.remove('in-pano'); this.sphere.visible = false; this.sphere.material.opacity = 0; this.player.enabled = true; this.syncExit(); }
 }

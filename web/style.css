@@ -519,3 +519,24 @@ body.ui-hidden #ui-restore { right:calc(22 * var(--u)) }
 #topbar .brand kbd.wide { padding:0 calc(6 * var(--u)) }
 /* the bar closes on the right with a hairline, like every module */
 #topbar #btn-ui { border-right:1px solid var(--hr) }
+/* ==== Welcome cards in the tutorial's language: translucent paper, square, a heavy ink rule on top, hairline rows,
+   red numerals and a red block, keys as solid black squares. ==== */
+#firststeps .fs-card { color:#1a1917; background:var(--hp-t, rgba(242,239,231,.4)) !important; -webkit-backdrop-filter:blur(24px) saturate(1.15); backdrop-filter:blur(24px) saturate(1.15);
+  border:0; border-top:calc(6 * var(--u)) solid #1a1917; border-radius:0; box-shadow:0 calc(24 * var(--u)) calc(60 * var(--u)) rgba(0,0,0,.22) }
+#firststeps .fs-photos img { border-radius:0 }
+#firststeps .fs-kicker { color:#555 }
+#firststeps .fs-title { color:#1a1917; font-weight:400; letter-spacing:-.025em }
+#firststeps .fs-lines li { border-top:1px solid rgba(26,25,23,.16); color:#1a1917 }
+#firststeps .fs-lines li:first-child { border-top:calc(2 * var(--u)) solid #1a1917 }
+#firststeps .fs-lines em { color:#c8352a; font-style:normal }
+#firststeps .fs-sign { color:#555; border-top:calc(2 * var(--u)) solid #1a1917 }
+/* controls card: a red block before the title, rows under hairlines, black key squares */
+#firststeps .fs-controls .fs-title { display:flex; align-items:center; gap:calc(14 * var(--u)); padding-bottom:calc(14 * var(--u)); margin-bottom:0; border-bottom:calc(2 * var(--u)) solid #1a1917 }
+#firststeps .fs-controls .fs-title::before { content:''; flex:none; width:calc(30 * var(--u)); height:calc(30 * var(--u)); background:#c8352a }
+#firststeps .fs-controls ul { gap:0; align-content:start; margin-top:calc(6 * var(--u)) }
+#firststeps .fs-controls li { padding:calc(9 * var(--u)) 0; border-top:1px solid rgba(26,25,23,.16); color:#1a1917; font-size:calc(17 * var(--u)) }
+#firststeps .fs-controls li:first-child { border-top:0 }
+#firststeps kbd, #firststeps kbd.wide { color:#f2efe7 !important; background:#1a1917 !important; border:0 !important; border-radius:0 !important; box-shadow:none }
+#firststeps .fs-mouse { color:#1a1917 }
+#firststeps .fs-foot { color:#555; border-top:calc(2 * var(--u)) solid #1a1917; font-size:calc(11 * var(--u)); letter-spacing:.14em; text-transform:uppercase }
+#firststeps #fsDemo:hover, #firststeps li:hover { color:#c8352a }

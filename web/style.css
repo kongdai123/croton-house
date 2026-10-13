@@ -492,3 +492,30 @@ body.ui-hidden #ui-restore:hover { opacity:1 }
 body.ui-hidden #ui-restore { top:calc(9 * var(--u)); right:calc(18 * var(--u)); left:auto; width:calc(84 * var(--u)); height:calc(40 * var(--u)); padding:0; justify-content:center; gap:calc(9 * var(--u)); opacity:.6 }
 body.ui-hidden #ui-restore .ico { width:calc(26 * var(--u)); height:calc(26 * var(--u)) }
 #topbar #btn-legends.pins-on { color:var(--hred) }
+
+/* M on the minimap's top-left corner, opening the plan */
+#mm-key { position:absolute; left:calc(16 * var(--u)); bottom:calc((16 + 190 + 6) * var(--u)); padding:0; border:0; background:none; cursor:pointer; pointer-events:auto; z-index:3 }
+#mm-key kbd { display:inline-grid; place-items:center; min-width:calc(18 * var(--u)); height:calc(18 * var(--u)); font:400 calc(10.5 * var(--u))/1 var(--liter); color:#f2efe7; background:#1a1917; border:0 }
+@media (pointer:coarse) { #mm-key { display:none } }
+/* Z, first press: the key squares go, everything else stays */
+body.keys-hidden #topbar kbd, body.keys-hidden #hud .dd-panel kbd, body.keys-hidden #mm-key { display:none !important }
+
+/* Default: no key squares and a compact bar (narrower modules, tighter gaps); Z once restores the keyed layout. */
+body.keys-hidden #topbar .chip { width:calc(50 * var(--u)) }
+body.keys-hidden #topbar .brand kbd { display:none }
+
+/* hide icon: an ink slash with a paper gap, like the other solid pictograms */
+#topbar .ico .gap { fill:none; stroke:var(--hp); stroke-width:4.4; stroke-linecap:square }
+#topbar .ico .bar { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:square }
+/* language: two small squares, the same visual width as an icon */
+#topbar .lang-sym { gap:1px }
+#topbar .lang-sym b { min-width:calc(16 * var(--u)); height:calc(16 * var(--u)); font-size:calc(9 * var(--u)); padding:0 calc(2 * var(--u)) }
+/* the right edge mirrors the left */
+#topbar { padding-right:calc(22 * var(--u)) }
+body.ui-hidden #ui-restore { right:calc(22 * var(--u)) }
+
+/* Enter as a wide key */
+#firststeps kbd.wide { min-width:calc(84 * var(--u)); font-size:calc(16 * var(--u)); letter-spacing:0 }
+#topbar .brand kbd.wide { padding:0 calc(6 * var(--u)) }
+/* the bar closes on the right with a hairline, like every module */
+#topbar #btn-ui { border-right:1px solid var(--hr) }

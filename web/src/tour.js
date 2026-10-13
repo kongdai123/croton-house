@@ -32,7 +32,12 @@ const STOPS = [
   { x: 0.0, y: 14.5, heading: 180, pitch: -0.02, hold: 6, zh: '谢谢观看 · Studio Hu Dwelling', en: 'Thanks for visiting · Studio Hu Dwelling', drift: { yaw: 0, push: 0.15 } },
 ];
 export class Tour {
-  constructor(player, tour, points, ui, viewpoints) { this.player = player; this.ui = ui; this.viewpoints = viewpoints; this.active = false; this.i = 0; this.phase = 'idle'; this.t = 0; }
+  constructor(player, tour, points, ui, viewpoints) {
+    this.player = player; this.ui = ui; this.viewpoints = viewpoints; this.active = false; this.i = 0; this.phase = 'idle'; this.t = 0;
+    // a language change mid-tour rewrites the caption on screen
+    addEventListener('langchange', () => { if (this.active && this.phase === 'hold') this.showCaption(STOPS[this.i]); });
+  }
+  showCaption(s) { this.ui.setCaption(`${getLang() === 'zh' ? s.zh : s.en}<small>${this.i + 1} / ${STOPS.length}</small>`); }
   toggle() { if (this.active) this.stop(); else this.start(); }
   start() {
     document.body.classList.add('touring'); this.ui.toggleLegends(false); this.ui.setLabel('');
@@ -65,7 +70,7 @@ export class Tour {
         const f = this.player.forward(), grid = buildGrid(this.player.extraColliders?.() ?? [], { doors: true });
         this.push = s.eye ? s.drift.push : freeRun(grid, this.player.pos.x, this.player.pos.z, f.x, f.z, s.drift.push, 0.25);
         this.base = { x: this.player.pos.x, z: this.player.pos.z, yaw: this.player.yaw };
-        this.ui.setCaption(`${getLang() === 'zh' ? s.zh : s.en}<small>${this.i + 1} / ${STOPS.length}</small>`);
+        this.showCaption(s);
       },
     });
     // The route assumes fully open leaves. Give their 1.1 s swing time to finish before crossing,

@@ -4,7 +4,7 @@ const DICT = {
     lookHelp: '鼠标移动看四周 · 点击画面开始', walkHelp: 'WASD / 方向键行走 · Shift 快走', jumpHelp: '空格跳跃 · 坐下时按空格起身', useHelp: '点击 / E / F 互动：家具坐下，灯、窗帘、门等开关', dragHelp: '按住拖动家具 · 右键放回原处', pinsHelp: 'H 显示或隐藏全部图例 · 点击红 / 蓝 / 绿标记到取景点 · 在「地图图例」中开关', mapHelp: 'M 地图', tourHelp: 'T 导览 · 方向键退出', duskHelp: 'N 黄昏 / 白天', qualityHelp: 'J 画质', musicHelp: 'B 背景音乐，两首轮流播放', mediaHelp: '媒体：R 小红书 · P 全景 · O 照片', langHelp: 'L 中文 / English', media: '媒体', musicCredit: '音乐：Oak Studios《Tuscany》。AIR《Mike Mills》原声版，由 Guillaume Edouard 分享并允许使用', compareHelp: 'C 对比照片 / 进入全景 · Q 退出', panelHelp: 'V 小红书标记 · Esc 菜单 / 关闭',
     touchLookHelp: '右侧滑动看四周', touchWalkHelp: '左侧摇杆行走', touchJumpHelp: '点「跳跃」跳起 · 坐下时起身', touchUseHelp: '点「互动」坐下或切换灯、窗帘、门等', touchDragHelp: '对准标记或卡片，点「互动」查看实拍', touchMenuHelp: '点「地图图例」切换标记、黄昏和画质 · 顶栏导览和语言 · 点地图展开',
  place: '萨拉索塔 · 佛罗里达', lede: '以原有建筑为基础，不大拆大建：重组空间，重塑室内与室外的关系，让一座老住宅拥有新的生活。', figure: '书房 · 向庭院敞开的玻璃门',
-    p1t: '光与白', p1: '白色、自然光、细格栅，与通透的空间界面。', p2t: '花园', p2: '庭院、露台与室内相连，花园成为生活的一部分。', p3t: '克制', p3: '有限的投入，更有辨识度的空间品质。', plan: '平面', credit: '由王天夫和朋友们制作', measure: '住宅尺度', enter: '进入住宅', warming: '正在准备房间…', warmCount: '光线与材质', warmDraw: '正在点亮房间…', warmingSub: '正在布置光线与材质，首次进入需要几秒钟。', fsKicker: '佛罗里达 萨拉索塔 · Studio Hu', fsI1: '保留 1962 年的房子。不为拆而拆。', fsI2: '墙被打开。二十英尺的折叠玻璃，花园走进客厅。', fsI3: '六十厘米的檐。挡住阳光，放进树影。', fsI4: '松木与橡木，亲手制作：床，窗台，台面。', fsSign: '三间卧室。一间书房。一座花园。95 × 110 英尺。Studio Hu。', fsTitle: '建筑漫步', fsLook: '转动目光', fsWalk: '沿平面行走', fsTour: '建筑漫步导览', fsViews: '照片，全景，笔记', fsStart: '点击开始。I 回到这里。? 查看全部。', introHelp: 'I 打开或关闭介绍', introTip: '介绍 · I', uiHide: '隐藏界面', uiShow: '显示界面 · Z', fsDemo: '演示', fsDemoTouch: '▶：演示', statsForNerds: '详细统计信息', swSub: '使用说明 · 2513 Croton Ave', musicLabel: '音乐', demoLabel: '演示', panoLoading: '全景加载中', panoDecoding: '全景准备中…', panoFailed: '全景加载失败，请重试', fsLookTouch: '右侧滑动：转动目光', fsWalkTouch: '左下摇杆：沿平面行走', fsTourTouch: '导览：建筑漫步', fsViewsTouch: '地图图例：照片', fsStartTouch: '点击开始。', hint: '鼠标看 · WASD 走 · 空格跳跃 · 点击互动 · ? 教程', views: '标记', rednote: '小红书', tour: '导览', dusk: '黄昏', maphint: '点击方块前往 · 点击空地瞬移 · M 关闭', comparehint: '拖动滑块对比实拍 · C 切换 · Q 退出', panoExit: '全景 · 按 Q 退出', compareExit: '实拍对比 · 按 Q 退出', quit: '退出', act: '动作',
+    p1t: '光与白', p1: '白色、自然光、细格栅，与通透的空间界面。', p2t: '花园', p2: '庭院、露台与室内相连，花园成为生活的一部分。', p3t: '克制', p3: '有限的投入，更有辨识度的空间品质。', plan: '平面', credit: '由王天夫和朋友们制作', measure: '住宅尺度', enter: '进入住宅', warming: '正在准备房间…', warmCount: '光线与材质', warmDraw: '正在点亮房间…', warmingSub: '正在布置光线与材质，首次进入需要几秒钟。', fsKicker: '佛罗里达 萨拉索塔 · Studio Hu', fsI1: '保留 1962 年的房子。不为拆而拆。', fsI2: '墙被打开。二十英尺的折叠玻璃，花园走进客厅。', fsI3: '六十厘米的檐。挡住阳光，放进树影。', fsI4: '松木与橡木，亲手制作：床，窗台，台面。', fsSign: '三间卧室。一间书房。一座花园。95 × 110 英尺。Studio Hu。', fsTitle: '建筑漫步', fsLook: '转动目光', fsWalk: '沿平面行走', fsTour: '建筑漫步导览', fsViews: '照片，全景，笔记', fsStart: '点击开始。Enter 回到这里。? 查看全部。', introHelp: 'Enter 打开或关闭介绍', introTip: '介绍 · Enter', mapLabel: '平面 · M', uiHide: '隐藏界面', uiShow: '显示界面 · Z', fsDemo: '演示', fsIntro: '再看这一页', fsKeys: '显示全部按键', fsDemoTouch: '▶：演示', statsForNerds: '详细统计信息', swSub: '使用说明 · 2513 Croton Ave', musicLabel: '音乐', demoLabel: '演示', panoLoading: '全景加载中', panoDecoding: '全景准备中…', panoFailed: '全景加载失败，请重试', fsLookTouch: '右侧滑动：转动目光', fsWalkTouch: '左下摇杆：沿平面行走', fsTourTouch: '导览：建筑漫步', fsViewsTouch: '地图图例：照片', fsStartTouch: '点击开始。', hint: '鼠标看 · WASD 走 · 空格跳跃 · 点击互动 · ? 教程', views: '标记', rednote: '小红书', tour: '导览', dusk: '黄昏', maphint: '点击方块前往 · 点击空地瞬移 · M 关闭', comparehint: '拖动滑块对比实拍 · C 切换 · Q 退出', panoExit: '全景 · 按 Q 退出', compareExit: '实拍对比 · 按 Q 退出', quit: '退出', act: '动作',
     sitOrDrag: '点击坐下 · 按住拖动', putBack: '放回原处', putAll: '全部放回', nothingMoved: '还没有移动过任何家具', rightBack: '右键放回',
     sit: '坐下', stand: '按方向键或空格起身', grab: '拖动', open: '打开', close: '关上', door: '门', pano: '全景', photo: '照片', rnpost: '小红书', goto: '去这个取景点', loading: '加载中', ready: '准备好了', tourOn: '导览进行中 · 按 T 或移动结束', tourOff: '导览结束', duskOn: '黄昏 · 室内灯亮起', dayOn: '白天', locked: '点击画面开始', fly: '飞过去…', viewpointsTitle: '全景', rednoteTitle: 'Studio Hu Dwelling 的小红书', 'Living room': '客厅', 'Kitchen': '厨房', 'Dining room': '餐厅', 'Office': '家庭室', 'Foyer': '玄关', 'Primary bedroom': '主卧', 'Primary bathroom': '主卫', 'Bedroom': '卧室', 'Bathroom': '卫生间', 'Hallway': '走廊', 'Patio': '露台', 'Backyard': '后花园', 'Front yard': '前院', 'Garage': '车库', seatHint: '坐下的高度 · 看看窗外',
     callDog: '叫狗狗', callCat: '叫猫咪', petDog: '摸摸狗狗', petCat: '摸摸猫咪', dogNoReach: '狗狗过不来，从那边到不了你这里', catNoReach: '猫咪过不来，从那边到不了你这里', dogNoReachDoor: '狗狗过不来——有扇门关着', catNoReachDoor: '猫咪过不来——有扇门关着' },
@@ -12,7 +12,7 @@ const DICT = {
     lookHelp: 'Move the mouse to look · click the scene to start', walkHelp: 'WASD / arrows to walk · Shift to walk faster', jumpHelp: 'Space to jump · Space while seated to stand', useHelp: 'Click / E / F to use: sit on furniture, toggle lights, curtains, doors', dragHelp: 'Drag furniture to move · right-click to put it back', pinsHelp: 'H show or hide all legends · click red / blue / green pins to visit · toggle them in Map legends', mapHelp: 'M map', tourHelp: 'T tour · move to exit', duskHelp: 'N dusk / daylight', qualityHelp: 'J quality', musicHelp: 'B background music, two songs in turn', mediaHelp: 'Media: R RedNote · P panoramas · O photos', langHelp: 'L 中文 / English', media: 'Media', musicCredit: 'Music: “Tuscany” by Oak Studios. AIR, “Mike Mills” (acoustic), shared for use by Guillaume Edouard', compareHelp: 'C compare photo / enter panorama · Q to exit', panelHelp: 'V RedNote pins · Esc menu / close',
     touchLookHelp: 'Swipe on the right to look', touchWalkHelp: 'Use the left joystick to walk', touchJumpHelp: 'Tap Jump to jump · stand when seated', touchUseHelp: 'Tap Use to sit or toggle lights, curtains, doors', touchDragHelp: 'Aim at a pin or card and tap Use to view the photo', touchMenuHelp: 'Use Map legends for pins, dusk and quality · top bar for tour and language · tap the map to expand',
  place: 'Sarasota, Florida', lede: 'Built on the house that was already there. Nothing torn down for its own sake: rooms reorganised, inside and outside reconnected, an old house given a new way of living.', figure: 'The office, glass doors open to the courtyard',
-    p1t: 'Light & white', p1: 'White walls, daylight, fine mullions and open thresholds.', p2t: 'Garden', p2: 'Courtyard and terrace open from the rooms; the garden becomes part of the house.', p3t: 'Restraint', p3: 'Modest means, a distinct quality of space.', plan: 'Plan', credit: 'Made by Tianfu Wang and friends', measure: 'Measures of the house', enter: 'Enter the house', warming: 'Preparing the rooms…', warmCount: 'Light and materials', warmDraw: 'Lighting the rooms…', warmingSub: 'Setting up the light and materials. The first visit takes a few seconds.', fsKicker: 'Sarasota, Florida · Studio Hu', fsI1: 'The house of 1962 is kept. Nothing is torn down for its own sake.', fsI2: 'The wall opens. Twenty feet of folding glass; the garden enters the living room.', fsI3: 'A brim of sixty centimetres. The sun stays out; the shadows of the trees come in.', fsI4: 'Pine and oak, worked by hand: the bed, the window seat, the counter.', fsSign: 'Three bedrooms. An office. A garden. 95 × 110 feet. Studio Hu.', fsTitle: 'The promenade', fsLook: 'Turn the eye', fsWalk: 'Walk the plan', fsTour: 'The guided promenade', fsViews: 'The photographs, the panoramas, the notes', fsStart: 'Click to begin. I returns here. ? shows everything.', introHelp: 'I show or hide the introduction', introTip: 'Introduction · I', uiHide: 'Hide the interface', uiShow: 'Show the interface · Z', fsDemo: 'The demonstration', fsDemoTouch: '▶: the demonstration', statsForNerds: 'Stats for nerds', swSub: 'Instructions for the visit · 2513 Croton Ave', musicLabel: 'Music', demoLabel: 'Demonstration', panoLoading: 'Loading panorama', panoDecoding: 'Preparing panorama…', panoFailed: 'The panorama did not load. Please try again.', fsLookTouch: 'Swipe on the right: turn the eye', fsWalkTouch: 'The stick, bottom left: walk the plan', fsTourTouch: 'Tour: the guided promenade', fsViewsTouch: 'Map legends: the photographs', fsStartTouch: 'Tap to begin.', hint: 'Mouse to look · WASD to walk · Space to jump · click to interact · ? tutorial', views: 'Pins', rednote: 'RedNote', tour: 'Tour', dusk: 'Dusk', maphint: 'Click a square to go there · click the plan to walk there · M to close', comparehint: 'Drag to compare with the photo · C to toggle · Q to exit', panoExit: 'Panorama · press Q to exit', compareExit: 'Photo comparison · press Q to exit', quit: 'Exit', act: 'Act',
+    p1t: 'Light & white', p1: 'White walls, daylight, fine mullions and open thresholds.', p2t: 'Garden', p2: 'Courtyard and terrace open from the rooms; the garden becomes part of the house.', p3t: 'Restraint', p3: 'Modest means, a distinct quality of space.', plan: 'Plan', credit: 'Made by Tianfu Wang and friends', measure: 'Measures of the house', enter: 'Enter the house', warming: 'Preparing the rooms…', warmCount: 'Light and materials', warmDraw: 'Lighting the rooms…', warmingSub: 'Setting up the light and materials. The first visit takes a few seconds.', fsKicker: 'Sarasota, Florida · Studio Hu', fsI1: 'The house of 1962 is kept. Nothing is torn down for its own sake.', fsI2: 'The wall opens. Twenty feet of glass; the garden comes inside.', fsI3: 'A brim of sixty centimetres: the sun stays out, the shade comes in.', fsI4: 'Pine and oak, worked by hand: the bed, the window seat, the counter.', fsSign: 'Three bedrooms. An office. A garden. 95 × 110 feet. Studio Hu.', fsTitle: 'The promenade', fsLook: 'Turn the eye', fsWalk: 'Walk the plan', fsTour: 'The guided promenade', fsViews: 'The photographs, the panoramas, the notes', fsStart: 'Click to begin. Enter returns here. ? shows everything.', introHelp: 'Enter shows or hides the introduction', introTip: 'Introduction · Enter', mapLabel: 'The plan · M', uiHide: 'Hide the interface', uiShow: 'Show the interface · Z', fsDemo: 'The demonstration', fsIntro: 'This page, again', fsKeys: 'Show every key', fsDemoTouch: '▶: the demonstration', statsForNerds: 'Stats for nerds', swSub: 'Instructions for the visit · 2513 Croton Ave', musicLabel: 'Music', demoLabel: 'Demonstration', panoLoading: 'Loading panorama', panoDecoding: 'Preparing panorama…', panoFailed: 'The panorama did not load. Please try again.', fsLookTouch: 'Swipe on the right: turn the eye', fsWalkTouch: 'The stick, bottom left: walk the plan', fsTourTouch: 'Tour: the guided promenade', fsViewsTouch: 'Map legends: the photographs', fsStartTouch: 'Tap to begin.', hint: 'Mouse to look · WASD to walk · Space to jump · click to interact · ? tutorial', views: 'Pins', rednote: 'RedNote', tour: 'Tour', dusk: 'Dusk', maphint: 'Click a square to go there · click the plan to walk there · M to close', comparehint: 'Drag to compare with the photo · C to toggle · Q to exit', panoExit: 'Panorama · press Q to exit', compareExit: 'Photo comparison · press Q to exit', quit: 'Exit', act: 'Act',
     sitOrDrag: 'Click to sit · drag to move', putBack: 'Put back', putAll: 'Put everything back', nothingMoved: 'Nothing has been moved', rightBack: 'right-click to put back',
     sit: 'Sit', stand: 'Move or press Space to stand', grab: 'Drag', open: 'Open', close: 'Close', door: 'Door', pano: 'Panorama', photo: 'Photo', rnpost: 'RedNote post', goto: 'Go to this viewpoint', loading: 'Loading', ready: 'Ready', tourOn: 'Tour running · T or move to stop', tourOff: 'Tour ended', duskOn: 'Dusk · lights on', dayOn: 'Daylight', locked: 'Click to look around', fly: 'Flying…', viewpointsTitle: 'Pano', rednoteTitle: 'Studio Hu Dwelling on RedNote', seatHint: 'Seated height · look out of the window',
     callDog: 'Call the dog', callCat: 'Call the cat', petDog: 'Pet the dog', petCat: 'Pet the cat', dogNoReach: "The dog can't reach you from there", catNoReach: "The cat can't reach you from there", dogNoReachDoor: "The dog can't reach you — a door is closed", catNoReachDoor: "The cat can't reach you — a door is closed" },
@@ -22,16 +22,16 @@ const HELP = {
   en: [
     [['Promenade', [['W A S D', 'Walk the plan'], ['Shift', 'A quicker step'], ['Mouse', 'Turn the eye'], ['Space', 'Rise · stand']]],
      ['Act', [['Click E F', 'Sit. Open. Light. Draw the curtain.'], ['Drag', 'Move the furniture'], ['Right-click', 'Return it to its place']]],
-     ['Documents', [['U', 'All documents'], ['R', 'RedNote · the house being built'], ['P', 'Panoramas'], ['O', 'The listing photographs']]]],
-    [['The eye', [['T', 'The guided promenade'], ['I', 'The house in four lines'], ['M', 'The plan'], ['H', 'All pins'], ['V', 'RedNote pins'], ['C', 'Photograph against model'], ['Q', 'Leave the photograph'], ['X', 'The demonstration']]],
-     ['The house', [['G', 'The dog'], ['K', 'The cat'], ['N', 'Day · dusk'], ['B', 'Music'], ['J', 'Quality'], ['Z', 'Hide the interface'], ['L', '中文 · English'], ['?', 'This sheet'], ['Esc', 'Menu · close']]]],
+     ['Documents', [['U', 'All documents'], ['R', 'RedNote · the notes and their pins'], ['P', 'Panoramas and their pins'], ['O', 'The photographs and their pins'], ['H', 'All pins']]]],
+    [['The eye', [['T', 'The guided promenade'], ['Enter', 'The house in four lines'], ['M', 'The plan'], ['C', 'Photograph against model'], ['Q', 'Leave the photograph'], ['X', 'The demonstration']]],
+     ['The house', [['G', 'The dog'], ['K', 'The cat'], ['N', 'Day · dusk'], ['B', 'Music'], ['J', 'Quality'], ['Z', 'Show keys · hide all · back'], ['L', '中文 · English'], ['?', 'This sheet'], ['Esc', 'Menu · close']]]],
   ],
   zh: [
     [['漫步', [['W A S D', '沿平面行走'], ['Shift', '快步'], ['鼠标', '转动目光'], ['空格', '起身 · 跳']]],
      ['动作', [['点击 E F', '坐下。开门。开灯。拉帘。'], ['拖动', '移动家具'], ['右键', '物归原处']]],
-     ['文献', [['U', '全部文献'], ['R', '小红书 · 建造的过程'], ['P', '全景'], ['O', '房源照片']]]],
-    [['目光', [['T', '建筑漫步导览'], ['I', '四行读懂这座房子'], ['M', '平面'], ['H', '全部标记'], ['V', '小红书标记'], ['C', '照片与模型对照'], ['Q', '离开照片'], ['X', '演示']]],
-     ['房子', [['G', '狗'], ['K', '猫'], ['N', '白天 · 黄昏'], ['B', '音乐'], ['J', '画质'], ['Z', '隐藏界面'], ['L', '中文 · English'], ['?', '本页'], ['Esc', '菜单 · 关闭']]]],
+     ['文献', [['U', '全部文献'], ['R', '小红书 · 笔记与标记'], ['P', '全景与标记'], ['O', '照片与标记'], ['H', '全部标记']]]],
+    [['目光', [['T', '建筑漫步导览'], ['Enter', '四行读懂这座房子'], ['M', '平面'], ['C', '照片与模型对照'], ['Q', '离开照片'], ['X', '演示']]],
+     ['房子', [['G', '狗'], ['K', '猫'], ['N', '白天 · 黄昏'], ['B', '音乐'], ['J', '画质'], ['Z', '显示按键 · 全部隐藏 · 恢复'], ['L', '中文 · English'], ['?', '本页'], ['Esc', '菜单 · 关闭']]]],
   ],
 };
 let lang = localStorage.getItem('croton-lang') || 'en';
@@ -112,13 +112,22 @@ export class UI {
     this.syncLegends();
     document.addEventListener('pointerdown', e => { if (this.legendsOpen && !document.getElementById('legends').contains(e.target)) this.toggleLegends(false); if (this.mediaOpen && !document.getElementById('media').contains(e.target)) this.toggleMedia(false); }, { capture: true });
     document.getElementById('btn-help').onclick = () => this.toggleHelp();
-    document.getElementById('btn-ui').onclick = () => this.toggleUI(false);
+    document.getElementById('btn-ui').onclick = () => this.cycleUI();
     document.getElementById('ui-restore').onclick = (e) => { e.stopPropagation(); this.toggleUI(true); };
     // The address in the top-left corner reopens the introduction (same as I).
     document.getElementById('brand').onclick = () => { if (this.firstStepsOpen) this.closeFirstSteps(false); else this.showFirstSteps(coarse); };
-    document.getElementById('btn-zillow').onclick = () => viewpoints.togglePanel('pano');
-    document.getElementById('btn-photolist').onclick = () => viewpoints.togglePanel('photo');
-    document.getElementById('btn-rednote').onclick = () => rednote.togglePanel();
+    // R / P / O: one toggle per kind of document: its list and its pins together. Opening shows the pins, closing hides them.
+    const isOpen = (kind) => kind === 'rn' ? !!rednote.panelOpen : !!(viewpoints.panelOpen && viewpoints.panelKind === kind);
+    const reveal = this.reveal = (kind) => {
+      const before = ['rn', 'pano', 'photo'].find(isOpen);
+      if (kind === 'rn') rednote.togglePanel(); else viewpoints.togglePanel(kind);
+      if (before && before !== kind && !isOpen(before)) markers.toggle(before, false);   // a list that gave way takes its pins with it
+      markers.toggle(kind, isOpen(kind));
+      this.revealed = isOpen(kind) ? kind : null;   // closing this list by any means hides these pins again
+    };
+    document.getElementById('btn-zillow').onclick = () => reveal('pano');
+    document.getElementById('btn-photolist').onclick = () => reveal('photo');
+    document.getElementById('btn-rednote').onclick = () => reveal('rn');
     document.getElementById('btn-dusk').onclick = toggleDusk;
     const music = document.getElementById('bgm'), musicBtn = document.getElementById('btn-music');
     const tracks = ['assets/audio/tuscany.m4a', 'assets/audio/mike-mills.m4a'];
@@ -131,6 +140,7 @@ export class UI {
     document.getElementById('btn-tour').onclick = () => tour.toggle();
     for (const [name, id] of [['dog', 'btn-calldog'], ['cat', 'btn-callcat']]) { const b = document.getElementById(id); if (!b) continue; if (pets?.get(name)) b.onclick = () => pets.call(name); else b.hidden = true; }
     document.getElementById('minimap').onclick = () => minimap.toggleBig();
+    document.getElementById('mm-key').onclick = () => minimap.toggleBig();
     addEventListener('keydown', e => { if (e.code === 'Escape') { e.crotonMenu = document.getElementById('ctxmenu')?.classList.contains('hidden') === false; e.crotonLegends = !!this.legendsOpen; e.crotonMedia = !!this.mediaOpen; } }, { capture: true });
     addEventListener('keydown', (e) => {
       if ((e.target?.tagName === 'INPUT' && e.target.type !== 'range') || ['TEXTAREA', 'SELECT'].includes(e.target?.tagName) || e.target?.isContentEditable) return;
@@ -142,19 +152,22 @@ export class UI {
       if (e.code === 'KeyM') minimap.toggleBig();
       if (e.code === 'KeyT') tour.toggle();
       if (e.code === 'KeyN') toggleDusk();
-      if (e.code === 'KeyV') markers.toggle();
-      if (e.code === 'KeyR') rednote.togglePanel();
+      if (e.code === 'KeyV' && this.title.classList.contains('hidden')) markers.toggle('rn');   // the old RedNote-pins key, kept quietly
+      if (e.code === 'KeyR' && this.title.classList.contains('hidden')) reveal('rn');
       const inside = this.title.classList.contains('hidden');
-      if (e.code === 'KeyP' && inside) viewpoints.togglePanel('pano');
-      if (e.code === 'KeyO' && inside) viewpoints.togglePanel('photo');
+      if (e.code === 'KeyP' && inside) reveal('pano');
+      if (e.code === 'KeyO' && inside) reveal('photo');
       if (e.code === 'KeyB' && inside) musicBtn.click();
       if (e.code === 'KeyL') setLang(lang === 'zh' ? 'en' : 'zh');
       if (e.code === 'KeyU' && inside) this.toggleMedia();
       if (e.code === 'KeyX' && inside) window.__app?.demo?.toggle();
-      if (e.code === 'KeyZ' && inside) this.toggleUI();
+      if (e.code === 'KeyZ' && inside) this.cycleUI();
       if (e.code === 'KeyH' && this.title.classList.contains('hidden')) { const kinds = ['rn', 'pano', 'photo']; const on = !kinds.every(k => markers.enabled[k]); for (const kind of kinds) markers.toggle(kind, on); }
       if (e.code === 'KeyJ') toggleQuality();
-      if (e.code === 'KeyI' && this.title.classList.contains('hidden') && !this.helpOpen) { if (this.firstStepsOpen) this.closeFirstSteps(false); else this.showFirstSteps(coarse); }
+      // Enter: the introduction (a focused button would also take Enter, so this one wins and the button is left alone)
+      if ((e.code === 'Enter' || e.code === 'NumpadEnter') && this.title.classList.contains('hidden') && !this.helpOpen && !this.panelOpen && !minimap.bigOpen) {
+        e.preventDefault(); if (this.firstStepsOpen) this.closeFirstSteps(false); else this.showFirstSteps(coarse);
+      }
       if (e.code === 'Escape') { if (e.crotonMenu) return; if (this.helpOpen) this.toggleHelp(false); else if (viewpoints.panoActive) viewpoints.exitPano(); else if (viewpoints.compareOpen) viewpoints.closeCompare(); else if (this.panelOpen) this.closePanel(); else if (minimap.bigOpen) minimap.toggleBig(); else { this.title.classList.toggle('hidden'); player.unlock(); } }
       if (e.code === 'Space') { e.preventDefault(); if (this.title.classList.contains('hidden') && !this.helpOpen) player.jump(); }
       if (e.code === 'KeyC' && !this.helpOpen) viewpoints.toggleCompare();
@@ -179,7 +192,15 @@ export class UI {
   }
   // Media: one dropdown for the RedNote, panorama and photo lists (R, P, O). Opening it closes the legends and vice versa.
   // Hide / show the whole interface (Z): only the scene and a faint eye in the corner remain, for clean views and screenshots.
+  // Z cycles: compact interface without keys (the default) -> keys shown -> everything hidden -> back to the default.
+  cycleUI() {
+    const b = document.body;
+    if (b.classList.contains('ui-hidden')) this.toggleUI(true);
+    else if (b.classList.contains('keys-hidden')) b.classList.remove('keys-hidden');
+    else this.toggleUI(false);
+  }
   toggleUI(show = document.body.classList.contains('ui-hidden')) {
+    if (show) document.body.classList.add('keys-hidden');
     document.body.classList.toggle('ui-hidden', !show);
     if (!show) { this.toggleLegends(false); this.toggleMedia(false); this.closePanel(); if (this.helpOpen) this.toggleHelp(false); if (this.firstStepsOpen) this.closeFirstSteps(false); }
   }
@@ -257,7 +278,7 @@ export class UI {
   setLabel(text) { if (!text) { this.label.classList.remove('show'); return; } this.label.textContent = text; this.label.classList.add('show'); }
   toast(text, ms = 2200) { this.toastEl.textContent = text; this.toastEl.classList.add('show'); clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => this.toastEl.classList.remove('show'), ms); }
   openPanel(title, bodyEl) { this.toggleLegends(false); this.closePanel(); this.panelTitle.textContent = title; this.panelBody.replaceChildren(bodyEl); this.panel.classList.remove('hidden'); this.panelOpen = true; this.player?.unlock(); }
-  closePanel() { this.panel.classList.add('hidden'); this.panelOpen = false; if (this.viewpoints) { this.viewpoints.panelOpen = false; this.viewpoints.panelKind = ''; } if (this.rednote) this.rednote.panelOpen = false; }
+  closePanel() { if (this.revealed && this.markers) { const k = this.revealed; this.revealed = null; this.markers.toggle(k, false); } this.panel.classList.add('hidden'); this.panelOpen = false; if (this.viewpoints) { this.viewpoints.panelOpen = false; this.viewpoints.panelKind = ''; } if (this.rednote) this.rednote.panelOpen = false; }
   setCaption(html) { if (!html) { this.caption.classList.add('hidden'); return; } this.caption.innerHTML = html; this.caption.classList.remove('hidden'); }
   touchControls(player) {
     const stick = document.getElementById('stick'), knob = document.getElementById('knob'), pad = document.getElementById('lookpad');

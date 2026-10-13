@@ -2,6 +2,8 @@
 @font-face { font-family:"Michelangelus"; src:url(assets/fonts/Michelangelus-Italic.ttf) format("truetype"); font-weight:400; font-style:italic; font-display:swap }
 @font-face { font-family:"Michelangelus"; src:url(assets/fonts/Michelangelus-Bold.ttf) format("truetype"); font-weight:500 900; font-style:normal; font-display:swap }
 @font-face { font-family:"Michelangelus"; src:url(assets/fonts/Michelangelus-BoldItalic.ttf) format("truetype"); font-weight:500 900; font-style:italic; font-display:swap }
+/* Liter (SIL OFL, assets/fonts/Liter-OFL.txt): the Swiss grotesk of the interface. One weight; hierarchy is size and space. */
+@font-face { font-family:"Liter"; src:url(assets/fonts/Liter-Regular.ttf) format("truetype"); font-weight:400; font-style:normal; font-display:swap }
 /* Chinese: Noto Serif SC subset to the characters in the site (tools/subset_fonts.py) */
 @font-face { font-family:"NotoSerifSC-Sub"; src:url(assets/fonts/NotoSerifSC-Regular.sub.woff2) format("woff2"); font-weight:100 500; font-display:swap; unicode-range:U+00B7,U+2010-206F,U+2E80-9FFF,U+F900-FAFF,U+FF00-FFEF }
 @font-face { font-family:"NotoSerifSC-Sub"; src:url(assets/fonts/NotoSerifSC-SemiBold.sub.woff2) format("woff2"); font-weight:501 900; font-display:swap; unicode-range:U+00B7,U+2010-206F,U+2E80-9FFF,U+F900-FAFF,U+FF00-FFEF }
@@ -252,3 +254,241 @@ body.touring #crosshair, body.touring #label, body.in-pano #crosshair, body.in-p
 #bigmap, #compare { z-index:4 }
 #minimap { z-index:2 }
 #touch { z-index:1 }
+
+/* ==== Corbusian interface (in the house) ===============================================================================
+   The landing's language carried inside: a paper band with an ink hairline, small-caps labels separated by hairlines,
+   every action with its key in a hairline box, square colour swatches (vermilion, ultramarine, green for the three
+   media), paper plates with ink text for dropdowns, panels, tutorial, toast, label and caption. Square corners throughout. */
+#hud { --hp:#f2efe7; --hp-a:rgba(242,239,231,.94); --hi:#1a1917; --hm:#77716a; --hr:rgba(26,25,23,.16); --hk:rgba(26,25,23,.42); --hred:#bf3f2b }
+#topbar { background:var(--hp-a); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); border-bottom:1px solid var(--hi); color:var(--hi); padding:calc(9 * var(--u)) calc(18 * var(--u)) calc(9 * var(--u)) calc(22 * var(--u)); gap:0 }
+#topbar .brand { display:inline-flex; align-items:baseline; gap:calc(10 * var(--u)); font-family:var(--serif); font-size:calc(30 * var(--u)); line-height:1.05; letter-spacing:-.012em; color:var(--hi); text-shadow:none }
+#topbar .brand b { font-weight:600 }
+#topbar kbd, #hud .dd-panel kbd { display:inline-grid; place-items:center; min-width:calc(17 * var(--u)); height:calc(17 * var(--u)); box-sizing:border-box; padding:0 calc(4 * var(--u)); font:500 calc(10 * var(--u))/1 var(--font); letter-spacing:0; text-transform:none; color:var(--hm); background:none; border:1px solid var(--hk); border-radius:0; opacity:1 }
+#topbar .brand kbd { align-self:center; margin-left:calc(2 * var(--u)) }
+#topbar > .chip, #topbar > .dd { border-left:1px solid var(--hr) }
+#topbar .chip { display:inline-flex; align-items:center; gap:calc(8 * var(--u)); height:calc(36 * var(--u)); padding:0 calc(13 * var(--u)); color:var(--hi); background:none; border:0; border-radius:0; backdrop-filter:none; font-size:calc(11.5 * var(--u)); letter-spacing:.16em; text-transform:uppercase; position:relative }
+#topbar .chip:hover { background:rgba(26,25,23,.06) }
+#topbar .chip.on { background:none; color:var(--hred) }
+#topbar .chip.on::after { content:''; position:absolute; left:calc(13 * var(--u)); right:calc(13 * var(--u)); bottom:calc(4 * var(--u)); height:2px; background:var(--hred) }
+#topbar .chip:focus-visible, #topbar .brand:focus-visible, #hud .dd-panel button:focus-visible { outline:2px solid var(--hi); outline-offset:-2px }
+#btn-music { font-size:calc(15 * var(--u)); letter-spacing:0 }
+#btn-music.on { background:none }
+#topbar .caret { margin-left:0; font-size:calc(9 * var(--u)); color:var(--hm) }
+#hud .dd { position:relative }
+#btn-media[aria-expanded="true"] .caret, #btn-legends[aria-expanded="true"] .caret { transform:rotate(180deg) }
+#hud .dd-panel, #legendsPanel { position:absolute; top:calc(100% + calc(9 * var(--u)) + 1px); right:0; min-width:calc(250 * var(--u)); width:auto; padding:0; color:var(--hi); background:var(--hp); border:1px solid var(--hi); border-radius:0; box-shadow:0 calc(14 * var(--u)) calc(34 * var(--u)) rgba(0,0,0,.18); backdrop-filter:none; pointer-events:auto; z-index:7 }
+#mediaPanel.hidden { display:none }
+#hud .dd-row, #hud .legend-row { display:flex; align-items:center; gap:calc(10 * var(--u)); width:100%; box-sizing:border-box; padding:calc(12 * var(--u)) calc(16 * var(--u)); font:inherit; font-size:calc(13.5 * var(--u)); text-align:left; color:var(--hi); background:none; border:0; border-top:1px solid var(--hr); border-radius:0; cursor:pointer }
+#hud .dd-panel > :first-child, #legendsPanel > :first-child { border-top:0 }
+#hud .dd-row:hover, #legendsPanel button:hover { background:rgba(26,25,23,.06) }
+#hud .dd-row kbd { margin-left:auto }
+#hud .legend-row kbd { margin-left:auto } #hud .legend-row kbd + .legend-state { margin-left:calc(8 * var(--u)) }
+#legendsPanel button { color:var(--hi) }
+#hud .legend-state { font-size:calc(10.5 * var(--u)); letter-spacing:.14em; text-transform:uppercase; color:var(--hm); opacity:1 }
+#hud .legend-row[aria-pressed="true"] .legend-state { color:var(--hred) }
+#hud .legend-actions { gap:0; padding:0; margin:0; border-top:1px solid var(--hi) }
+#hud .legend-actions button { padding:calc(11 * var(--u)) calc(8 * var(--u)); font-size:calc(10.5 * var(--u)); letter-spacing:.16em; text-transform:uppercase; border-radius:0 }
+#hud .legend-actions button + button { border-left:1px solid var(--hr) }
+#hud .legend-touch { border-top:1px solid var(--hi); margin:0; padding:0 }
+#hud .dot { border-radius:0; width:calc(10 * var(--u)); height:calc(10 * var(--u)); margin:0; box-shadow:none; flex:none }
+#hud .dot.rn { background:#bf3f2b } #hud .dot.pano { background:#2c4a8a } #hud .dot.photo { background:#3e7a55 }
+#hud .legend-row[aria-pressed="false"] .dot { opacity:.3 }
+/* side panel (RedNote / panorama / photo lists) */
+#panel { right:0; bottom:0; background:var(--hp); color:var(--hi); border-left:1px solid var(--hi); border-radius:0; box-shadow:calc(-14 * var(--u)) 0 calc(40 * var(--u)) rgba(0,0,0,.16) }
+#panelHead { padding:calc(16 * var(--u)) calc(20 * var(--u)) calc(13 * var(--u)); font-family:var(--serif); font-weight:400; font-size:calc(22 * var(--u)); border-bottom:1px solid var(--hi) }
+#panelClose { color:var(--hi); font-size:calc(22 * var(--u)) }
+#panelBody { padding:0 0 calc(20 * var(--u)) }
+#panel .vp { border-radius:0; padding:calc(10 * var(--u)) calc(18 * var(--u)); border-bottom:1px solid var(--hr) }
+#panel .vp:hover { background:rgba(26,25,23,.05) }
+#panel .vp.active { background:rgba(191,63,43,.08); box-shadow:inset 3px 0 0 var(--hred) }
+#panel .vp img { border-radius:0 }
+#panel .vp .t { font-weight:500; display:flex; align-items:center; gap:calc(8 * var(--u)) }
+/* tutorial */
+#controls { background:var(--hp); color:var(--hi); border:1px solid var(--hi); border-radius:0; box-shadow:0 calc(18 * var(--u)) calc(50 * var(--u)) rgba(0,0,0,.2) }
+#hud .controls-head { font-weight:400; border-bottom:1px solid var(--hi) }
+#controlsBody > * { padding-bottom:calc(7 * var(--u)); border-bottom:1px solid var(--hr) }
+#hud .controls-foot { border-top:0; letter-spacing:.04em }
+/* toast, aim label, tour caption, panorama exit, loading pill, right-click menu */
+#toast, #label, #panoload { background:var(--hp-a); color:var(--hi); border:1px solid var(--hk); border-radius:0; text-shadow:none; box-shadow:0 calc(6 * var(--u)) calc(20 * var(--u)) rgba(0,0,0,.14) }
+#label { font-family:var(--serif) }
+#panoload i { background:var(--hr) } #panoload b { background:var(--hi) }
+#caption { background:var(--hp-a); color:var(--hi); border:1px solid var(--hk); border-left:calc(5 * var(--u)) solid var(--hred); border-radius:0; text-shadow:none; box-shadow:0 calc(10 * var(--u)) calc(30 * var(--u)) rgba(0,0,0,.16) }
+#caption small { color:var(--hm); opacity:1; letter-spacing:.12em; text-transform:uppercase }
+#viewExit { background:var(--hp-a); color:var(--hi); border:1px solid var(--hi); border-radius:0; box-shadow:0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0,0,0,.16) }
+#viewExitBtn { color:var(--hi); background:none; border:1px solid var(--hk); border-radius:0 }
+#viewExitBtn:hover { background:rgba(26,25,23,.06) }
+#viewExit kbd { background:none; color:var(--hi); border:1px solid var(--hk); border-radius:0 }
+#ctxmenu { padding:0; background:#f2efe7; color:#1a1917; border:1px solid #1a1917; border-radius:0; backdrop-filter:none; box-shadow:0 calc(12 * var(--u)) calc(30 * var(--u)) rgba(0,0,0,.2) }
+#ctxmenu button { color:#1a1917; border-radius:0; padding:calc(10 * var(--u)) calc(14 * var(--u)); border-top:1px solid rgba(26,25,23,.14) }
+#ctxmenu button:first-child { border-top:0 }
+#ctxmenu button:hover:not(:disabled) { background:rgba(26,25,23,.06) }
+#ctxmenu button.sep { margin-top:0; border-top:1px solid #1a1917; border-radius:0; color:#77716a }
+@media (pointer:coarse) { #topbar kbd, #hud .dd-panel kbd { display:none } }
+@media (max-width:1100px) { #topbar { flex-wrap:wrap; padding:6px 10px } #topbar .brand { font-size:22px } #topbar .chip { height:30px; padding:0 9px; letter-spacing:.1em; font-size:11px } }
+#topbar > .chip { border-left:1px solid var(--hr) }
+#panel { top:var(--bar-h, 54px) }
+#topbar .pet-ico { width:calc(19 * var(--u)); height:calc(19 * var(--u)); fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round }
+#topbar .pet-ico .f { fill:currentColor; stroke:none }
+
+/* ==== Tutorial as a Swiss sheet: grotesk, flush left, a strict two-column grid, numbered groups under heavy rules,
+   keys as solid black squares, one vermilion block. ==== */
+#controls { --sw:var(--font); font-synthesis:none; width:min(calc(860 * var(--u)), calc(100vw - calc(28 * var(--u)))); padding:0; font-family:var(--sw); background:#f4f2ec; color:#111; border:0; border-top:calc(6 * var(--u)) solid #111; box-shadow:0 calc(24 * var(--u)) calc(60 * var(--u)) rgba(0,0,0,.28) }
+#hud #controls .controls-head { display:grid; grid-template-columns:calc(54 * var(--u)) 1fr auto; align-items:end; gap:calc(18 * var(--u)); padding:calc(26 * var(--u)) calc(30 * var(--u)) calc(20 * var(--u)); font-family:var(--sw); border-bottom:calc(2 * var(--u)) solid #111 }
+#controls .sw-red { display:block; width:calc(54 * var(--u)); height:calc(54 * var(--u)); background:#c8352a }
+#controls .sw-titles { display:flex; flex-direction:column; gap:calc(6 * var(--u)) }
+#controls #controlsTitle { font-size:calc(44 * var(--u)); line-height:.9; font-weight:400; letter-spacing:-.035em }
+#controls .sw-sub { font-size:calc(11 * var(--u)); font-weight:400; letter-spacing:.18em; text-transform:uppercase; color:#555 }
+#controls #controlsClose { align-self:start; font:300 calc(30 * var(--u))/1 var(--sw); color:#111 }
+#controlsBody { padding:calc(6 * var(--u)) calc(30 * var(--u)) calc(14 * var(--u)); gap:0; font-size:calc(13.5 * var(--u)) }
+#controlsBody > * { padding-bottom:0; border-bottom:0 }
+#controls .sw-grid { display:grid; grid-template-columns:1fr 1fr; column-gap:calc(34 * var(--u)) }
+#controls .sw-group { margin-top:calc(14 * var(--u)); border-top:calc(2 * var(--u)) solid #111 }
+#controls .sw-group header { display:flex; align-items:baseline; gap:calc(12 * var(--u)); padding:calc(8 * var(--u)) 0 calc(6 * var(--u)) }
+#controls .sw-num { font-size:calc(24 * var(--u)); font-weight:400; letter-spacing:-.02em; color:#c8352a; font-variant-numeric:tabular-nums }
+#controls .sw-name { font-size:calc(11.5 * var(--u)); font-weight:400; letter-spacing:.2em; text-transform:uppercase }
+#controls .sw-row { display:grid; grid-template-columns:calc(150 * var(--u)) 1fr; align-items:center; gap:calc(12 * var(--u)); padding:calc(4 * var(--u)) 0; border-top:1px solid rgba(0,0,0,.14) }
+#controls .sw-keys { display:flex; flex-wrap:wrap; gap:calc(4 * var(--u)) }
+#controls .sw-keys kbd { display:inline-grid; place-items:center; min-width:calc(24 * var(--u)); height:calc(24 * var(--u)); padding:0 calc(6 * var(--u)); box-sizing:border-box; font:400 calc(12 * var(--u))/1 var(--sw); letter-spacing:.02em; color:#f4f2ec; background:#111; border:0; border-radius:0 }
+#controls .sw-keys kbd.wide { padding:0 calc(8 * var(--u)); font-size:calc(10.5 * var(--u)); letter-spacing:.08em; text-transform:uppercase }
+#controls .sw-what { font-size:calc(13.5 * var(--u)); line-height:1.3 }
+#controls .sw-plain { padding:calc(9 * var(--u)) 0; border-top:1px solid rgba(0,0,0,.14); font-size:calc(14 * var(--u)) }
+#controls .music-credit { margin-top:calc(22 * var(--u)); padding-top:calc(10 * var(--u)); border-top:calc(2 * var(--u)) solid #111; font-size:calc(11.5 * var(--u)); color:#444 }
+#controls .music-credit a { color:#c8352a }
+#hud #controls .controls-foot { padding:calc(10 * var(--u)) calc(30 * var(--u)) calc(16 * var(--u)); font-size:calc(10.5 * var(--u)); letter-spacing:.16em; text-transform:uppercase; color:#555; border-top:1px solid rgba(0,0,0,.14) }
+@media (max-width:820px) { #controls .sw-grid { grid-template-columns:1fr } }
+#topbar .pet-ico { stroke:none } #topbar .pet-ico .cut { fill:none; stroke:var(--hp); stroke-width:1.3; stroke-linecap:round } #topbar .pet-ico .eye { fill:var(--hp) }
+/* Day / dusk: a sun by day, a crescent moon at dusk (the button carries .on at dusk). */
+#topbar .tod-ico { width:calc(19 * var(--u)); height:calc(19 * var(--u)) }
+#topbar .tod-ico .sun circle { fill:currentColor } #topbar .tod-ico .sun path { fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:square }
+#topbar .tod-ico .moon { fill:currentColor; display:none }
+#btn-dusk.on .tod-ico .sun { display:none } #btn-dusk.on .tod-ico .moon { display:inline }
+#topbar #btn-dusk.on { color:var(--hi) } #topbar #btn-dusk.on::after { display:none }
+#topbar .pin-ico { width:calc(19 * var(--u)); height:calc(19 * var(--u)) } #topbar .pin-ico .f { fill:currentColor } #topbar .pin-ico .eye { fill:var(--hp) }
+
+/* ==== Swiss bar: grotesk, solid pictograms, keys as black squares ==== */
+#topbar { font-family:var(--font); font-synthesis:none }
+#topbar .brand { font-family:var(--font); font-weight:400; font-size:calc(30 * var(--u)); letter-spacing:-.035em }
+#topbar .brand b { font-weight:400 }
+#topbar .chip { font-family:var(--font); letter-spacing:.12em }
+#topbar kbd, #hud .dd-panel kbd { min-width:calc(18 * var(--u)); height:calc(18 * var(--u)); font:400 calc(10.5 * var(--u))/1 var(--font); color:var(--hp); background:var(--hi); border:0 }
+#topbar .ico { width:calc(20 * var(--u)); height:calc(20 * var(--u)) }
+#topbar .ico .f { fill:currentColor } #topbar .ico .eye { fill:var(--hp) }
+#topbar .ico .ln { fill:none; stroke:currentColor; stroke-width:2.2; stroke-linecap:round }
+#topbar .ico .cutw { fill:none; stroke:var(--hp); stroke-width:2.2; stroke-linecap:round }
+#topbar #btn-music.on { color:var(--hred) } #topbar #btn-music.on::after { display:none }
+/* ==== Swiss type everywhere in the house: Liter for the whole interface (the landing keeps its serif poster). ==== */
+#hud, #hud button, #hud input, #ctxmenu, #ctxmenu button, #nerdstats .ns-head { font-family:var(--font); font-synthesis:none }
+#hud #caption, #hud #label, #hud #panelHead, #hud .controls-head, #firststeps .fs-title, #firststeps .fs-lines li, #hud #toast, #hud #panoload, #hud #viewExit { font-family:var(--font); font-weight:400 }
+#hud #caption { letter-spacing:-.01em }
+#hud #panelHead { letter-spacing:-.02em }
+#hud .vp .t { font-weight:400 }
+#firststeps .fs-title { letter-spacing:-.02em }
+#firststeps kbd, #hud #caption small { font-family:var(--font); font-weight:400 }
+#firststeps kbd { color:#111; background:#f4f2ec; border:0 }
+
+/* Bigger pictograms in the bar */
+#topbar .ico, #topbar .pet-ico, #topbar .pin-ico, #topbar .tod-ico { width:calc(26 * var(--u)); height:calc(26 * var(--u)) }
+#topbar .chip { height:calc(40 * var(--u)); gap:calc(9 * var(--u)) }
+/* The demonstration strip: Swiss, bottom centre. Step number in red, the keys as black squares that flash red when
+   "pressed", the action in Liter, a small-caps label. */
+#demobar { position:absolute; left:50%; bottom:calc(36 * var(--u)); transform:translateX(-50%); display:flex; align-items:center; gap:calc(18 * var(--u)); padding:calc(16 * var(--u)) calc(24 * var(--u)); min-width:calc(520 * var(--u)); max-width:calc(100vw - calc(40 * var(--u))); box-sizing:border-box; color:#111; background:#f4f2ec; border-top:calc(5 * var(--u)) solid #111; box-shadow:0 calc(14 * var(--u)) calc(40 * var(--u)) rgba(0,0,0,.25); font-family:var(--font); font-synthesis:none; z-index:6 }
+#demobar.hidden { display:none }
+#demobar .db-num { font-size:calc(22 * var(--u)); color:#c8352a; font-variant-numeric:tabular-nums; letter-spacing:-.02em; white-space:nowrap }
+#demobar .db-num:empty { display:none }
+#demobar .db-keys { display:flex; gap:calc(5 * var(--u)) }
+#demobar .db-keys:empty { display:none }
+#demobar .db-keys kbd { display:inline-grid; place-items:center; min-width:calc(34 * var(--u)); height:calc(34 * var(--u)); padding:0 calc(8 * var(--u)); box-sizing:border-box; font:400 calc(15 * var(--u))/1 var(--font); color:#f4f2ec; background:#111; border:0; border-radius:0 }
+#demobar .db-keys kbd.wide { font-size:calc(11 * var(--u)); letter-spacing:.12em; text-transform:uppercase; padding:0 calc(10 * var(--u)) }
+#demobar .db-keys kbd.hit { animation:db-hit .55s ease-out }
+#demobar .db-keys kbd:first-child { background:#c8352a }
+@keyframes db-hit { 0% { transform:scale(1) } 35% { transform:scale(.86) } 100% { transform:scale(1) } }
+#demobar .db-text { flex:1; font-size:calc(22 * var(--u)); letter-spacing:-.015em; white-space:nowrap }
+#demobar .db-label { font-size:calc(10.5 * var(--u)); letter-spacing:.2em; text-transform:uppercase; color:#666 }
+body.demo #crosshair, body.demo #label, body.demo #caption { display:none }
+@media (max-width:700px) { #demobar { min-width:0; gap:10px; padding:12px 14px } #demobar .db-text { font-size:16px; white-space:normal } #demobar .db-label { display:none } }
+body.demo #toast { display:none }
+/* Touch buttons, Swiss: squares in ink and vermilion, Liter small caps. */
+@media (pointer:coarse) {
+  #touchJump, #touchAct { border-radius:0 !important; border:0 !important; font-family:var(--font) !important; font-size:12px !important; letter-spacing:.16em; text-transform:uppercase; color:#f4f2ec !important; box-shadow:0 8px 22px rgba(0,0,0,.25) }
+  #touchJump { background:#111 !important } #touchAct { background:#c8352a !important }
+  #stick { border-radius:50%; border:1px solid rgba(244,242,236,.7) !important; background:rgba(17,17,17,.18) !important }
+}
+
+/* ==== Landing and loading screens in Liter. Both read their type from --font / --serif, so pointing those at Liter on
+   these two screens restyles them whole. The original Michelangelus versions are kept: ?serif=1 brings them back. ==== */
+:root { --font-m:"Michelangelus","NotoSerifSC-Sub",-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Helvetica Neue",Arial,sans-serif; --serif-m:"Michelangelus","NotoSerifSC-Sub","Iowan Old Style","Palatino","Songti SC","Noto Serif CJK SC",Georgia,serif; --liter:"Liter","PingFang SC","Hiragino Sans GB","Helvetica Neue",Arial,sans-serif }
+#title, #warming { --font:var(--liter); --serif:var(--liter); font-family:var(--liter); font-synthesis:none }
+#title button, #warming button { font-family:inherit }
+#title .lc-hero h1 { letter-spacing:-.05em }
+#title .lc-point h3 { font-weight:400 }
+#warming .wm-title { letter-spacing:-.035em }
+html.serif-landing #title, html.serif-landing #warming { --font:var(--font-m); --serif:var(--serif-m); font-family:var(--font-m); font-synthesis:auto }
+html.serif-landing #title .lc-hero h1 { letter-spacing:-.035em }
+html.serif-landing #title .lc-point h3 { font-weight:500 }
+html.serif-landing #warming .wm-title { letter-spacing:-.025em }
+
+/* ==== Swiss type in the house: Liter for the whole interface (bar, dropdowns, panels, tutorial, intro, captions, labels,
+   toasts, the demonstration strip, touch buttons, menus). One weight, so faux bold is switched off. ==== */
+#hud, #hud *, #ctxmenu, #ctxmenu *, #nerdstats .ns-head, #nerdstats .ns-head * { font-family:var(--liter) !important; font-synthesis:none }
+#hud #controls { --sw:var(--liter) }
+#hud .sw-name, #hud .sw-num, #hud #controlsTitle, #hud .fs-title, #hud .fs-lines li, #hud #caption, #hud #panelHead, #hud .vp .t, #hud #label { font-weight:400 }
+/* Language: two squares, 中 and EN; the current language is filled. */
+#topbar .lang-sym { display:inline-flex; gap:2px }
+#topbar .lang-sym b { display:inline-grid; place-items:center; min-width:calc(22 * var(--u)); height:calc(22 * var(--u)); padding:0 calc(3 * var(--u)); box-sizing:border-box; font-weight:400; font-size:calc(11.5 * var(--u)); letter-spacing:.02em; color:var(--hi); border:1px solid var(--hi) }
+html[lang="zh"] #topbar .lang-sym b[data-l="zh"], html[lang="en"] #topbar .lang-sym b[data-l="en"] { color:var(--hp); background:var(--hi) }
+/* ==== Equal modules in the bar: every button the same width, content centred; dropdown carets sit in the corner. ==== */
+#topbar .chip { box-sizing:border-box; width:calc(84 * var(--u)); padding:0; justify-content:center; gap:calc(9 * var(--u)) }
+#topbar .chip .caret { position:absolute; right:calc(6 * var(--u)); bottom:calc(5 * var(--u)); font-size:calc(8 * var(--u)); line-height:1 }
+#topbar .lang-sym b { min-width:calc(19 * var(--u)); height:calc(19 * var(--u)); font-size:calc(10 * var(--u)); padding:0 calc(2 * var(--u)) }
+@media (max-width:1100px) { #topbar .chip { width:auto; padding:0 9px } }
+/* ==== Semi-transparent text boxes: translucent paper with a blur behind, so the house reads through but the text stays legible. ==== */
+#hud { --hp-t:rgba(242,239,231,.78) }
+#topbar { background:rgba(242,239,231,.82); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px) }
+#hud .dd-panel, #legendsPanel, #panel, #hud #controls, #demobar, #ctxmenu, #toast, #label, #panoload, #caption, #viewExit {
+  background:var(--hp-t, rgba(242,239,231,.78)) !important; -webkit-backdrop-filter:blur(16px) saturate(1.05); backdrop-filter:blur(16px) saturate(1.05) }
+#ctxmenu { background:rgba(242,239,231,.84) !important }
+/* More transparent: about 60% paper, with a stronger blur behind so the text still reads. */
+#hud { --hp-t:rgba(242,239,231,.6) }
+#topbar { background:rgba(242,239,231,.6); -webkit-backdrop-filter:blur(18px) saturate(1.1); backdrop-filter:blur(18px) saturate(1.1) }
+#hud .dd-panel, #legendsPanel, #panel, #hud #controls, #demobar, #toast, #label, #panoload, #caption, #viewExit { -webkit-backdrop-filter:blur(20px) saturate(1.1); backdrop-filter:blur(20px) saturate(1.1) }
+#ctxmenu { background:rgba(242,239,231,.66) !important; -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px) }
+
+/* Landing text: everything except the "Dwelling" title takes the warm grey of the photo caption (--lc-mute). */
+#title .lc-head, #title .lc-head *, #title .lc-addr, #title .lc-lede, #title .lc-point h3, #title .lc-point p, #title .lc-point em,
+#title .lc-plan figcaption, #title .loading, #title #loadtext, #title .hint, #title .lc-credit, #title .lc-measure small { color:var(--lc-mute) }
+#title .lc-lang button.on { color:var(--lc-mute); border-bottom-color:var(--lc-mute) }
+#title .lc-hero h1 { color:var(--lc-ink) }
+#firststeps #fsDemo { cursor:pointer } #firststeps #fsDemo:hover { color:#fff }
+/* Even more transparent: about 40% paper, a strong blur keeps the text legible. */
+#hud { --hp-t:rgba(242,239,231,.4) }
+#topbar { background:rgba(242,239,231,.4); -webkit-backdrop-filter:blur(22px) saturate(1.15); backdrop-filter:blur(22px) saturate(1.15) }
+#hud .dd-panel, #legendsPanel, #panel, #hud #controls, #demobar, #toast, #label, #panoload, #caption, #viewExit { -webkit-backdrop-filter:blur(24px) saturate(1.15); backdrop-filter:blur(24px) saturate(1.15) }
+#ctxmenu { background:rgba(242,239,231,.48) !important; -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px) }
+
+/* Hero plan scale: segmented bar */
+#lcPlan .sbo { fill:var(--lc-paper); stroke:var(--lc-ink); stroke-width:.03 }
+/* Hero: the numbers and the titles of 01 02 03 stay in ink */
+#title .lc-point em, #title .lc-point h3 { color:var(--lc-ink) }
+/* Swiss minimap: a square plan with a hairline frame (drawn on the canvas) */
+#minimap { border-radius:0 !important; box-shadow:0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0,0,0,.18) !important; background:none !important }
+#lcPlan text.sl { font-family:var(--liter); font-style:normal; font-size:.62px; fill:var(--lc-ink) }
+/* Full plan (M): paper plate with a hairline, over a light veil */
+#bigmap { background:rgba(242,239,231,.35) !important; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px) }
+#bigmapCanvas { border-radius:0 !important; background:#f2efe7 !important; box-shadow:0 calc(20 * var(--u)) calc(60 * var(--u)) rgba(0,0,0,.25) !important }
+#bigmap .mapHint { color:#1a1917; font-size:calc(11 * var(--u)); letter-spacing:.16em; text-transform:uppercase }
+/* Aim label: smaller type and padding */
+#hud #label { font-size:calc(14 * var(--u)); padding:calc(5 * var(--u)) calc(10 * var(--u)); top:calc(50% + calc(20 * var(--u))) }
+
+/* Hide the interface (Z): everything in the HUD goes except a faint eye in the corner that brings it back. */
+#ui-restore { display:none }
+body.ui-hidden #hud > *:not(#ui-restore):not(#crosshair):not(#label):not(#caption), body.ui-hidden #nerdstats { display:none !important }   /* aim and tour captions stay */
+body.ui-hidden #ui-restore { display:inline-flex; align-items:center; gap:calc(8 * var(--u)); position:absolute; top:calc(12 * var(--u)); right:calc(12 * var(--u)); padding:calc(6 * var(--u)) calc(9 * var(--u)); color:#1a1917; background:rgba(242,239,231,.4); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:0; cursor:pointer; pointer-events:auto; opacity:.45; transition:opacity .2s }
+body.ui-hidden #ui-restore:hover { opacity:1 }
+#ui-restore .ico { width:calc(22 * var(--u)); height:calc(22 * var(--u)) } #ui-restore .ico .f { fill:currentColor } #ui-restore .ico .eye { fill:#f2efe7 }
+#ui-restore kbd { display:inline-grid; place-items:center; min-width:calc(18 * var(--u)); height:calc(18 * var(--u)); font:400 calc(10.5 * var(--u))/1 var(--liter); color:#f2efe7; background:#1a1917; border:0 }
+
+/* Z lives in the top-right corner in both states: first in the bar, and the restore eye in exactly the same box. */
+#topbar #btn-ui { border-left:1px solid var(--hr) }
+body.ui-hidden #ui-restore { top:calc(9 * var(--u)); right:calc(18 * var(--u)); left:auto; width:calc(84 * var(--u)); height:calc(40 * var(--u)); padding:0; justify-content:center; gap:calc(9 * var(--u)); opacity:.6 }
+body.ui-hidden #ui-restore .ico { width:calc(26 * var(--u)); height:calc(26 * var(--u)) }
+#topbar #btn-legends.pins-on { color:var(--hred) }

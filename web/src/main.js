@@ -19,6 +19,7 @@ import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
 import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
 import { Stats } from './stats.js';
+import { Demo } from './demo.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -131,7 +132,7 @@ interact.markers = markers;
 interact.viewRoots = viewpoints.viewRoots = [houseRoot, layout.root];
 viewpoints.markers = markers;
 if (Q.get('pins') === '0') Object.assign(markers.enabled, { rn: false, pano: false, photo: false });
-minimap.markers = markers; minimap.targets = viewpoints.targets;
+minimap.setPlan(house); minimap.markers = markers; minimap.targets = viewpoints.targets;
 minimap.setExtra(rednote.blips());
 function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kind && p.target.id === target.id); if (pin) markers.activate({ pin }); else viewpoints.goTo(target); }
 ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
@@ -267,6 +268,7 @@ function frame(dt) {
   stats.begin();
   simT += dt;
   tourCtl.update(dt);
+  demo.update(dt);
   viewpoints.update(dt);
   player.update(dt);
   human.update(dt);
@@ -298,13 +300,17 @@ function frame(dt) {
   }
   stats.end();
 }
+// The demonstration (X): a scripted promenade through the controls.
+const demo = new Demo({ player, viewpoints, markers, pets, ui, tour: tourCtl, interact, layout });
+document.getElementById('btn-demo').onclick = () => demo.toggle();
 // Stats for nerds (hidden): the right-click menu's last item, the ` key, or ?stats=1.
 const stats = new Stats({ renderer, camera, player, state, lighting, pets, canvas });
 addEventListener('crotonstats', () => stats.toggle());
 addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && e.target?.tagName !== 'INPUT') stats.toggle(); });
 if (Q.has('stats')) stats.toggle(true);
+window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
+window.__app = { demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
 // Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
 // Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
 // cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.

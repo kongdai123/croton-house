@@ -34,6 +34,19 @@ const easeInOutSine = (x) => -(Math.cos(Math.PI * x) - 1) / 2;
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const angTo = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));   // shortest signed turn from a to b
 const angMix = (a, b, w) => a + angTo(a, b) * w;
+// Critically damped spring for a heading (Unity's SmoothDamp, angle-aware), with a turn-rate cap. Keeps camera turns
+// continuous in both angle and angular velocity, so route corners read as a steady pan instead of a snap.
+function dampAngle(cur, target, state, smoothTime, maxSpeed, dt) {
+  if (dt <= 0) return cur;
+  const goal = cur + angTo(cur, target), omega = 2 / Math.max(1e-4, smoothTime), x = omega * dt;
+  const k = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x), maxChange = maxSpeed * smoothTime;
+  const change = Math.max(-maxChange, Math.min(maxChange, cur - goal)), aim = cur - change;
+  const temp = (state.v + omega * change) * dt;
+  state.v = (state.v - omega * temp) * k;
+  let out = aim + (change + temp) * k;
+  if ((goal - cur > 0) === (out > goal)) { out = goal; state.v = 0; }
+  return out;
+}
 const CAM_H = 1.5;   // real-estate tripod height
 const TRIM = { '26bd39e7b7': 10, '954f8388b8': 15, d5e1aedcc0: 25, ee4635b067: -28, b9a18422cd: -10, '03fae42bc1': 35 };   // degrees, from the side-by-side check
 // Outdoor panoramas are not on the Zillow plan; placed from their content (patio by the office doors, backyard by the fire pit)
@@ -100,7 +113,7 @@ export class Viewpoints {
     const sec = (title) => { const h = document.createElement('div'); h.style.cssText = 'font-weight:700;margin:10px 8px 4px;color:#8a847a;font-size:12px;letter-spacing:.08em;text-transform:uppercase'; h.textContent = title; body.appendChild(h); };
     if (kind !== 'photo') { sec(t('panos') + ' · Zillow 3D Home'); for (const v of this.targets.filter(v => v.kind === 'pano')) body.appendChild(this.row(v)); }
     if (kind !== 'pano') { sec(t('photos') + ' · Zillow'); for (const v of this.targets.filter(v => v.kind === 'photo')) body.appendChild(this.row(v)); }
-    this.ui.openPanel(kind === 'photo' ? t('photos') : t('viewpointsTitle'), body); this.panelOpen = true; this.panelKind = kind;
+    this.ui.openPanel(kind === 'photo' ? t('photos') : kind === 'pano' ? t('panos') : t('viewpointsTitle'), body); this.panelOpen = true; this.panelKind = kind;
   }
   row(v) {
     const el = document.createElement('div'); el.className = 'vp' + (this.current?.id === v.id ? ' active' : '');
@@ -124,7 +137,8 @@ export class Viewpoints {
     let path = null;
     if (dist > 0.6 && !opts.direct) { try { path = navPath(buildGrid(this.player.extraColliders?.() ?? []), from.x, from.z, to.x, to.z); } catch (e) { console.warn('nav', e); } }
     const len = path ? path.length : dist;
-    const dur = opts.duration ?? (path ? Math.min(9, Math.max(1.2, 0.9 + len / 1.9)) : Math.min(2.6, 0.8 + dist * 0.12));
+    // routed legs also get time for the turn they need (about 70°/s at most), so a short hop with a big turn doesn't whip
+    const dur = opts.duration ?? (path ? Math.min(9, Math.max(1.2, 0.9 + len / 1.9, 1.0 + Math.abs(dy) / 1.2)) : Math.min(2.6, 0.8 + dist * 0.12));
     if (this.player.seat) this.player.stand();
     this.fly = { from, to, t: 0, dur, target: full, onDone: opts.onDone, silent: opts.silent, keepDriven: opts.keepDriven, path, yaw: from.yaw, doors: path ? doorCrossings(path.curve, path.length) : [] };
     this.player.enabled = false; this.player.driven = true;
@@ -151,11 +165,21 @@ export class Viewpoints {
         // walk the route: look where we're going mid-flight, settle into the target view at the end
         const e = easeInOutSine(f.t), c = f.path.curve, L = f.path.length, p = c.getPointAt(e);
         this.directDoors(e * L, dt);
-        const a = c.getPointAt(Math.min(1, e + 1.4 / L)), travel = Math.hypot(a.x - p.x, a.z - p.z) > 0.05 ? Math.atan2(-(a.x - p.x), -(a.z - p.z)) : f.yaw;
-        const wS = 1 - sstep(0, 0.22, e), wE = L < 1.5 ? e : sstep(0.6, 1, e);
-        const want = angMix(angMix(travel, f.from.yaw, wS), f.to.yaw, wE);
-        f.yaw = angMix(f.yaw, want, 1 - Math.exp(-dt * 6));
-        this.player.yaw = angMix(f.yaw, want, sstep(0.85, 1, e));
+        // Heading: the route's tangent a little ahead (continuous along the centripetal spline, unlike the bearing to a
+        // look-ahead point, which swung fast as that point collapsed onto the destination). Start and end views blend in
+        // by weight; a damped spring with a turn-rate cap smooths it; the last 10% eases onto the fixed destination yaw,
+        // so the camera lands on the composed view exactly without chasing a moving target.
+        const tan = c.getTangentAt(Math.min(1, e + 0.5 / L)), travel = Math.atan2(-tan.x, -tan.z);
+        const wS = 1 - sstep(0, 0.22, e), wE = L < 1.5 ? e : sstep(0.35, 0.92, e);   // hand over to the destination view early enough to turn gently
+        const follow = angMix(angMix(travel, f.from.yaw, wS), f.to.yaw, wE);
+        // Short legs (under 4 m) ease straight from the start view to the end view; following the route fades in up to 8 m,
+        // where looking where you walk reads naturally through the doorways.
+        const want = angMix(angMix(f.from.yaw, f.to.yaw, sstep(0.08, 0.92, e)), follow, sstep(4, 8, L));
+        f.yawState ??= { v: 0 };
+        // the cap rises only as much as needed to reach the destination view in the time left, so short legs don't rush it
+        const left = Math.max(0.35, (1 - f.t) * f.dur * 0.85), need = Math.abs(angTo(f.yaw, f.to.yaw)) / left;
+        f.yaw = dampAngle(f.yaw, want, f.yawState, 0.45, Math.max(1.9, need), dt);
+        this.player.yaw = angMix(f.yaw, f.to.yaw, sstep(0.9, 1, e));
         const level = f.from.pitch + (0 - f.from.pitch) * (1 - wS);
         this.player.pitch = level + (f.to.pitch - level) * wE;
         this.player.pos.x = p.x; this.player.pos.z = p.z;

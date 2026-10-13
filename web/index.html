@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>/* ?serif=1 restores the original Michelangelus landing and loading screens */ if (/[?&]serif=1\b/.test(location.search)) document.documentElement.classList.add("serif-landing");</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>2513 Croton Ave · Studio Hu Dwelling</title>
 <link rel="icon" href="data:,">
@@ -72,31 +73,40 @@
       <div class="fs-kicker" data-i18n="fsKicker">Sarasota, Florida · Studio Hu</div>
       <h2 class="fs-title" id="fsIntroTitle">2513 Croton Ave</h2>
       <ol class="fs-lines">
-        <li><em>01</em><span data-i18n="fsI1">A 1962 block house, kept rather than replaced.</span></li>
-        <li><em>02</em><span data-i18n="fsI2">Twenty feet of folding glass. Opened, the garden becomes the living room.</span></li>
-        <li><em>03</em><span data-i18n="fsI3">The overhang reaches out sixty centimetres, to let the shadows of the trees in.</span></li>
-        <li><em>04</em><span data-i18n="fsI4">Bed, window seat, counters: pine and oak, made by hand.</span></li>
+        <li><em>01</em><span data-i18n="fsI1">The house of 1962 is kept. Nothing is torn down for its own sake.</span></li>
+        <li><em>02</em><span data-i18n="fsI2">The wall opens. Twenty feet of folding glass; the garden enters the living room.</span></li>
+        <li><em>03</em><span data-i18n="fsI3">A brim of sixty centimetres. The sun stays out; the shadows of the trees come in.</span></li>
+        <li><em>04</em><span data-i18n="fsI4">Pine and oak, worked by hand: the bed, the window seat, the counter.</span></li>
       </ol>
-      <p class="fs-sign" data-i18n="fsSign">Three bedrooms, an office, a garden. Lot 95 × 110 ft. Design and build: Studio Hu.</p>
+      <p class="fs-sign" data-i18n="fsSign">Three bedrooms. An office. A garden. 95 × 110 feet. Studio Hu.</p>
     </section>
     <section class="fs-card fs-controls" aria-labelledby="fsTitle">
-      <div class="fs-title" id="fsTitle" data-i18n="fsTitle">First steps</div>
+      <div class="fs-title" id="fsTitle" data-i18n="fsTitle">The promenade</div>
       <ul>
-        <li><span class="fs-keys fs-desk"><svg class="fs-mouse" viewBox="0 0 24 34" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="31" rx="10.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span class="fs-desk" data-i18n="fsLook">Look around with the mouse</span><span class="fs-touch" data-i18n="fsLookTouch">Swipe on the right to look around</span></li>
-        <li><span class="fs-keys fs-desk"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="fs-desk" data-i18n="fsWalk">Walk around</span><span class="fs-touch" data-i18n="fsWalkTouch">Use the stick, bottom left, to walk</span></li>
-        <li><span class="fs-keys fs-desk"><kbd>T</kbd></span><span class="fs-desk" data-i18n="fsTour">Take the guided tour</span><span class="fs-touch" data-i18n="fsTourTouch">Tap Tour for the guided tour</span></li>
-        <li><span class="fs-keys fs-desk"><kbd>H</kbd></span><span class="fs-desk" data-i18n="fsViews">Show viewpoints: photos, panoramas, RedNote</span><span class="fs-touch" data-i18n="fsViewsTouch">Show viewpoints from Map legends</span></li>
+        <li><span class="fs-keys fs-desk"><svg class="fs-mouse" viewBox="0 0 24 34" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="31" rx="10.5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="6" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span class="fs-desk" data-i18n="fsLook">Turn the eye</span><span class="fs-touch" data-i18n="fsLookTouch">Swipe on the right: turn the eye</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span class="fs-desk" data-i18n="fsWalk">Walk the plan</span><span class="fs-touch" data-i18n="fsWalkTouch">The stick, bottom left: walk the plan</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>T</kbd></span><span class="fs-desk" data-i18n="fsTour">The guided promenade</span><span class="fs-touch" data-i18n="fsTourTouch">Tour: the guided promenade</span></li>
+        <li><span class="fs-keys fs-desk"><kbd>H</kbd></span><span class="fs-desk" data-i18n="fsViews">The photographs, the panoramas, the notes</span><span class="fs-touch" data-i18n="fsViewsTouch">Map legends: the photographs</span></li>
+      <li id="fsDemo" role="button" tabindex="0"><span class="fs-keys fs-desk"><kbd>X</kbd></span><span class="fs-desk" data-i18n="fsDemo">The demonstration</span><span class="fs-touch" data-i18n="fsDemoTouch">▶: the demonstration</span></li>
       </ul>
-      <div class="fs-foot"><span class="fs-desk" data-i18n="fsStart">Click anywhere to start · I for this introduction · ? for all controls</span><span class="fs-touch" data-i18n="fsStartTouch">Tap anywhere to start</span></div>
+      <div class="fs-foot"><span class="fs-desk" data-i18n="fsStart">Click to begin. I returns here. ? shows everything.</span><span class="fs-touch" data-i18n="fsStartTouch">Tap to begin.</span></div>
     </section>
   </div>
   <div id="topbar">
-    <button id="brand" class="brand" type="button" data-i18n-title="introTip" title="Introduction · I"><b>2513</b> Croton Ave</button>
+    <button id="brand" class="brand" type="button" data-i18n-title="introTip" title="Introduction · I" aria-keyshortcuts="I"><b>2513</b> Croton Ave<kbd>I</kbd></button>
     <div class="spacer"></div>
-    <div id="legends">
-      <button class="chip" id="btn-legends" aria-expanded="false" aria-controls="legendsPanel"><span data-i18n="mapLegends">Map legends</span><span class="caret" aria-hidden="true">▾</span></button>
-      <div id="legendsPanel" class="hidden" role="group" aria-labelledby="btn-legends">
-        <button class="legend-row" id="btn-views" aria-pressed="false"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span><span class="legend-state" data-i18n="hidden">Off</span></button>
+    <div id="media" class="dd">
+      <button class="chip" id="btn-media" aria-expanded="false" aria-controls="mediaPanel" aria-keyshortcuts="U" data-i18n-title="media" title="Media" aria-label="Media"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect class="f" x="2.5" y="4.5" width="19" height="15"/><path class="eye" d="M4.6 17.4l5.2-6.6 3.6 4.4 2.4-2.8 3.6 5z"/><circle class="eye" cx="16.4" cy="8.6" r="1.8"/></svg><kbd>U</kbd><span class="caret" aria-hidden="true">▾</span></button>
+      <div id="mediaPanel" class="dd-panel hidden" role="menu" aria-labelledby="btn-media">
+        <button class="dd-row" id="btn-rednote" role="menuitem" aria-keyshortcuts="R"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span><kbd>R</kbd></button>
+        <button class="dd-row" id="btn-zillow" role="menuitem" aria-keyshortcuts="P"><i class="dot pano" aria-hidden="true"></i><span data-i18n="panos">Panoramas</span><kbd>P</kbd></button>
+        <button class="dd-row" id="btn-photolist" role="menuitem" aria-keyshortcuts="O"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">Photos</span><kbd>O</kbd></button>
+      </div>
+    </div>
+    <div id="legends" class="dd">
+      <button class="chip" id="btn-legends" aria-expanded="false" aria-controls="legendsPanel" data-i18n-title="mapLegends" title="Map legends" aria-label="Map legends"><svg class="pin-ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 2.4c-3.8 0-6.8 3-6.8 6.8 0 5 6.8 12.4 6.8 12.4s6.8-7.4 6.8-12.4c0-3.8-3-6.8-6.8-6.8z"/><circle class="eye" cx="12" cy="9.2" r="2.5"/></svg><kbd>H</kbd><span class="caret" aria-hidden="true">▾</span></button>
+      <div id="legendsPanel" class="dd-panel hidden" role="group" aria-labelledby="btn-legends">
+        <button class="legend-row" id="btn-views" aria-pressed="false" aria-keyshortcuts="V"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span><kbd>V</kbd><span class="legend-state" data-i18n="hidden">Off</span></button>
         <button class="legend-row" id="btn-panos" aria-pressed="false"><i class="dot pano" aria-hidden="true"></i><span data-i18n="panos">Panoramas</span><span class="legend-state" data-i18n="hidden">Off</span></button>
         <button class="legend-row" id="btn-photos" aria-pressed="false"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">Photos</span><span class="legend-state" data-i18n="hidden">Off</span></button>
         <div class="legend-actions"><button id="legends-show" data-i18n="showAll">Show all</button><button id="legends-hide" data-i18n="hideAll">Hide all</button></div>
@@ -106,30 +116,30 @@
         </div>
       </div>
     </div>
-    <button class="chip pin-chip" id="btn-rednote"><i class="dot rn" aria-hidden="true"></i><span data-i18n="rednote">RedNote</span></button>
-    <button class="chip pin-chip" id="btn-zillow"><i class="dot pano" aria-hidden="true"></i><span data-i18n="viewpointsTitle">Pano</span></button>
-    <button class="chip pin-chip" id="btn-photolist"><i class="dot photo" aria-hidden="true"></i><span data-i18n="photos">Photos</span></button>
-    <button class="chip" id="btn-tour" data-i18n="tour">Tour</button>
-    <button class="chip pet-chip" id="btn-calldog" aria-keyshortcuts="G"><span data-i18n="callDog">Call the dog</span><kbd>G</kbd></button>
-    <button class="chip pet-chip" id="btn-callcat" aria-keyshortcuts="K"><span data-i18n="callCat">Call the cat</span><kbd>K</kbd></button>
-    <button class="chip" id="btn-dusk" data-i18n="dusk" aria-pressed="false">Dusk</button>
-    <button class="chip" id="btn-music" aria-label="Music" aria-pressed="false" title="Music">♪</button>
-    <button class="chip" id="btn-help" data-i18n="controlsTitle" aria-label="Tutorial" aria-keyshortcuts="? /" aria-pressed="false">Tutorial</button>
-    <button class="chip" id="btn-lang">中文</button>
+    <button class="chip" id="btn-tour" aria-keyshortcuts="T" data-i18n-title="tour" title="Tour" aria-label="Tour"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><ellipse class="f" cx="7.6" cy="12.6" rx="2.7" ry="3.9" transform="rotate(-8 7.6 12.6)"/><ellipse class="f" cx="8.3" cy="19.4" rx="2" ry="1.8"/><ellipse class="f" cx="16.2" cy="5.8" rx="2.7" ry="3.9" transform="rotate(8 16.2 5.8)"/><ellipse class="f" cx="15.6" cy="12.6" rx="2" ry="1.8"/></svg><kbd>T</kbd></button>
+    <button class="chip" id="btn-demo" aria-keyshortcuts="X" data-i18n-title="demoLabel" title="Demonstration" aria-label="Demonstration"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect class="f" x="2.5" y="2.5" width="19" height="19"/><path class="eye" d="M9.4 7.4v9.2l7.4-4.6z"/></svg><kbd>X</kbd></button>
+    <button class="chip pet-chip" id="btn-calldog" aria-keyshortcuts="G" data-i18n-title="callDog" title="Call the dog" aria-label="Call the dog"><svg class="pet-ico dog" viewBox="0 0 24 24" aria-hidden="true"><ellipse class="f" cx="5.2" cy="11" rx="2.7" ry="5" transform="rotate(18 5.2 11)"/><ellipse class="f" cx="18.8" cy="11" rx="2.7" ry="5" transform="rotate(-18 18.8 11)"/><circle class="f head" cx="12" cy="13" r="7"/><circle class="eye" cx="9.4" cy="12" r="1.15"/><circle class="eye" cx="14.6" cy="12" r="1.15"/><ellipse class="eye" cx="12" cy="16.2" rx="2.9" ry="2.2"/><ellipse class="f" cx="12" cy="15.4" rx="1.25" ry=".9"/></svg><kbd>G</kbd></button>
+    <button class="chip pet-chip" id="btn-callcat" aria-keyshortcuts="K" data-i18n-title="callCat" title="Call the cat" aria-label="Call the cat"><svg class="pet-ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M4.6 10.2 5.6 3.4l4.5 3.8c1.2-.3 2.6-.3 3.8 0l4.5-3.8 1 6.8c.9 1.6 1.1 3.6.3 5.6-1.3 3.4-4.3 4.9-7.7 4.9s-6.4-1.5-7.7-4.9c-.8-2-.6-4 .3-5.6z"/><ellipse class="eye" cx="9.3" cy="13.2" rx="1.1" ry="1.5"/><ellipse class="eye" cx="14.7" cy="13.2" rx="1.1" ry="1.5"/><path class="eye" d="M11 16.2h2l-1 1.1z"/></svg><kbd>K</kbd></button>
+    <button class="chip" id="btn-dusk" aria-pressed="false" aria-keyshortcuts="N" data-i18n-title="dusk" title="Dusk" aria-label="Dusk"><svg class="tod-ico" viewBox="0 0 24 24" aria-hidden="true"><g class="sun"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.6M12 18.8v2.6M2.6 12h2.6M18.8 12h2.6M5.4 5.4l1.8 1.8M16.8 16.8l1.8 1.8M5.4 18.6l1.8-1.8M16.8 7.2l1.8-1.8"/></g><path class="moon" d="M15.6 3.6a8.6 8.6 0 1 0 4.8 13.9A7 7 0 0 1 15.6 3.6z"/></svg><kbd>N</kbd></button>
+    <button class="chip" id="btn-music" aria-label="Music" aria-pressed="false" title="Music" aria-keyshortcuts="B" data-i18n-title="musicLabel"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M8.4 4.6l12-2.4v13.4a3 3 0 1 1-1.8-2.7V6.6l-8.4 1.7v9.3a3 3 0 1 1-1.8-2.7z"/></svg><kbd>B</kbd></button>
+    <button class="chip" id="btn-help" aria-label="Tutorial" aria-keyshortcuts="? /" aria-pressed="false" data-i18n-title="controlsTitle" title="Tutorial"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle class="f" cx="12" cy="12" r="9.6"/><path class="cutw" d="M9.2 9.4a2.9 2.9 0 1 1 4.1 2.6c-.9.4-1.3 1-1.3 1.9v.6"/><circle class="eye" cx="12" cy="17.4" r="1.2"/></svg><kbd>?</kbd></button>
+    <button class="chip" id="btn-lang" aria-keyshortcuts="L" title="中文 · English" aria-label="中文 · English"><span class="lang-sym" aria-hidden="true"><b data-l="zh">中</b><b data-l="en">EN</b></span><kbd>L</kbd></button>
+    <button class="chip" id="btn-ui" aria-keyshortcuts="Z" data-i18n-title="uiHide" title="Hide the interface" aria-label="Hide the interface"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 5.2c-4.7 0-8.4 3.1-10 6.8 1.6 3.7 5.3 6.8 10 6.8s8.4-3.1 10-6.8c-1.6-3.7-5.3-6.8-10-6.8z"/><circle class="eye" cx="12" cy="12" r="3.6"/><circle class="f" cx="12" cy="12" r="1.7"/><path class="cutw" d="M4 20 20 4"/></svg><kbd>Z</kbd></button>
   </div>
   <audio id="bgm" preload="none"></audio>
   <div id="crosshair"></div>
   <div id="label"></div>
   <div id="toast"></div>
+  <button id="ui-restore" type="button" data-i18n-title="uiShow" title="Show the interface · Z" aria-label="Show the interface"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="f" d="M12 5.2c-4.7 0-8.4 3.1-10 6.8 1.6 3.7 5.3 6.8 10 6.8s8.4-3.1 10-6.8c-1.6-3.7-5.3-6.8-10-6.8z"/><circle class="eye" cx="12" cy="12" r="3.6"/><circle class="f" cx="12" cy="12" r="1.7"/></svg><kbd>Z</kbd></button>
   <div id="panoload" class="hidden" role="status" aria-live="polite"><span id="panoloadText">Loading panorama</span><i><b id="panoloadBar"></b></i></div>
   <canvas id="minimap" width="190" height="190"></canvas>
-  <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">Click any blue/green/red dot to go there · M to close</div></div>
+  <div id="bigmap" class="hidden"><canvas id="bigmapCanvas"></canvas><div class="mapHint" data-i18n="maphint">Click a square to go there · click the plan to walk there · M to close</div></div>
   <aside id="panel" class="hidden"><div id="panelHead"><span id="panelTitle"></span><button id="panelClose">×</button></div><div id="panelBody"></div></aside>
   <div id="compare" class="hidden"><img id="compareImg" alt=""><input id="compareSlider" type="range" min="0" max="100" value="55"><div id="compareHint" data-i18n="comparehint">Drag to compare with the photo · C to toggle · Q to exit</div></div>
   <div id="viewExit" class="hidden"><span class="vx-pano" data-i18n="panoExit">Panorama · press Q to exit</span><span class="vx-compare" data-i18n="compareExit">Photo comparison · press Q to exit</span><button id="viewExitBtn"><kbd>Q</kbd><span data-i18n="quit">Exit</span></button></div>
-  <aside id="controls" class="hidden" aria-labelledby="controlsTitle"><div class="controls-head"><b id="controlsTitle" data-i18n="controlsTitle">Tutorial</b><button id="controlsClose" aria-label="Close">×</button></div><div id="controlsBody"></div><div class="controls-foot" data-i18n="controlsFoot">? or / to show or hide · Esc to close</div></aside>
+  <aside id="controls" class="hidden" aria-labelledby="controlsTitle"><div class="controls-head"><i class="sw-red" aria-hidden="true"></i><div class="sw-titles"><b id="controlsTitle" data-i18n="controlsTitle">Tutorial</b><span class="sw-sub" data-i18n="swSub">Controls · 2513 Croton Ave</span></div><button id="controlsClose" aria-label="Close">×</button></div><div id="controlsBody"></div><div class="controls-foot" data-i18n="controlsFoot">? or / to show or hide · Esc to close</div></aside>
   <div id="caption" class="hidden"></div>
-  <div id="touch"><div id="stick"><div id="knob"></div></div><div id="lookpad"></div><button id="touchJump" data-i18n="jump">Jump</button><button id="touchAct" data-i18n="act">Use</button></div>
+  <div id="touch"><div id="stick"><div id="knob"></div></div><div id="lookpad"></div><button id="touchJump" data-i18n="jump">Jump</button><button id="touchAct" data-i18n="act">Act</button></div>
 </div>
 <script type="module" src="dist/app.js"></script>
 </body>

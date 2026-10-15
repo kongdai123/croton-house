@@ -78,7 +78,7 @@ export const L = {
   steelDark: once(() => { const m = M.steel().clone(); m.color = new THREE.Color(0x6a6e73); m.roughness = 0.4; return m; }),
   drum: once(() => { const m = M.steel().clone(); m.color = new THREE.Color(0xd5d8db); m.roughness = 0.3; m.side = THREE.DoubleSide;
     m.map = canvasTex(64, 64, (g, W, H) => { g.fillStyle = '#c8cbce'; g.fillRect(0, 0, W, H); g.fillStyle = '#2c2f33'; for (const [x, y] of [[16, 16], [48, 48]]) { g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); } }, { repeat: [40, 10] }); return m; }),
-  display: once(() => new THREE.MeshStandardMaterial({ color: 0x0a1418, emissive: 0x7fd6ff, emissiveIntensity: 0.25, roughness: 0.3,
+  display: once(() => new THREE.MeshStandardMaterial({ color: 0x0a1418, emissive: 0x7fd6ff, emissiveIntensity: 0.25, roughness: 0.3, userData: { emits: 'screen' },
     emissiveMap: canvasTex(128, 32, (g) => { g.fillStyle = '#000'; g.fillRect(0, 0, 128, 32); g.fillStyle = '#fff'; g.font = 'bold 20px monospace'; g.fillText('0:48', 34, 24); }) })),
   heaterGrey: once(() => new THREE.MeshPhysicalMaterial({ color: 0x8f959c, roughness: 0.42, metalness: 0.25, clearcoat: 0.35 })),
   plasticWhite: once(() => M.plasticWhite()),

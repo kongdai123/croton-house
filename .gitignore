@@ -10,3 +10,8 @@ __pycache__/
 docs/evidence/
 # fidelity-check and pet test output (regenerate with web/tools/compare.py and the pet tools)
 compare/
+# promo renders (remake with web/tools/promo.mjs + promo_encode.py)
+docs/promo/*.mp4
+# baked-lighting pipeline: Slurm wrappers for one particular cluster, and the bake outputs
+bake/cluster/
+bake/work/

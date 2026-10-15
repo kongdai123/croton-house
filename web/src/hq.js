@@ -93,6 +93,10 @@ export function createMirror(geometry) {
           if (proxy.visible) proxy.matrixWorld.copy(source.matrixWorld);
         }
         for (const { source, proxy, occluded } of reflection.lights) {
+          // hidden lights stay out of the reflection: baked lighting hides the live fixtures, window fills and sky light
+          let shown = source.visible;
+          for (let p = source.parent; shown && p; p = p.parent) shown = p.visible;
+          proxy.visible = shown;
           proxy.color.copy(source.color); proxy.intensity = occluded ? 0 : source.intensity; proxy.matrixWorld.copy(source.matrixWorld);
           if (source.isHemisphereLight) proxy.groundColor.copy(source.groundColor);
         }

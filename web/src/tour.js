@@ -28,7 +28,7 @@ const STOPS = [
   { x: 3.5, y: 6.5, heading: 350, pitch: -0.08, hold: 5, zh: '露台 · 无界的后花园', en: 'Patio · the borderless back garden', drift: { yaw: 1, push: 0.15 } },
   { x: 4.9, y: 14.5, heading: 230, pitch: -0.25, hold: 5, zh: '火盆与自制的木长凳', en: 'The fire pit and the lumber bench he built', drift: { yaw: 1, push: 0.1 } },
   { x: -1.4, y: 6.4, heading: 280, pitch: -0.3, hold: 5, zh: '主卧小院 · 石子地面、推拉门与热带植物', en: 'Primary courtyard · pebbles, the bedroom slider and tropical planting', drift: { yaw: 1, push: 0.1 } },
-  { x: 3.5, y: 7.7, heading: 245, pitch: -0.06, hold: 6, zh: '黄昏 · 后院灯火', en: 'Dusk · backyard lights', drift: { yaw: 1, push: 0.1 }, dusk: true },
+  { x: 3.5, y: 7.7, heading: 245, pitch: -0.06, hold: 6, zh: '黄昏 · 后院灯火', en: 'Dusk · backyard lights', bakedZh: '后院 · 晨光里的露台与花园', bakedEn: 'The backyard · the patio and garden in the morning light', drift: { yaw: 1, push: 0.1 }, dusk: true },
   { x: 0.0, y: 14.5, heading: 180, pitch: -0.02, hold: 6, zh: '谢谢观看 · Studio Hu Dwelling', en: 'Thanks for visiting · Studio Hu Dwelling', drift: { yaw: 0, push: 0.15 } },
 ];
 export class Tour {
@@ -37,21 +37,25 @@ export class Tour {
     // a language change mid-tour rewrites the caption on screen
     addEventListener('langchange', () => { if (this.active && this.phase === 'hold') this.showCaption(STOPS[this.i]); });
   }
-  showCaption(s) { this.ui.setCaption(`${getLang() === 'zh' ? s.zh : s.en}<small>${this.i + 1} / ${STOPS.length}</small>`); }
+  // Without a dusk bake the dusk stop keeps its daylight caption.
+  showCaption(s) { const baked = window.__app?.state.baked && !window.__app.state.bakedSlots?.includes('dusk') && s.bakedEn; this.ui.setCaption(`${getLang() === 'zh' ? (baked ? s.bakedZh : s.zh) : (baked ? s.bakedEn : s.en)}<small>${this.i + 1} / ${STOPS.length}</small>`); }
   toggle() { if (this.active) this.stop(); else this.start(); }
   start() {
     document.body.classList.add('touring'); this.ui.toggleLegends(false); this.ui.setLabel('');
-    this.active = true; this.i = -1; this.phase = 'next'; this.t = 0; this.wasDusk = window.__app?.state.dusk;
+    this.active = true; this.i = -1; this.phase = 'next'; this.t = 0; this.wasDusk = window.__app?.state.dusk; this.wasSlot = window.__app?.state.bakedSlot;
     // Every door back to its resting state; flights open route doors ahead and close them behind.
     for (const d of getDoors()) if (d.kind === 'french' || d.pivot) setDoorOpen(d, !!d.openDefault);
     this.player.driven = true;
     this.ui.toast(t('tourOn'), 3000); document.getElementById('btn-tour').classList.add('on'); this.next();
   }
-  stop() { document.body.classList.remove('touring'); this.ui.setLabel(''); this.active = false; this.phase = 'idle'; this.viewpoints.autoOpened?.clear(); this.ui.setCaption(''); this.player.enabled = true; this.player.driven = false; document.getElementById('btn-tour').classList.remove('on'); this.ui.toast(t('tourOff'), 1500); }
+  stop() { if (this.wasSlot && window.__app?.state.bakedSlots?.includes('dusk')) window.__app.setBakedSlot(this.wasSlot); document.body.classList.remove('touring'); this.ui.setLabel(''); this.active = false; this.phase = 'idle'; this.viewpoints.autoOpened?.clear(); this.ui.setCaption(''); this.player.enabled = true; this.player.driven = false; document.getElementById('btn-tour').classList.remove('on'); this.ui.toast(t('tourOff'), 1500); }
   next() {
     this.i++; if (this.i >= STOPS.length) { this.stop(); return; }
     const s = STOPS[this.i]; this.phase = 'fly';
-    if (s.dusk && !window.__app.state.dusk) this.ui.toggleDusk();
+    if (s.dusk) {
+      if (window.__app.state.bakedSlots?.includes('dusk')) window.__app.setBakedSlot('dusk');
+      else if (!window.__app.state.dusk && !window.__app.state.baked) this.ui.toggleDusk();
+    }
     // `via`: come down from the previous aerial stop onto a ground spot first, then take the nav route
     if (s.via && STOPS[this.i - 1]?.eye) {
       this.viewpoints.goTo({ kind: 'tour', id: 'via' + this.i, eye: EYE, pitch: 0, ...s.via }, { silent: true, keepDriven: true, direct: true, duration: 3.4, onDone: () => { if (this.active) this.flyTo(s); } });

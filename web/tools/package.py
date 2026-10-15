@@ -2,16 +2,17 @@
 """Package the walkthrough into a size-checked, standalone build folder.
 
 Run with a Python interpreter containing Pillow: python tools/package.py.
-Inputs: index.html, style.css, dist/app.js, data/, and the six runtime asset folders.
+Inputs: index.html, style.css, dist/ runtime bundles, data/, and the runtime asset folders.
 Output: build/, with resolved asset symlinks and compressed images/videos.
 Requires ffmpeg and ffprobe on PATH when a video exceeds the upload limit.
 Limits use decimal MB, conservatively matching the publishing hard caps.
 Source assets are never modified; a failed package leaves the previous build intact.
 """
 
+import argparse
+import hashlib
 import json
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -23,10 +24,12 @@ except ImportError:
     sys.exit("ERROR: Pillow is required. Run this script with a Python environment containing Pillow.")
 
 ROOT = Path(__file__).resolve().parents[1]
-FILE_LIMIT = 15_000_000
+FILE_LIMIT = 15_000_000   # original publishing brief: docs/briefs/codex_packaging_mobile.md
 TOTAL_LIMIT = 240_000_000
-ASSET_FOLDERS = ("tex", "hdr", "photos", "panos", "rednote")
+ASSET_FOLDERS = ("tex", "hdr", "photos", "panos", "rednote", "fonts", "audio", "pets", "landing", "pano_thumbs", "agx", "lightmaps")
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+RUNTIME_FILES = ("index.html", "style.css", "dist/app.js", "dist/webgpu.js",
+                 "dist/photo-merge-worker.js", "dist/photo-bvh-worker.js")
 
 
 def process_image(src, dst, folder):
@@ -89,7 +92,7 @@ def copy_folder(src, dst, folder, scratch):
         raise RuntimeError(f"Missing runtime folder: {src}")
     dst.mkdir(parents=True, exist_ok=True)
     for path in sorted(src.rglob("*")):
-        if not path.is_file() or path.name.startswith("."):
+        if not path.is_file() or path.name.startswith(".") or (folder == "audio" and path.name == "brush-i.m4a"):
             continue
         target = dst / path.relative_to(src)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -100,6 +103,54 @@ def copy_folder(src, dst, folder, scratch):
             compress_video(path, target, scratch)
         else:
             shutil.copy2(path, target)
+
+
+def copy_lightmaps(src, dst):
+    """Publish only runtime bake files, byte-for-byte, under immutable content names."""
+    encodings = sorted((src / "v2").glob("*/encoding.json"))
+    if not encodings:
+        raise RuntimeError(f"Missing lightmap slot encodings: {src}")
+    files = ["v2/lightmap_uv2.bin.gz"]
+    for encoding in encodings:
+        slot = encoding.parent.name
+        meta = json.loads(encoding.read_text())
+        files += [f"v2/{slot}/encoding.json", f"{slot}/probes.bin", f"{slot}/sky_bg.hdr", f"{slot}/refl/meta.json"]
+        def layer_names(owner, layer, encoding):
+            rows = encoding.get("rows", {}).get(layer)
+            if rows is not None and (len(rows) != 2 or any(type(n) is not int or n <= 0 for n in rows)):
+                raise RuntimeError(f"Invalid split rows for {owner}/{layer}")
+            return [f"v2/{owner}/{layer}_{i}.webp" for i in range(2)] if rows else [f"v2/{owner}/{layer}.webp"]
+
+        own_lamps = layer_names(slot, "lamps", meta)
+        owner = "sunrise" if meta.get("lampsSlot") == "sunrise" or not any((src / name).exists() for name in own_lamps) else slot
+        lamp_meta = meta if owner == slot else json.loads((src / f"v2/{owner}/encoding.json").read_text())
+        # Explicit shared references can still use a complete older slot-local lamps bake.
+        if owner != slot and not all((src / name).exists() for name in layer_names(owner, "lamps", lamp_meta)) and all((src / name).exists() for name in own_lamps):
+            owner, lamp_meta = slot, meta
+        files += layer_names(slot, "slot", meta) + layer_names(owner, "lamps", lamp_meta)
+        if owner != slot: files.append(f"v2/{owner}/encoding.json")
+        if (src / f"v2/{slot}/foliage.bin.gz").exists():
+            files.append(f"v2/{slot}/foliage.bin.gz")
+        for resolution in ("half", "quarter"):
+            slot_name = f"v2/{slot}/{resolution}/slot.webp"
+            lamps_name = f"v2/{owner}/{resolution}/lamps.webp"
+            if (src / slot_name).exists() or (owner == slot and (src / lamps_name).exists()):
+                files += [slot_name, lamps_name]   # require both layers at every published tier
+        probes = json.loads((src / f"{slot}/refl/meta.json").read_text())
+        files += [f"{slot}/refl/probe_{int(p['i']):02d}.hdr" for p in probes]
+    manifest = {}
+    for name in sorted(set(files)):
+        path = src / name
+        if path.stat().st_size > FILE_LIMIT:
+            raise RuntimeError(f"{path}: exceeds 15 MB; split atlas layers with encode_webp.py --split")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+        suffix = "".join(path.suffixes)
+        hashed = path.name[:-len(suffix)] + "." + digest + suffix
+        target = dst / Path(name).with_name(hashed)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+        manifest[name] = target.relative_to(dst).as_posix()
+    (dst / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
 def report_and_check(build):
@@ -139,18 +190,17 @@ def main():
         scratch = Path(temporary)
         staged = scratch / "build"
         staged.mkdir()
-        for name in ("index.html", "style.css", "dist/app.js"):
+        for name in RUNTIME_FILES:
             src = ROOT / name
             target = staged / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            if name.endswith(".js"):
-                code = re.sub(r"^//# sourceMappingURL=.*$", "", src.read_text(), flags=re.MULTILINE)
-                target.write_text(code)
-            else:
-                shutil.copy2(src, target)
+            shutil.copy2(src, target)
         copy_folder(ROOT / "data", staged / "data", "data", scratch)
         for folder in ASSET_FOLDERS:
-            copy_folder(ROOT / "assets" / folder, staged / "assets" / folder, folder, scratch)
+            if folder == "lightmaps":
+                copy_lightmaps(ROOT / "assets" / folder, staged / "assets" / folder)
+            else:
+                copy_folder(ROOT / "assets" / folder, staged / "assets" / folder, folder, scratch)
         report_and_check(staged)
         if build.exists():
             shutil.rmtree(build)
@@ -159,6 +209,9 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=ROOT, help="site source folder (default: web/)")
+    ROOT = parser.parse_args().root.resolve()
     try:
         main()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:

@@ -77,7 +77,9 @@ export const PLACEMENTS = [
   { m: 'bath', i: 'vanityDouble', x: -7.653, y: 4.47, ry: E, zh: '悬挂双盆洗手台', n: 'Floating double vanity' },
   { m: 'bath', i: 'mirrorCabinetWide', x: -7.833, y: 4.47, h: 0.15, ry: E },
   { m: 'bath', i: 'ladderRack', x: -6.31, y: 3.45, ry: W },
-  { m: 'decor', i: 'recessedLight', x: -6.95, y: 4.4, light: false }, { m: 'decor', i: 'recessedLight', x: -6.95, y: 2.9, light: false },
+  // no live light (the raster walkthrough's light budget), but lamps in the baked lighting (bake/export/lights.mjs): with the
+  // door shut and its one window in the WC, the primary bath has no other light at sunrise (g30 shows the cans on)
+  { m: 'decor', i: 'recessedLight', x: -6.95, y: 4.4, light: false, bake: true }, { m: 'decor', i: 'recessedLight', x: -6.95, y: 2.9, light: false, bake: true },
   // Bedroom B (x 4.08..7.9, y 1.95..5.36): acacia bed on the east wall, nightstand under the window, dark console by the slider
   { m: 'bedrooms', i: 'bedAcacia', x: 6.69, y: 3.4, ry: W, zh: '相思木床', n: 'Acacia bed' },
   { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: 4.55, ry: W, zh: '松木床头柜', n: 'Pine nightstand' },
@@ -87,9 +89,9 @@ export const PLACEMENTS = [
   { m: 'decor', i: 'recessedLight', x: 6.0, y: 3.6 }, { m: 'decor', i: 'recessedLight', x: 6.0, y: 2.5, light: false },
   // Bath B (x 5.1..7.9, y 0.31..1.84) and the hall bath (y -1.27..0.2)
   { m: 'bath', i: 'vanity', x: 6.1, y: 0.64, ry: N, zh: '悬挂洗手台', n: 'Floating vanity' }, { m: 'bath', i: 'mirrorCabinet', x: 6.1, y: 0.4, h: 0.15, ry: N },
-  { m: 'bath', i: 'toilet', x: 7.52, y: 0.62, ry: W }, { m: 'bath', i: 'shower', x: 7.28, y: 1.34, ry: W },
+  { m: 'bath', i: 'toilet', x: 7.52, y: 0.62, ry: W }, { m: 'bath', i: 'showerWindowB', x: 7.28, y: 1.34, ry: W },
   { m: 'bath', i: 'vanitySmall', x: 6.0, y: -0.12, ry: S }, { m: 'bath', i: 'mirrorCabinetSmall', x: 6.0, y: 0.12, h: 0.15, ry: S },
-  { m: 'bath', i: 'toilet', x: 7.52, y: -0.04, ry: W }, { m: 'bath', i: 'shower', x: 7.28, y: -0.77, ry: W },
+  { m: 'bath', i: 'toilet', x: 7.52, y: -0.04, ry: W }, { m: 'bath', i: 'showerWindowHall', x: 7.28, y: -0.77, ry: W },
   // Bedroom 3 (x 4.08..7.9, y -5.74..-2.14): pine spindle bed on the east wall, nightstands, dark dresser on the front wall
   { m: 'bedrooms', i: 'bedPine', x: 6.72, y: -3.95, ry: W, zh: '松木床', n: 'Pine bed' },
   { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -2.84, ry: W }, { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -5.06, ry: W, light: false },
@@ -105,7 +107,8 @@ export const PLACEMENTS = [
   { m: 'closet', i: 'travel', x: 7.65, y: -1.63, ry: W },
   { m: 'closet', i: 'yoga', x: 5.74, y: -1.53 },
   // Hallway + closets
-  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false },
+  // windowless, between shut bath and closet doors: lamps in the baked lighting only (see the primary bath's cans)
+  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true },
   // Laundry nook (x -7.9..-6.36, y 0.16..1.48, open to the garage) and garage (x -7.9..-3.51, y -5.74..0.16), g07 / g48 / g49
   { m: 'garage', i: 'laundryPlinth', x: -7.5, y: 1.07, ry: S },
   { m: 'bath', i: 'washerDryer', x: -7.5, y: 1.1, h: 0.10, ry: S, zh: '叠放洗烘机', n: 'Washer & dryer' },

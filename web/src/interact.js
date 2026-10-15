@@ -279,7 +279,7 @@ export class Interact {
           const base = o.material, hl = base.clone();
           // clone() drops the shader hooks (daylight, HQ shadow, lighting chunk), which would give the highlight its own
           // program: a fresh compile on first hover, several seconds on Windows, and a look without the daylight tint.
-          hl.onBeforeCompile = base.onBeforeCompile; hl.customProgramCacheKey = base.customProgramCacheKey; hl.onBeforeRender = base.onBeforeRender;
+          hl.onBeforeCompile = base.onBeforeCompile; hl.customProgramCacheKey = base.customProgramCacheKey; hl.onBeforeRender = base.onBeforeRender; hl.bakedHooks = base.bakedHooks;
           hl.emissive.set(0xffffff); hl.emissiveIntensity = 0.06;
           o.userData.hl = base; o.material = hl;
         }

@@ -52,7 +52,7 @@ const L = {
   glassEdge: once(() => solid(0xcdd9d3, 0.16, { transparent: true, opacity: 0.5, depthWrite: false })),
   water: once(() => solid(0xc1d3cd, 0.08, { transparent: true, opacity: 0.14, depthWrite: false })),
   shade: once(() => new THREE.MeshPhysicalMaterial({ map: fabricMap(), color: 0xfff4df, roughness: 0.95,
-    emissive: 0xffe1af, emissiveIntensity: 0.20, sheen: 0.6, side: THREE.DoubleSide })),
+    emissive: 0xffe1af, emissiveIntensity: 0.20, sheen: 0.6, side: THREE.DoubleSide, userData: { emits: 'lamp' } })),
   leaf: once(() => { const m = solid(0xffffff, 0.68, { map: leaf({ color: '#65794e', vein: '#9aa67a', w: 128, h: 256 }),
     alphaTest: 0.5, side: THREE.DoubleSide }); m.allowOverride = false; return m; }),
   book: once(() => [0x74796d, 0xbcb29d, 0x46525a, 0xa28570, 0xddd6c5, 0x565548].map(c => solid(c, 0.9))),
@@ -108,7 +108,7 @@ const lattice = once(() => {
       g.beginPath(); g.moveTo(k, 0); g.lineTo(k + s * H * 0.55, H); g.stroke(); }
   });
   const m = solid(0xf5e7cb, 0.9, { map, alphaTest: 0.45, side: THREE.DoubleSide,
-    emissive: 0xc6a26a, emissiveIntensity: 0.1 }); m.allowOverride = false; return m;
+    emissive: 0xc6a26a, emissiveIntensity: 0.1, userData: { emits: 'lamp' } }); m.allowOverride = false; return m;
 });
 function eggLamp() {
   const root = group(cyl(0.045, 0.05, 0.018, L.brass(), { y: 0.009, seg: 24 }));

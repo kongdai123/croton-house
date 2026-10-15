@@ -228,6 +228,6 @@ export const mats = {
   driedGrass: once(() => new THREE.MeshStandardMaterial({ color: 0xd9c49b, roughness: 0.9 })),
   brass: once(() => new THREE.MeshStandardMaterial({ color: 0xb08d57, roughness: 0.35, metalness: 0.9 })),
   chrome: once(() => new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.15, metalness: 1 })),
-  bulb: once(() => new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffd9a0, emissiveIntensity: 2.2, roughness: 0.3 })),
+  bulb: once(() => new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffd9a0, emissiveIntensity: 2.2, roughness: 0.3, userData: { emits: 'lamp' } })),
 };
 export { M, proc };

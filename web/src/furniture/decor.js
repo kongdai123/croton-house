@@ -18,9 +18,9 @@ const L = {
   white: once(() => new THREE.MeshStandardMaterial({ color: 0xf4f4f1, roughness: 0.42, metalness: 0.05 })),       // powder-coated fixture white
   inner: once(() => new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.55, metalness: 0.3 })),        // black baffle
   baffle: once(() => new THREE.MeshStandardMaterial({ color: 0x1d1d1d, roughness: 0.35, metalness: 0.6, side: THREE.DoubleSide })),
-  lens: once(() => new THREE.MeshStandardMaterial({ color: 0xfff2e0, emissive: 0xfff2e0, emissiveIntensity: 1.5, roughness: 0.3 })),
-  canDisc: once(() => new THREE.MeshStandardMaterial({ color: 0xfff0d8, emissive: 0xfff0d8, emissiveIntensity: 1.6, roughness: 0.4 })),
-  warm: once(() => new THREE.MeshStandardMaterial({ color: 0xffe2b4, emissive: 0xffd9a0, emissiveIntensity: 2.0, roughness: 0.6 })),
+  lens: once(() => new THREE.MeshStandardMaterial({ color: 0xfff2e0, emissive: 0xfff2e0, emissiveIntensity: 1.5, roughness: 0.3, userData: { emits: 'lamp' } })),
+  canDisc: once(() => new THREE.MeshStandardMaterial({ color: 0xfff0d8, emissive: 0xfff0d8, emissiveIntensity: 1.6, roughness: 0.4, userData: { emits: 'lamp' } })),
+  warm: once(() => new THREE.MeshStandardMaterial({ color: 0xffe2b4, emissive: 0xffd9a0, emissiveIntensity: 2.0, roughness: 0.6, userData: { emits: 'lamp' } })),
   // sheer cloth as a closed 4 mm solid (FrontSide: one face per crossing is drawn); opacity tuned to the bright voile of g24;
   // a slubby linen-voile texture drives colour + alpha so it reads as cloth, not glass.
   voile: once(() => {
@@ -35,19 +35,21 @@ const L = {
   shade: once(() => {
     const [c, g] = canvas(256, 256), r = rng(41); g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, 256, 256);
     g.globalAlpha = 0.18; for (let i = 0; i < 1400; i++) { g.fillStyle = r() > 0.5 ? '#ffffff' : '#d9d6cf'; g.fillRect(r() * 256, r() * 256, 1, 2 + r() * 6); }
+    // the emissive is the raster walkthrough's stand-in for daylight through the cloth, not a light source (no
+    // userData.emits: photo mode, the Blender export and the baked view drop it, materials.js emitsLight)
     return new THREE.MeshPhysicalMaterial({ map: ctex(c, { repeat: [6, 1] }), color: 0xffffff, roughness: 0.92, sheen: 0.6, sheenColor: new THREE.Color(0xffffff), emissive: 0xfffaf0, emissiveIntensity: 0.12 });
   }),
   lcd: once(() => {
     const [c, g] = canvas(128, 80); g.fillStyle = '#3e4440'; g.fillRect(0, 0, 128, 80);
     g.fillStyle = '#c9d6c2'; g.font = 'bold 44px sans-serif'; g.fillText('72', 30, 56); g.font = '14px sans-serif'; g.fillText('°', 84, 30); g.fillText('COOL', 8, 74); g.fillText('AUTO', 86, 74);
-    const t = ctex(c); return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.25 });
+    const t = ctex(c); return new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.25, userData: { emits: 'screen' } });
   }),
   perforated: once(() => {
     // irregular "coral" cut-out pattern of the porch sconce (g06): warm light through organic holes
     const [c, g] = canvas(128, 256), r = rng(9); g.fillStyle = '#000'; g.fillRect(0, 0, 128, 256); g.fillStyle = '#fff';
     for (let i = 0; i < 700; i++) { const x = 4 + r() * 120, y = 4 + r() * 248, a = 1.2 + r() * 3, b = 0.8 + r() * 1.6; g.beginPath(); g.ellipse(x, y, a, b, r() * Math.PI, 0, Math.PI * 2); g.fill(); }
     const t = ctex(c);
-    return new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6, metalness: 0.3, emissive: 0xffc98a, emissiveMap: t, emissiveIntensity: 2.2 });
+    return new THREE.MeshStandardMaterial({ color: 0x1c1c1c, roughness: 0.6, metalness: 0.3, emissive: 0xffc98a, emissiveMap: t, emissiveIntensity: 2.2, userData: { emits: 'lamp' } });
   }),
   wash: once(() => {
     // soft up-light fan on the wall: a blurred wedge widening away from the fixture, fading with distance
@@ -105,7 +107,15 @@ const L = {
 function sheerMat(opacity) {
   const m = M.sheer().clone(); m.side = THREE.FrontSide; m.opacity = opacity; m.color = new THREE.Color(0xffffff);
   m.map = L.voile().map; m.alphaMap = L.voile().alpha; m.roughness = 0.95; m.sheen = 1; m.sheenRoughness = 0.5; m.sheenColor = new THREE.Color(0xffffff);
-  m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.03; return m;
+  m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.03;
+  // Physical voile for the baked view (materials.js sheerProbePatch), photo mode and the Blender export (photo.js,
+  // bake/export/setup.py): the fibres reflect ~30% and scatter ~70% of the light from behind through to the viewer.
+  // Tuned in Cycles with nothing else glowing: a bunched stack at a window reads ~0.8x the wall above it, as in the
+  // listing photos (g19, g20, g23, g24); 0.4 gave ~0.7x, and more transmission barely helps (~0.79x at 0.85).
+  // The raster walkthrough keeps the look above (the 0.03 emissive, lifted to 0.12 by day: not a light source).
+  m.userData.sheer = { reflect: 0.3, transmit: 0.7 };
+  m.customProgramCacheKey = () => 'sheer-voile';
+  return m;
 }
 
 // ---------------------------------------------------------------- helpers

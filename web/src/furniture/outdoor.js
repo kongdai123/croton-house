@@ -16,6 +16,7 @@ function firePit() {
   const R = 0.32, cy = 0.48, g = root();
   const steel = pitSteel().clone(), screen = fireScreen().clone();
   steel.emissive.set(0xff4808); steel.side = THREE.DoubleSide; screen.emissive.set(0xff6514);
+  steel.userData.emits = screen.userData.emits = 'fire';
   const part = (t0, t1, mat, r = R, seg = 64) => { const geo = new THREE.SphereGeometry(r, seg, 24, 0, 2 * PI, t0, t1 - t0);
     const uv = geo.attributes.uv, p = geo.attributes.position; for (let i = 0; i < p.count; i++) uv.setY(i, 1 - Math.acos(Math.max(-1, Math.min(1, p.getY(i) / r))) / PI);
     const m = new THREE.Mesh(geo, mat); m.position.y = cy; return shadow(m); };
@@ -40,7 +41,7 @@ function firePit() {
     g.add(box(0.05, 0.012, 0.05, pitSteel(), { x: 0.3 * s, z: 0.3 * c, bottom: true, r: 0.003, ry: a })); }
   // fuel: ash bed + three split logs (bark sides, sawn ends)
   const embers = ash().clone(), bark = barkDark().clone(), ends = charEnd().clone();
-  for (const m of [embers, bark, ends]) m.emissive.set(0xff3b04);
+  for (const m of [embers, bark, ends]) { m.emissive.set(0xff3b04); m.userData.emits = 'fire'; }
   g.add(cyl(0.2, 0.2, 0.01, embers, { y: cy - R + 0.07 }));
   const logGeo = new THREE.CylinderGeometry(0.038, 0.042, 0.36, 10, 1); const mats = [bark, ends, ends];
   [[0, 0.24, 0, 0.3], [0.04, 0.27, 0.05, 1.5], [-0.05, 0.285, -0.02, 2.5]].forEach(([x, y, z, ry], i) => {
@@ -400,7 +401,7 @@ function frontCurb() {
 function frontLamp() {
   const g = root(), white = renderWhite();
   g.add(latheM([[0, 0], [.11, 0], [.11, .04], [.075, .12], [.055, .19], [.048, 1.43], [.075, 1.45], [.075, 1.49], [.105, 1.52]], white, { seg: 24 }));
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: 0, transparent: true, opacity: .19, roughness: .12, depthWrite: false });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: 0, transparent: true, opacity: .19, roughness: .12, depthWrite: false, userData: { emits: 'lamp' } });
   const globe = new THREE.Mesh(new THREE.SphereGeometry(.14, 24, 16), glass); globe.position.y = 1.70; globe.scale.y = 1.35; g.add(globe);
   for (let k = 0; k < 6; k++) {
     const a = k * PI / 3;
@@ -408,7 +409,7 @@ function frontLamp() {
   }
   g.add(latheM([[0, 1.87], [.08, 1.87], [.1, 1.90], [.04, 1.94], [.025, 1.98], [0, 2.03]], white, { seg: 24 }));
   g.add(cyl(.017, .017, .2, white, { y: 1.65 }), cyl(.025, .025, .16, white, { x: .1, y: 1.0, rz: PI / 2 }));
-  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 0, roughness: .3 });
+  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 0, roughness: .3, userData: { emits: 'lamp' } });
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(.036, 16, 12), bulbMat); bulb.position.y = 1.72; g.add(bulb);
   g.userData.onTime = (dusk, instant) => { bulbMat.emissiveIntensity = dusk ? 2.5 : 0; glass.emissiveIntensity = dusk ? .18 : 0; };
   setCollider(g, { w: .16, d: .16, h: 2.03 });

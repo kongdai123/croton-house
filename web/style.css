@@ -540,3 +540,44 @@ body.ui-hidden #ui-restore { right:calc(22 * var(--u)) }
 #firststeps .fs-mouse { color:#1a1917 }
 #firststeps .fs-foot { color:#555; border-top:calc(2 * var(--u)) solid #1a1917; font-size:calc(11 * var(--u)); letter-spacing:.14em; text-transform:uppercase }
 #firststeps #fsDemo:hover, #firststeps li:hover { color:#c8352a }
+
+/* ==== Photo mode panel ===============================================================================================
+   The side plate's language: paper, ink hairlines, small-caps section heads, square controls, the vermilion for state. */
+#hud .dot.shot { background:#1a1917 }
+#photo { position:absolute; top:calc(58 * var(--u)); right:0; bottom:0; width:min(calc(372 * var(--u)), 94vw); overflow:auto; pointer-events:auto; z-index:6; color:var(--hi); background:var(--hp); border-left:1px solid var(--hi); box-shadow:calc(-14 * var(--u)) 0 calc(40 * var(--u)) rgba(0,0,0,.16); font-size:calc(13 * var(--u)); -webkit-user-select:text; user-select:text }
+#photo .ph-head { display:flex; align-items:baseline; gap:calc(10 * var(--u)); padding:calc(16 * var(--u)) calc(20 * var(--u)) calc(13 * var(--u)); border-bottom:1px solid var(--hi) }
+#photo h2 { margin:0; flex:1; font-family:var(--serif); font-weight:400; font-size:calc(22 * var(--u)) }
+#photo kbd { display:inline-grid; place-items:center; min-width:calc(17 * var(--u)); height:calc(17 * var(--u)); padding:0 calc(4 * var(--u)); font:500 calc(10 * var(--u))/1 var(--font); color:var(--hm); border:1px solid var(--hk) }
+#photo .ph-close { font:inherit; font-size:calc(22 * var(--u)); line-height:1; color:var(--hi); background:none; border:0; cursor:pointer; padding:0 calc(2 * var(--u)) }
+#photo section { padding:calc(14 * var(--u)) calc(20 * var(--u)); border-bottom:1px solid var(--hr) }
+#photo h3 { margin:calc(4 * var(--u)) 0 calc(9 * var(--u)); font-weight:400; font-size:calc(10.5 * var(--u)); letter-spacing:.16em; text-transform:uppercase; color:var(--hm) }
+#photo h3:not(:first-child) { margin-top:calc(14 * var(--u)) }
+#photo button { font:inherit; color:var(--hi); background:none; border:1px solid var(--hk); border-radius:0; cursor:pointer; padding:calc(7 * var(--u)) calc(9 * var(--u)) }
+#photo button:hover:not(:disabled) { background:rgba(26,25,23,.06) }
+#photo button:disabled, #photo input:disabled { opacity:.4; cursor:default }
+#photo button.on { color:var(--hp); background:var(--hi); border-color:var(--hi) }
+#photo button:focus-visible, #photo input:focus-visible { outline:2px solid var(--hi); outline-offset:1px }
+#photo .ph-prompt { display:flex; gap:calc(6 * var(--u)) }
+#photo .ph-prompt input { flex:1; min-width:0; font:inherit; color:var(--hi); background:#fbf9f4; border:1px solid var(--hi); border-radius:0; padding:calc(8 * var(--u)) calc(9 * var(--u)) }
+#photo .ph-matched { min-height:1.2em; margin:calc(8 * var(--u)) 0; font-size:calc(11.5 * var(--u)); color:var(--hred) }
+#photo .ph-presets { display:grid; grid-template-columns:repeat(3, 1fr); gap:calc(5 * var(--u)) }
+#photo .ph-presets button { font-size:calc(11.5 * var(--u)) }
+#photo .ph-light.off .ph-row { opacity:.45 }
+#photo .ph-row { display:grid; grid-template-columns:calc(92 * var(--u)) 1fr calc(62 * var(--u)); align-items:center; gap:calc(8 * var(--u)); margin:calc(5 * var(--u)) 0 }
+#photo .ph-row input { width:100%; accent-color:var(--hred) }
+#photo .ph-row output { text-align:right; font-variant-numeric:tabular-nums; color:var(--hm); font-size:calc(11.5 * var(--u)) }
+#photo .ph-seg { display:flex }
+#photo .ph-seg button { flex:1; font-size:calc(11.5 * var(--u)); white-space:nowrap }
+#photo .ph-seg button + button { border-left:0 }
+#photo .ph-seg + .ph-seg { margin-top:calc(6 * var(--u)) }
+#photo .ph-go { border-bottom:0 }
+#photo .ph-bar { position:relative; height:2px; background:var(--hr); overflow:hidden }
+#photo .ph-bar b { position:absolute; inset:0; background:var(--hred); transform-origin:left; transform:scaleX(0) }
+#photo .ph-status { min-height:1.2em; margin:calc(9 * var(--u)) 0; font-size:calc(11.5 * var(--u)); color:var(--hm); font-variant-numeric:tabular-nums }
+#photo .ph-actions { display:grid; grid-template-columns:2fr 1fr 1.4fr; gap:calc(6 * var(--u)) }
+#photo .ph-actions .primary { color:var(--hp); background:var(--hi); border-color:var(--hi); letter-spacing:.14em; text-transform:uppercase; font-size:calc(11.5 * var(--u)) }
+#photo .ph-actions .primary:hover:not(:disabled) { background:#000 }
+@media (max-width:700px) { #photo { top:auto; height:62vh; width:100vw; border-left:0; border-top:1px solid var(--hi) } }
+#photo button.on:hover:not(:disabled) { background:var(--hi) }
+/* while a still is on the canvas, only the top bar and the photo panel stay */
+body.photo-still #minimap, body.photo-still #crosshair, body.photo-still #label, body.photo-still #caption, body.photo-still #touch, body.photo-still #toast { display:none !important }

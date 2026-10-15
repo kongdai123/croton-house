@@ -1,6 +1,7 @@
 // Material library: scanned PBR sets from Poly Haven (CC0) in assets/tex/<set>, plus procedural canvas textures (proc.js).
 // Every material is created once and shared. Units are metres; `repeat` = texture tiles per metre.
 import * as THREE from 'three';
+import { shaderReplace as rep } from './foliage_bake.js';
 import * as proc from './proc.js';
 
 const loader = new THREE.ImageLoader();
@@ -176,8 +177,8 @@ export const M = {
   umbrellaNavy: once(() => new THREE.MeshStandardMaterial({ color: 0x1d2a52, roughness: 0.9, side: THREE.DoubleSide })),
   plasticWhite: once(() => new THREE.MeshPhysicalMaterial({ color: 0xf6f6f4, roughness: 0.4, clearcoat: 0.3 })),
   terracottaWhite: once(() => new THREE.MeshStandardMaterial({ color: 0xf0ece4, roughness: 0.8 })),
-  emissiveWarm: once(() => new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffd9a0, emissiveIntensity: 1.5, roughness: 1 })),
-  screen: once(() => new THREE.MeshStandardMaterial({ map: proc.screen(), roughness: 0.3, emissive: 0xffffff, emissiveMap: proc.screen(), emissiveIntensity: 0.6 })),
+  emissiveWarm: once(() => new THREE.MeshStandardMaterial({ color: 0xfff1d6, emissive: 0xffd9a0, emissiveIntensity: 1.5, roughness: 1, userData: { emits: 'lamp' } })),
+  screen: once(() => new THREE.MeshStandardMaterial({ map: proc.screen(), roughness: 0.3, emissive: 0xffffff, emissiveMap: proc.screen(), emissiveIntensity: 0.6, userData: { emits: 'screen' } })),
 };
 
 export function setEnvironment(envMap, intensity = 1, materials = null) {
@@ -256,3 +257,40 @@ Object.assign(M, {
     m.name = 'shellWhite'; return m;
   }),
 });
+
+// Real light sources: the lamp surfaces light_switch.js collects from the fixtures (userData.lightGlow) and materials
+// marked where they are made with userData.emits ('lamp' for bulbs, shades and diffusers outside a switch, 'screen' and
+// 'indicator' for displays and LEDs that are on, 'fire'). Any other emissive colour is a raster stand-in (lighting.js
+// lifts every emissive material to a 0.12 glow by day, so cloth and paper read as backlit) and must not emit light in
+// the path tracer (photo.js), the Blender export (bake/export/setup.py) or under the baked lighting (lightmap.js).
+export const emitsLight = m => !!(m?.userData?.lightGlow || m?.userData?.emits);
+
+// Sheer voile under the baked light (lightmap.js calls this from probeLit for materials with userData.sheer = { reflect,
+// transmit }). Real voile shows two things: the room-side light its fibres reflect, and the window-side light they
+// scatter through (diffuse transmission: soft, with no image of what is behind), so the cloth is read from the probe
+// volume on both sides. The probes sample open air, but a ripplefold panel drawn back into its stack (or a narrow panel,
+// whose 12 folds share less width) shades itself fold by fold: both terms carry that occlusion, from 0.3 for a tight
+// stack to 1 for a panel drawn across, by how far the panel's folds are spread (its world x scale). The reflect /
+// transmit split is decor.js's, shared with photo mode and Cycles (setup.py), where a bunched stack reads ~0.8x the wall
+// above it.
+// The walkthrough's daytime glow (lighting.js lifts every emissive material to 0.12) has no place here: the cloth only
+// returns light it receives. The sun reaching the back of the cloth is transmitted by the same fraction, and the sheen
+// is kept soft.
+export function sheerProbePatch(sh, material) {
+  const s = material.userData.sheer;
+  material.sheerUniform ??= { value: new THREE.Vector2(s.reflect, s.transmit) };
+  sh.uniforms.uSheer = material.sheerUniform;
+  const probe = 'irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) );';
+  sh.vertexShader = 'varying float vSheerSpread;\n' + rep(sh.vertexShader, '#include <project_vertex>', '#include <project_vertex>\n\tvSheerSpread = length( modelMatrix[ 0 ].xyz );', 'sheer spread');
+  const direct = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution );\n}';
+  let f = rep(sh.fragmentShader, '#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment, 'sheer physical pars');
+  f = rep(f, direct, 'vec2 sheerK = sheerResponse();\n\treflectedLight.directDiffuse += ( sheerK.x * irradiance + sheerK.y * saturate( - dot( geometryNormal, directLight.direction ) ) * directLight.color ) * BRDF_Lambert( material.diffuseContribution );\n}', 'sheer direct');
+  f = rep(f, 'vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vec3( 0.0 );', 'sheer emission');
+  f = rep(f, '#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_SHEEN\n\tmaterial.sheenColor *= 0.3;\n#endif', 'sheer sheen');
+  f = rep(f, probe, `{ vec3 sheerN = inverseTransformDirection( geometryNormal, viewMatrix ); vec2 sheerK = sheerResponse();
+      irradiance += sheerK.x * probeIrradiance( vProbeWorld, sheerN ) + sheerK.y * probeIrradiance( vProbeWorld, - sheerN ); }`, 'sheer probe');
+  // Fold overlap has optical depth: a narrow/bunched panel covers the background with many cloth layers. Apply after
+  // the alpha map so even its weave holes close up in the stack. Same world spread drives the lighting occlusion.
+  f = rep(f, '#include <alphamap_fragment>', '#include <alphamap_fragment>\n diffuseColor.a = 1.0 - pow( max( 1.0 - diffuseColor.a, 0.0 ), max( 1.0, 0.7 / max( vSheerSpread, 0.02 ) ) );', 'sheer coverage');
+  sh.fragmentShader = 'uniform vec2 uSheer; varying float vSheerSpread;\nvec2 sheerResponse() { return uSheer * mix( 0.3, 1.0, smoothstep( 0.05, 0.7, vSheerSpread ) ); }\n' + f;
+}

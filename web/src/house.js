@@ -156,7 +156,7 @@ export function buildHouse(house, mods, opts = {}) {
   const can = group(); can.name = 'niche-recessed-can';
   can.add(cyl(0.087, 0.087, 0.006, M.trim(), { x: 3.65, y: CEIL - 0.005, z: -1.254, seg: 32 }));
   const baffle = new THREE.MeshStandardMaterial({ color: 0xbcb5a5, roughness: 0.85 });
-  const lens = new THREE.MeshStandardMaterial({ color: 0xffeed1, emissive: 0xffd49a, emissiveIntensity: 2.2, roughness: 0.5 });
+  const lens = new THREE.MeshStandardMaterial({ color: 0xffeed1, emissive: 0xffd49a, emissiveIntensity: 2.2, roughness: 0.5, userData: { emits: 'lamp' } });
   can.add(cyl(0.071, 0.071, 0.009, baffle, { x: 3.65, y: CEIL - 0.009, z: -1.254, seg: 32 }));
   const canLens = cyl(0.057, 0.057, 0.003, lens, { x: 3.65, y: CEIL - 0.015, z: -1.254, seg: 32 });
   // This can is on in the daytime reference too; preserve its glow across time toggles.

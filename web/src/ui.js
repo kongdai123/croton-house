@@ -1,6 +1,6 @@
 // HUD, panels, i18n (zh first), toasts, title screen, touch controls.
 const DICT = {
-  zh: { compareAction: 'C · 对比实拍', panoAction: 'C · 进入全景', panos: '全景', photos: '照片', posts: '小红书', mapLegends: '地图图例', shown: '显示', hidden: '隐藏', showAll: '全部显示', hideAll: '全部隐藏', on: '开启', off: '关闭', highQuality: '高画质', petHelp: 'G 叫狗狗 · K 叫猫咪', touchPetHelp: '点「叫狗狗」或「叫猫咪」呼唤宠物', jump: '跳跃', controlsTitle: '教程', controlsFoot: '? 或 / 显示或收起 · Esc 关闭', photoCard: '点击卡片或按 C 对比实拍', panoCard: '点击卡片或按 C 进入 / 离开全景',
+  zh: { timeOfDay: '时间', slot_sunrise: '日出 · 雨后晨光', slot_noon: '正午', slot_golden: '金色时刻', slot_dusk: '蓝调 · 室内灯亮起', slotHelp: 'N 切换光照时间', touchMenuSlotsHelp: '点「地图图例」切换标记、时间和画质 · 顶栏导览和语言 · 点地图展开', slotFailed: '光照加载失败，保留当前时间。', sunriseOnly: '烘焙光照仅支持日出，无法切换时间。', touchMenuBakedHelp: '地图图例可开关标记和画质 · 顶栏可开启导览和切换语言 · 点击地图可放大', compareAction: 'C · 对比实拍', panoAction: 'C · 进入全景', panos: '全景', photos: '照片', photoMode: '摄影', posts: '小红书', mapLegends: '地图图例', shown: '显示', hidden: '隐藏', showAll: '全部显示', hideAll: '全部隐藏', on: '开启', off: '关闭', highQuality: '高画质', petHelp: 'G 叫狗狗 · K 叫猫咪', touchPetHelp: '点「叫狗狗」或「叫猫咪」呼唤宠物', jump: '跳跃', controlsTitle: '教程', controlsFoot: '? 或 / 显示或收起 · Esc 关闭', photoCard: '点击卡片或按 C 对比实拍', panoCard: '点击卡片或按 C 进入 / 离开全景',
     lookHelp: '鼠标移动看四周 · 点击画面开始', walkHelp: 'WASD / 方向键行走 · Shift 快走', jumpHelp: '空格跳跃 · 坐下时按空格起身', useHelp: '点击 / E / F 互动：家具坐下，灯、窗帘、门等开关', dragHelp: '按住拖动家具 · 右键放回原处', pinsHelp: 'H 显示或隐藏全部图例 · 点击红 / 蓝 / 绿标记到取景点 · 在「地图图例」中开关', mapHelp: 'M 地图', tourHelp: 'T 导览 · 方向键退出', duskHelp: 'N 黄昏 / 白天', qualityHelp: 'J 画质', musicHelp: 'B 背景音乐，两首轮流播放', mediaHelp: '媒体：R 小红书 · P 全景 · O 照片', langHelp: 'L 中文 / English', media: '媒体', musicCredit: '音乐：Oak Studios《Tuscany》。AIR《Mike Mills》原声版，由 Guillaume Edouard 分享并允许使用', compareHelp: 'C 对比照片 / 进入全景 · Q 退出', panelHelp: 'V 小红书标记 · Esc 菜单 / 关闭',
     touchLookHelp: '右侧滑动看四周', touchWalkHelp: '左侧摇杆行走', touchJumpHelp: '点「跳跃」跳起 · 坐下时起身', touchUseHelp: '点「互动」坐下或切换灯、窗帘、门等', touchDragHelp: '对准标记或卡片，点「互动」查看实拍', touchMenuHelp: '点「地图图例」切换标记、黄昏和画质 · 顶栏导览和语言 · 点地图展开',
  place: '萨拉索塔 · 佛罗里达', lede: '以原有建筑为基础，不大拆大建：重组空间，重塑室内与室外的关系，让一座老住宅拥有新的生活。', figure: '书房 · 向庭院敞开的玻璃门',
@@ -8,7 +8,7 @@ const DICT = {
     sitOrDrag: '点击坐下 · 按住拖动', putBack: '放回原处', putAll: '全部放回', nothingMoved: '还没有移动过任何家具', rightBack: '右键放回',
     sit: '坐下', stand: '按方向键或空格起身', grab: '拖动', open: '打开', close: '关上', door: '门', pano: '全景', photo: '照片', rnpost: '小红书', goto: '去这个取景点', loading: '加载中', ready: '准备好了', tourOn: '导览进行中 · 按 T 或移动结束', tourOff: '导览结束', duskOn: '黄昏 · 室内灯亮起', dayOn: '白天', locked: '点击画面开始', fly: '飞过去…', viewpointsTitle: '全景', rednoteTitle: 'Studio Hu Dwelling 的小红书', 'Living room': '客厅', 'Kitchen': '厨房', 'Dining room': '餐厅', 'Office': '家庭室', 'Foyer': '玄关', 'Primary bedroom': '主卧', 'Primary bathroom': '主卫', 'Bedroom': '卧室', 'Bathroom': '卫生间', 'Hallway': '走廊', 'Patio': '露台', 'Backyard': '后花园', 'Front yard': '前院', 'Garage': '车库', seatHint: '坐下的高度 · 看看窗外',
     callDog: '叫狗狗', callCat: '叫猫咪', petDog: '摸摸狗狗', petCat: '摸摸猫咪', dogNoReach: '狗狗过不来，从那边到不了你这里', catNoReach: '猫咪过不来，从那边到不了你这里', dogNoReachDoor: '狗狗过不来——有扇门关着', catNoReachDoor: '猫咪过不来——有扇门关着' },
-  en: { compareAction: 'C · Compare photo', panoAction: 'C · Enter panorama', panos: 'Panoramas', photos: 'Photos', posts: 'RedNote', mapLegends: 'Map legends', shown: 'On', hidden: 'Off', showAll: 'Show all', hideAll: 'Hide all', on: 'On', off: 'Off', highQuality: 'High quality', petHelp: 'G call the dog · K call the cat', touchPetHelp: 'Tap Call the dog or Call the cat to summon a pet', jump: 'Jump', controlsTitle: 'Tutorial', controlsFoot: '? or / to show or hide · Esc to close', photoCard: 'Click the card or press C to compare', panoCard: 'Click the card or press C to enter / leave pano',
+  en: { timeOfDay: 'Time of day', slot_sunrise: 'Sunrise · after rain', slot_noon: 'Noon', slot_golden: 'Golden hour', slot_dusk: 'Blue hour · lights on', slotHelp: 'N cycle time of day', touchMenuSlotsHelp: 'Use Map legends for pins, time and quality · top bar for tour and language · tap the map to expand', slotFailed: 'Lighting could not load. Keeping the current time.', sunriseOnly: 'Baked lighting: sunrise only; time of day is locked.', touchMenuBakedHelp: 'Use Map legends for pins and quality · top bar for tour and language · tap the map to expand', compareAction: 'C · Compare photo', panoAction: 'C · Enter panorama', panos: 'Panoramas', photos: 'Photos', photoMode: 'Photograph', posts: 'RedNote', mapLegends: 'Map legends', shown: 'On', hidden: 'Off', showAll: 'Show all', hideAll: 'Hide all', on: 'On', off: 'Off', highQuality: 'High quality', petHelp: 'G call the dog · K call the cat', touchPetHelp: 'Tap Call the dog or Call the cat to summon a pet', jump: 'Jump', controlsTitle: 'Tutorial', controlsFoot: '? or / to show or hide · Esc to close', photoCard: 'Click the card or press C to compare', panoCard: 'Click the card or press C to enter / leave pano',
     lookHelp: 'Move the mouse to look · click the scene to start', walkHelp: 'WASD / arrows to walk · Shift to walk faster', jumpHelp: 'Space to jump · Space while seated to stand', useHelp: 'Click / E / F to use: sit on furniture, toggle lights, curtains, doors', dragHelp: 'Drag furniture to move · right-click to put it back', pinsHelp: 'H show or hide all legends · click red / blue / green pins to visit · toggle them in Map legends', mapHelp: 'M map', tourHelp: 'T tour · move to exit', duskHelp: 'N dusk / daylight', qualityHelp: 'J quality', musicHelp: 'B background music, two songs in turn', mediaHelp: 'Media: R RedNote · P panoramas · O photos', langHelp: 'L 中文 / English', media: 'Media', musicCredit: 'Music: “Tuscany” by Oak Studios. AIR, “Mike Mills” (acoustic), shared for use by Guillaume Edouard', compareHelp: 'C compare photo / enter panorama · Q to exit', panelHelp: 'V RedNote pins · Esc menu / close',
     touchLookHelp: 'Swipe on the right to look', touchWalkHelp: 'Use the left joystick to walk', touchJumpHelp: 'Tap Jump to jump · stand when seated', touchUseHelp: 'Tap Use to sit or toggle lights, curtains, doors', touchDragHelp: 'Aim at a pin or card and tap Use to view the photo', touchMenuHelp: 'Use Map legends for pins, dusk and quality · top bar for tour and language · tap the map to expand',
  place: 'Sarasota, Florida', lede: 'Built on the house that was already there. Nothing torn down for its own sake: rooms reorganised, inside and outside reconnected, an old house given a new way of living.', figure: 'The office, glass doors open to the courtyard',
@@ -178,9 +178,24 @@ export class UI {
     if (coarse) this.touchControls(player);
   }
   syncLegends() {
+    const slots = this.state.baked && this.state.bakedSlots?.length > 1, locked = this.state.baked && !slots;
+    for (const id of ['btn-dusk', 'legend-dusk']) {
+      const button = document.getElementById(id);
+      button.classList.toggle('hidden', !!locked); button.disabled = !!locked;
+      if (locked) button.removeAttribute('aria-keyshortcuts');
+      else if (id === 'btn-dusk') button.setAttribute('aria-keyshortcuts', 'N');
+      if (!slots && button.dataset.i18nTitle?.startsWith('slot_')) { button.dataset.i18nTitle = 'dusk'; button.title = t('dusk'); button.setAttribute('aria-label', t('dusk')); }
+      if (!slots && id === 'legend-dusk' && button.querySelector?.('[data-i18n]')?.dataset.i18n === 'timeOfDay') { const label = button.querySelector('[data-i18n]'); label.dataset.i18n = 'dusk'; label.textContent = t('dusk'); }
+      if (slots) {
+        const key = `slot_${this.state.bakedSlot ?? 'sunrise'}`;
+        if (id === 'btn-dusk') { button.dataset.i18nTitle = key; button.title = t(key); button.setAttribute('aria-label', t(key)); }
+        else { const label = button.querySelector('[data-i18n]'); if (label) { label.dataset.i18n = 'timeOfDay'; label.textContent = t('timeOfDay'); } }
+      }
+    }
     if (!this.markers) return;
     for (const [kind, id] of [['rn', 'btn-views'], ['pano', 'btn-panos'], ['photo', 'btn-photos']]) this.legendState(id, this.markers.enabled[kind], 'shown', 'hidden');
-    this.legendState('legend-dusk', this.state.dusk);
+    if (slots) { const label = document.getElementById('legend-dusk').querySelector('.legend-state'); label.dataset.i18n = `slot_${this.state.bakedSlot ?? 'sunrise'}`; label.textContent = t(label.dataset.i18n); }
+    else this.legendState('legend-dusk', this.state.dusk);
     // the pin icon in the bar turns vermilion while any pins are showing
     document.getElementById('btn-legends')?.classList.toggle('pins-on', ['rn', 'pano', 'photo'].some(k => this.markers.enabled[k]));
     const duskBtn = document.getElementById('btn-dusk'); duskBtn.classList.toggle('on', !!this.state.dusk); duskBtn.setAttribute('aria-pressed', String(!!this.state.dusk));
@@ -214,11 +229,12 @@ export class UI {
     if (on) { this.syncLegends(); this.player?.unlock(); }
   }
   renderHelp() {
+    const slots = this.state.baked && this.state.bakedSlots?.length > 1;
     const keys = matchMedia('(pointer:coarse)').matches ? ['touchLookHelp', 'touchWalkHelp', 'touchJumpHelp', 'touchUseHelp', 'touchDragHelp', 'pinsHelp', 'touchPetHelp', 'touchMenuHelp'] : ['lookHelp', 'walkHelp', 'jumpHelp', 'useHelp', 'dragHelp', 'pinsHelp', 'mapHelp', 'tourHelp', 'introHelp', 'duskHelp', 'qualityHelp', 'musicHelp', 'petHelp', 'compareHelp', 'mediaHelp', 'panelHelp', 'langHelp'];
     const body = document.getElementById('controlsBody'); body.replaceChildren();
     const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
     if (matchMedia('(pointer:coarse)').matches) {
-      for (const key of keys) body.appendChild(el('div', 'sw-plain', t(key)));
+      for (const key of keys) body.appendChild(el('div', 'sw-plain', t(this.state.baked && key === 'touchMenuHelp' ? (slots ? 'touchMenuSlotsHelp' : 'touchMenuBakedHelp') : key)));
     } else {
       const grid = el('div', 'sw-grid'); let n = 0;
       for (const column of HELP[lang] ?? HELP.en) {
@@ -227,9 +243,10 @@ export class UI {
           const group = el('section', 'sw-group'), head = el('header');
           head.append(el('span', 'sw-num', String(++n).padStart(2, '0')), el('span', 'sw-name', name)); group.appendChild(head);
           for (const [keySet, what] of rows) {
+            if (this.state.baked && !slots && keySet === 'N') continue;
             const row = el('div', 'sw-row'), ks = el('span', 'sw-keys');
             for (const k of keySet.split(' ')) ks.appendChild(el('kbd', k.length > 1 ? 'wide' : '', k));
-            row.append(ks, el('span', 'sw-what', what)); group.appendChild(row);
+            row.append(ks, el('span', 'sw-what', slots && keySet === 'N' ? t('slotHelp') : what)); group.appendChild(row);
           }
           col.appendChild(group);
         }

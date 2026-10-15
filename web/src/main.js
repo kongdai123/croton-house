@@ -20,6 +20,11 @@ import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './
 import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
 import { Stats } from './stats.js';
 import { Demo } from './demo.js';
+import { PhotoMode } from './photo.js';
+import { PhotoUI } from './photo_ui.js';
+import { applyLightmaps } from './lightmap.js';
+import { createContact } from './contact.js';
+import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -37,19 +42,22 @@ const pixelRatio = p => {
 };
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: detected.tier === 'hq', powerPreference: 'high-performance', preserveDrawingBuffer: true });
+const bakedWanted = bakedRequested(location.search);
+const bakedUnavailable = bakedWanted ? bakedCapabilityError(renderer) : null;
 renderer.setPixelRatio(pixelRatio(preset));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 300);
 scene.add(camera);
 // Size the drawing buffer from the canvas box (CSS keeps #gl covering the viewport; setSize(..., false) writes no inline size).
 // Registered before any await so viewport changes during the loading screen still reach the canvas; composer joins once lighting exists.
-let post = null, activePreset = preset;
+let post = null, activePreset = preset, photoFit = null;
 function fitView() {
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   const pr = pixelRatio(activePreset);
   if (pr !== renderer.getPixelRatio()) { renderer.setPixelRatio(pr); post?.setPixelRatio(pr); }
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h, false); post?.setSize(w, h);
+  photoFit?.();
 }
 fitView();
 // Resizes arrive in bursts while a window edge is dragged, and each fitView reallocates the drawing buffer and every
@@ -81,9 +89,11 @@ const lighting = createLighting(renderer, scene, camera, house, preset);
 const { fixtures, composer, gtao } = lighting;
 post = composer; fitView();
 async function applyTime() {
-  await lighting.applyTime(state.dusk);
+  if (baked) state.dusk = baked.slotName === 'dusk';
+  await lighting.applyTime(baked ? false : state.dusk);   // baked slots own their sky, sun and physical lamp level
   for (const o of layout.placed) o.userData.onTime?.(state.dusk, !state.ready);
   pets?.relight();
+  baked?.afterTime();
   ui.syncLegends();
 }
 
@@ -109,20 +119,43 @@ const garden = buildGarden({ quality: preset.grass, camera });
 scene.add(garden.group);
 ui.progress(0.3, 'furniture');
 const layout = new Layout(scene, fixtures, house, points);
-await layout.build((p, msg) => ui.progress(0.3 + p * 0.55, msg));
-await step(0.86, 'materials');
+await layout.build((p, msg) => ui.progress(0.3 + p * 0.35, msg));
+await step(0.66, 'materials');
 lighting.collectMaterials(scene);
-await step(0.9, 'finishing');
+await step(0.68, 'finishing');
 const batch = Q.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+// Baked sunrise is the default. Keep the complete legacy setup until staging succeeds.
+let baked = null;
+state.baked = false;
+state.bakedFallback = bakedUnavailable;
+if (bakedWanted && !state.bakedFallback) {
+  await step(0.69, 'lighting');
+  try {
+    baked = await applyLightmaps({ scene, renderer, lighting, movables: layout.movables,
+      dynamic: [...getDoors().map(d => d.group), ...layout.animated.filter(o => o.userData.toggle)],
+      slot: Q.get('lightmap') || 'sunrise', tier: Q.has('fast') ? 'mobile' : state.quality,
+      onProgress: p => ui.progress(0.69 + p * 0.22) });
+    state.baked = true; state.dusk = false;
+    state.bakedSlots = baked.availableSlots; state.bakedSlot = baked.slotName;
+  } catch (err) { state.bakedFallback = err.message; }
+}
 await step(0.92, 'controls');
 
 // ---- Player, interaction, UI systems ----
 const player = new Player(camera, canvas, state);
 player.teleport(+(Q.get('x') ?? 0.0), -(+(Q.get('y') ?? -6.9)), +(Q.get('h') ?? 0), +(Q.get('p') ?? 0));   // default: the front walk, looking at the house
-const human = new Human(scene, player);
+const human = new Human(scene, player); baked?.register(human.root);
 const interact = new Interact(scene, camera, player, layout, ui, human);
 const pets = Q.get('pets') === '0' ? null : new Pets({ scene, player, layout, camera, ui, lighting, seed: Q.has('petseed') ? +Q.get('petseed') : undefined });
+if (pets) for (const a of pets.agents) baked?.register(a.root);
 interact.pets = pets;
+function applyFeatures(p) {
+  if (!baked) return;
+  if (p.contact && !scene.userData.contact) createContact({ scene, camera, lighting, movables: layout.movables, pets, player, human });
+  scene.userData.contact?.setEnabled(p.contact);
+  baked.setFeatures(p.name);
+}
+applyFeatures(Q.has('fast') ? TIERS.mobile : preset);
 const minimap = new Minimap(player, layout, points, tour, posts, ui, (target) => goTo(target));
 const viewpoints = new Viewpoints(scene, camera, player, points, tour, ui, renderer, photoSpots);
 const rednote = new RedNote(posts, ui, viewpoints);
@@ -140,34 +173,73 @@ ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, to
 // ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA, per tier preset. J toggles quality.
 // Toggling dusk needs the other sky now, so it opens the background preparation's quiet-moment gate (see below).
 let skyUrgent = false;
-function toggleDusk() { skyUrgent = true; state.dusk = !state.dusk; ui.syncLegends(); applyTime(); }
+let slotRequestId = 0;
+async function setBakedSlot(name) {
+  if (!baked || !baked.availableSlots.includes(name)) return false;
+  const requestId = ++slotRequestId;
+  try {
+    const switched = await baked.setSlot(name);
+    if (!switched || requestId !== slotRequestId || !baked) return false;
+    state.bakedSlot = baked.slotName; state.dusk = baked.slotName === 'dusk';
+    for (const o of layout.placed) o.userData.onTime?.(state.dusk, false);
+    ui.syncLegends(); ui.toast(t(`slot_${baked.slotName}`));
+    return true;
+  } catch (err) { console.warn('baked slot kept previous scene', err); if (requestId === slotRequestId) ui.toast(t('slotFailed')); return false; }
+}
+function toggleDusk() {
+  if (baked) {
+    if (baked.availableSlots.length < 2) { ui.toast(t('sunriseOnly')); return; }
+    return setBakedSlot(baked.nextSlot());
+  }
+  skyUrgent = true; state.dusk = !state.dusk; ui.syncLegends(); applyTime();
+}
 // Mirror reflections exist only in the hq preset; their proxy scenes are built the first time it is used.
 // Foliage antialiasing. Leaves are alpha-tested cut-outs, which MSAA cannot smooth on its own; alpha-to-coverage lets the
 // cut-out edge use the multisample coverage instead. Mipmaps average a leaf's alpha down at distance, which thins
 // canopies under alpha-to-coverage, so the cutoff drops to 45% of its original while it is on. Without MSAA,
 // alpha-to-coverage would draw whole leaf cards, so it follows the tier's sample count.
 const foliageMaterials = new Set();
-scene.traverse(o => { for (const m of [].concat(o.material ?? [])) if (m.alphaTest > 0 && !m.transparent) foliageMaterials.add(m); });
+function collectFoliageMaterials() {
+  foliageMaterials.clear();
+  scene.traverse(o => { for (const m of [].concat(o.material ?? [])) if (m.alphaTest > 0 && !m.transparent) foliageMaterials.add(m); });
+}
+collectFoliageMaterials();
 function setFoliageAA(on) {
   for (const m of foliageMaterials) {
     m.userData.cutoff ??= m.alphaTest;
-    const cutoff = on ? m.userData.cutoff * 0.45 : m.userData.cutoff;
+    const cutoff = on || lighting.taa ? m.userData.cutoff * 0.45 : m.userData.cutoff;   // PCSS depth copies keep dense leaf shadows under TAA too
     if (m.alphaToCoverage !== on || m.alphaTest !== cutoff) { m.alphaToCoverage = on; m.alphaTest = cutoff; m.needsUpdate = true; }
   }
 }
-setFoliageAA(preset.msaa > 0);
+setFoliageAA(!lighting.taa && preset.msaa > 0);
 let mirrorsReady = false;
 const mirrorsOn = () => TIERS[state.quality].mirrors;
 function setQuality(name) {
-  const p = TIERS[name]; state.quality = name;
+  const p = TIERS[name]; if (!p) return Promise.resolve(); state.quality = name;
   garden.setQuality(p.grass); lighting.setQuality(p);
-  activePreset = p; setFoliageAA(p.msaa > 0); fitView();
+  applyFeatures(p);
+  const switching = baked?.setQuality(name).catch(fallbackLegacy);
+  activePreset = p; setFoliageAA(!lighting.taa && p.msaa > 0); fitView();
   if (p.mirrors && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
   ui.syncLegends();
+  return switching ?? Promise.resolve();
+}
+async function fallbackLegacy(err) {
+  if (!baked) return;
+  state.bakedFallback = err.message;
+  baked.dispose(); baked = null; state.baked = false;
+  if (window.__app) window.__app.baked = null;
+  ui.renderHelp(); ui.syncLegends();
+  const file = await daylightFile;
+  if (!lighting.daylight?.load(file)) lighting.bakeDaylight();
+  lighting.setQuality(TIERS[state.quality]);
+  collectFoliageMaterials(); setFoliageAA(TIERS[state.quality].msaa > 0);
+  await applyTime();
+  if (mirrorsReady) layout.prepareMirrors();
 }
 // The detected tier is the starting point; J switches to its pair (hq/laptop <-> mobile, mobile <-> laptop) and back.
 function toggleQuality() { const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
-ui.syncLegends();
+ui.renderHelp(); ui.syncLegends();
 
 if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
 if (Q.has('fast')) setQuality('mobile');
@@ -215,10 +287,9 @@ const stopCompileProgress = (() => {
 // compileAsync has queued every link, so the GPU process is busy on all cores: the daylight bake (~2 s of CPU ray
 // tests) runs now, overlapping the compile instead of adding to the load. Its textures upload before the warm draw.
 // Use the shipped bake when it matches this build's walls, furniture and windows; otherwise run the ray tests here.
-{ // The file was requested at startup and is normally long here; never let a stalled request hold the load.
+if (!baked) { // The file was requested at startup and is normally long here; never let a stalled request hold the load.
   const file = await Promise.race([daylightFile, new Promise(resolve => setTimeout(() => resolve(null), 4000))]);
   if (!lighting.daylight?.load(file)) {
-    if (file) console.info('data/daylight.bin is from another layout; baking live. Regenerate with: node tools/bake_daylight.mjs');
     lighting.bakeDaylight();
   }
   state.daylightSource = lighting.daylight?.source; }
@@ -254,7 +325,7 @@ const titleShown = () => !document.getElementById('title').classList.contains('h
 const quietMoment = () => titleShown() || (performance.now() - (state.enteredAt ?? 0) > 8000 && player.keys.size === 0 && !tourCtl.active && !viewpoints.fly);
 // The download starts right away; each heavy step waits for whenQuiet() (or for a dusk toggle, which needs it now).
 const whenQuiet = () => new Promise(resolve => { const check = () => (skyUrgent || quietMoment() ? idle(resolve) : setTimeout(check, 500)); check(); });
-idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other, whenQuiet).then(() => { state.otherSkyMs = performance.now() - t0; }); });
+if (!baked) idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other, whenQuiet).then(() => { state.otherSkyMs = performance.now() - t0; }); });
 if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); fitView(); }
 document.getElementById('enter').addEventListener('click', fitView);
 
@@ -265,6 +336,7 @@ const clock = new THREE.Clock(); let simT = 0;
 const toggled = layout.animated.filter(o => o.userData.toggle).map(o => ({ toggle: o.userData.toggle, value: o.userData.toggle.value }));
 const togglesMoving = () => toggled.reduce((any, t) => { const v = t.toggle.value, changed = t.toggle.moving || v !== t.value; t.value = v; return any || changed; }, false);
 function frame(dt) {
+  if (photo.active) return;   // photo mode owns the canvas while it shows a still
   stats.begin();
   simT += dt;
   tourCtl.update(dt);
@@ -281,6 +353,7 @@ function frame(dt) {
   garden.update(simT);
   minimap.draw();
   lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
+  baked?.updateMovables(dt);
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
@@ -301,6 +374,10 @@ function frame(dt) {
   stats.end();
 }
 // The demonstration (X): a scripted promenade through the controls.
+// Photo mode: a path-traced still of the current view (see photo.js).
+const photo = new PhotoMode({ renderer, scene, camera, lighting });
+const photoUI = new PhotoUI({ photo, player, ui });
+photoFit = () => photo.onResize?.();
 const demo = new Demo({ player, viewpoints, markers, pets, ui, tour: tourCtl, interact, layout });
 document.getElementById('btn-demo').onclick = () => demo.toggle();
 // Stats for nerds (hidden): the right-click menu's last item, the ` key, or ?stats=1.
@@ -310,7 +387,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
+window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
 // Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
 // Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
 // cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.
@@ -318,8 +395,11 @@ const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && 
 const framePeriod = fpsCap > 0 ? 1000 / fpsCap : 0;
 state.fpsCap = fpsCap;
 let readyFrames = 0, nextFrameAt = 0;
+// ?capture: the app stops drawing on its own so a recorder can step it frame by frame with renderAt (tools/promo.mjs).
+const CAPTURE = Q.has('capture');
 const loop = (now) => {
   requestAnimationFrame(loop);
+  if (CAPTURE && readyFrames >= 12) return;
   // The cap is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo at 30 fps judders.
   if (framePeriod && !viewpoints.panoOpaque) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
   const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true;

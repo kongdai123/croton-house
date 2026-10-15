@@ -105,14 +105,39 @@ function toilet() {
 // laid horizontally (as photographed), recessed niche, 2" grey-white marble mosaic pan, 0.10 white curb on
 // the front and right, fixed clear glass panel 0.60 × 2.00 on the front (+Z) clamped to the left wall,
 // chrome rain arm with a Ø0.20 head at 2.10, hand shower on a slide bar, single-lever valve trim.
-function shower() {
+// `win` [x0, x1, y0, y1]: a house window behind the back wall (shower-local x, heights), cut out of the tile with a tiled
+// reveal `reveal` deep back to the window frame and a quartz stool (g34, g36: the east baths' windows are in the shower).
+// The niche moves to the other side of the window or, without room for it, the bottles stand on the stool.
+function shower({ win = null, reveal = 0.14 } = {}) {
   const root = new THREE.Group(), S = 1.0, H = 2.3, bt = 0.08, lt = 0.06, pan = 0.045, curb = 0.1;
   const T = retile(L.tileLarge(), 1 / 0.6, 1 / 0.3, { oy: -pan / 0.3 });
-  // back wall with the niche cut through it (extrude UVs are in metres)
-  const nx0 = 0.06, nx1 = 0.36, ny0 = 1.08, ny1 = 1.38;
-  root.add(extrude([[-S / 2, 0], [S / 2, 0], [S / 2, H], [-S / 2, H]], bt, T, { z: -S / 2, holes: [[[nx0, ny0], [nx0, ny1], [nx1, ny1], [nx1, ny0]]] }));
-  root.add(extrude([[nx0, ny0], [nx1, ny0], [nx1, ny1], [nx0, ny1]], 0.012, T, { z: -S / 2 + 0.004 }));
-  root.add(box(nx1 - nx0, 0.012, bt - 0.012, M.quartz(), { r: 0.003, x: (nx0 + nx1) / 2, y: ny0 + 0.006, z: -S / 2 + 0.016 + (bt - 0.012) / 2 }));
+  // back wall with the niche (and the window) cut through it (extrude UVs are in metres)
+  let nx0 = 0.06, nx1 = 0.36, niche = true;
+  const ny0 = 1.08, ny1 = 1.38, xl = -S / 2 + lt;
+  if (win && !(win[1] <= nx0 || win[0] >= nx1)) {
+    if (win[0] - 0.06 - (xl + 0.04) >= nx1 - nx0) { nx1 = win[0] - 0.06; nx0 = nx1 - 0.3; }
+    else if (S / 2 - 0.04 - (win[1] + 0.06) >= nx1 - nx0) { nx0 = win[1] + 0.06; nx1 = nx0 + 0.3; }
+    else niche = false;
+  }
+  const outline = [[-S / 2, 0], [S / 2, 0], [S / 2, H], [-S / 2, H]], holes = [];
+  if (niche) holes.push([[nx0, ny0], [nx0, ny1], [nx1, ny1], [nx1, ny0]]);
+  if (win) {
+    const [wx0, wx1, wy0, wy1] = [Math.max(win[0], -S / 2), Math.min(win[1], S / 2), win[2], Math.min(win[3], H - 0.02)];
+    // a window reaching the wall's edge is a notch in the outline, else a hole
+    if (wx1 >= S / 2) outline.splice(2, 0, [S / 2, wy0], [wx0, wy0], [wx0, wy1], [S / 2, wy1]);
+    else if (wx0 <= -S / 2) outline.push([-S / 2, wy1], [wx1, wy1], [wx1, wy0], [-S / 2, wy0]);
+    else holes.push([[wx0, wy0], [wx0, wy1], [wx1, wy1], [wx1, wy0]]);
+    const w = wx1 - wx0, h = wy1 - wy0, zr = -S / 2 - reveal / 2 + 0.002, t = 0.012;
+    root.add(box(w, t, reveal + bt, M.quartz(), { x: (wx0 + wx1) / 2, y: wy0 - t / 2 + 0.002, z: zr + bt / 2 }));   // stool
+    root.add(box(w, t, reveal, T, { x: (wx0 + wx1) / 2, y: wy1 + t / 2, z: zr }));                                   // head
+    if (wx0 > -S / 2) root.add(box(t, h, reveal, T, { x: wx0 - t / 2, y: wy0 + h / 2, z: zr }));
+    if (wx1 < S / 2) root.add(box(t, h, reveal, T, { x: wx1 + t / 2, y: wy0 + h / 2, z: zr }));
+  }
+  root.add(extrude(outline, bt, T, { z: -S / 2, holes }));
+  if (niche) {
+    root.add(extrude([[nx0, ny0], [nx1, ny0], [nx1, ny1], [nx0, ny1]], 0.012, T, { z: -S / 2 + 0.004 }));
+    root.add(box(nx1 - nx0, 0.012, bt - 0.012, M.quartz(), { r: 0.003, x: (nx0 + nx1) / 2, y: ny0 + 0.006, z: -S / 2 + 0.016 + (bt - 0.012) / 2 }));
+  }
   // left wall: shape x → world -z after the 90° turn
   root.add(extrude([[-S / 2, 0], [S / 2 - bt, 0], [S / 2 - bt, H], [-S / 2, H]], lt, T, { x: -S / 2, ry: PI / 2 }));
   // mosaic pan and L-shaped curb
@@ -154,9 +179,10 @@ function shower() {
   root.add(hs);
   root.add(cyl(0.02, 0.02, 0.03, CH, { x: wx + 0.015, y: 0.95, z: -0.1, rz: PI / 2, seg: 16 }));
   root.add(tube([[wx + 0.03, 0.95, -0.1], [wx + 0.09, 0.85, -0.05], [wx + 0.12, 0.8, 0.05], [wx + 0.1, 1.1, 0.13], [wx + 0.08, 1.47, 0.12]], 0.007, L.hose(), { seg: 48, radial: 8 }));
-  // a couple of bottles in the niche
-  root.add(lathe([[0, 0], [0.03, 0], [0.032, 0.02], [0.032, 0.15], [0.02, 0.18], [0.012, 0.19], [0.012, 0.21], [0, 0.21]], M.plasticWhite(), { x: 0.14, y: ny0 + 0.012, z: -S / 2 + 0.05, seg: 16 }));
-  root.add(lathe([[0, 0], [0.025, 0], [0.027, 0.02], [0.027, 0.16], [0.018, 0.18], [0, 0.18]], new THREE.MeshPhysicalMaterial({ color: 0xc9d97a, roughness: 0.3, clearcoat: 0.6 }), { x: 0.24, y: ny0 + 0.012, z: -S / 2 + 0.05, seg: 16 }));
+  // a couple of bottles in the niche, or on the window stool
+  const [bx, by, bz] = niche ? [nx0 + 0.08, ny0 + 0.012, -S / 2 + 0.05] : [Math.max(win[0], -S / 2 + lt) + 0.08, win[2] + 0.002, -S / 2 + 0.04];
+  root.add(lathe([[0, 0], [0.03, 0], [0.032, 0.02], [0.032, 0.15], [0.02, 0.18], [0.012, 0.19], [0.012, 0.21], [0, 0.21]], M.plasticWhite(), { x: bx, y: by, z: bz, seg: 16 }));
+  root.add(lathe([[0, 0], [0.025, 0], [0.027, 0.02], [0.027, 0.16], [0.018, 0.18], [0, 0.18]], new THREE.MeshPhysicalMaterial({ color: 0xc9d97a, roughness: 0.3, clearcoat: 0.6 }), { x: bx + 0.1, y: by, z: bz, seg: 16 }));
   describe(root, { id: 'bath-shower', name: 'Walk-in corner shower', zh: '步入式淋浴间', note: 'collider = back wall; userData.colliders lists back + left walls; the shower floor stays walkable' });
   setCollider(root, { w: S, d: bt, x: 0, z: -S / 2 + bt / 2, h: H });
   root.userData.colliders = [{ w: S, d: bt, x: 0, z: -S / 2 + bt / 2, h: H }, { w: lt, d: S - bt, x: -S / 2 + lt / 2, z: bt / 2, h: H }];
@@ -201,6 +227,10 @@ export const items = {
   mirrorCabinetSmall: () => mirrorCabinet(0.9, 2, 'bath-mirrorCabinetSmall', 'Mirrored medicine cabinet 0.90', '镜柜（小）'),
   toilet,
   shower,
+  // the east baths' showers: their back walls stand in front of the house windows (bath B 647cb4d0fa, hall bath
+  // fde2f2f0ba; sill 0.95, head 2.06), which open through the tile as in g34 and g36. Shower-local x = shower centre y - plan y.
+  showerWindowB: () => shower({ win: [1.34 - 1.3609, 1.34 - 0.7605, 0.95, 2.06] }),
+  showerWindowHall: () => shower({ win: [-0.77 + 0.1546, -0.77 + 1.0719, 0.95, 2.06] }),
   ladderRack,
   washerDryer,
   waterHeater,

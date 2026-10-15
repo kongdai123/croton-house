@@ -9,7 +9,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { M } from './materials.js';
+import { M, emitsLight } from './materials.js';
 import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
@@ -293,6 +293,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
           // into the source split the same material features into two or three programs each, and every program is
           // a ~90 KB shader that Windows compiles slowly.
           const paint = { value: local.userData.daylightPaint ?? 1 };
+          local.bakedHooks = { compile: previousCompile, key: previousKey };
           local.onBeforeCompile = function (shader, renderer) {
             previousCompile.call(this, shader, renderer);
             if (!shader.uniforms.uHQShadow) hqEffects.patch(shader);
@@ -308,6 +309,14 @@ export function createLighting(renderer, scene, camera, house, preset) {
       };
       o.material = Array.isArray(o.material) ? o.material.map(assign) : assign(o.material);
     });
+  }
+
+  // Baked lighting (lightmap.js) carries the light through cloth already: only real light sources keep their glow
+  // (materials.js emitsLight), the rest go dark and leave the daytime rule above for good.
+  function physicalEmission() {
+    const previous = new Map(emissives), levels = new Map([...emissives.keys()].map(m => [m, m.emissiveIntensity]));
+    for (const material of [...emissives.keys()]) if (!emitsLight(material)) { material.emissiveIntensity = 0; emissives.delete(material); }
+    return () => { for (const [m, v] of previous) emissives.set(m, v); for (const [m, v] of levels) m.emissiveIntensity = v; };
   }
 
   function setLightingEnvironment(texture, intensity, materials) {
@@ -357,6 +366,9 @@ export function createLighting(renderer, scene, camera, house, preset) {
       light.color.set(dusk ? 0xffc884 : 0xf1f5ff);
       light.intensity = dusk ? (light.userData.north ? 3.2 : 0) : light.userData.dayIntensity;
     }
+    // Raster look: every emissive outside a light switch (screens, LEDs, and the cellular shades and sheers, whose glow
+    // stands in for daylight through the cloth) settles at a faint 0.12 by day, the lamps' own off level
+    // (light_switch.js), and brightens at dusk. Baked lighting drops the stand-ins (physicalEmission).
     for (const [material, base] of emissives) material.emissiveIntensity = dusk ? base * 1.8 : 0.12;
     for (const { toggle } of lightSwitches) toggle.onTime(dusk);
     indoor = indoorWeight(camera.position);
@@ -392,7 +404,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     }
     // Warm wall bounce increases smoothly as the eye moves away from an opening.
     const intensity = dusk ? mix(0.5, 0.55, indoor) : mix(0.62, 0.68, indoor);
-    for (const material of interiorMaterials) material.envMapIntensity = intensity;
+    for (const material of interiorMaterials) if (!material.userData.probeLit) material.envMapIntensity = intensity;
     const skyMix = (dusk ? 0.08 : 0.35) * (1 - indoor);
     if (blendTarget && (lastSkyMix < 0 || Math.abs(skyMix - lastSkyMix) > 0.002)) {
       blendMaterial.uniforms.skyMix.value = skyMix;
@@ -406,7 +418,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     // 4096 map with every caster cost ~25 ms a frame for the whole of the arrival door's swing. The frame after movement
     // stops still refreshes, so the resting shadow is exact.
     shadowClock += dt;
-    if ((moving && shadowClock >= 0.1) || (!moving && wasMoving)) { sun.shadow.needsUpdate = true; shadowClock = 0; }
+    if (!sun.userData.bakedShadow && ((moving && shadowClock >= 0.1) || (!moving && wasMoving))) { sun.shadow.needsUpdate = true; shadowClock = 0; }
     wasMoving = moving;
   }
 
@@ -426,7 +438,8 @@ export function createLighting(renderer, scene, camera, house, preset) {
     if (!material?.isMeshStandardMaterial || material.userData.petPlace) return material;
     const place = { in: { value: 0 }, out: { value: 1 } };
     material.userData.petPlace = place;
-    const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey?.bind(material);
+    const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();
+    material.bakedHooks = { compile: prev, key: prevKey };
     material.onBeforeCompile = function (shader, renderer) {
       prev?.call(this, shader, renderer);
       shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightingChunk);
@@ -436,10 +449,11 @@ export function createLighting(renderer, scene, camera, house, preset) {
       if (!shader.fragmentShader.includes('uniform float uPetOut')) shader.fragmentShader = 'uniform float uPetOut;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= mix(0.18, 1.0, uPetOut);');
     };
-    material.customProgramCacheKey = () => (prevKey ? prevKey() : '') + '|pet-light';
+    material.customProgramCacheKey = () => prevKey + '|pet-light';
     return material;
   }
   function syncPet(material, indoorPet) {
+    if (material?.userData.probeLit) return;
     const place = material?.userData.petPlace; if (!place) return;
     place.in.value = indoorPet && !dusk ? 1 : 0;
     place.out.value = indoorPet ? 0 : 1;
@@ -453,5 +467,5 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  return { reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  return { reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

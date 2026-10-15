@@ -1,0 +1,12 @@
+AgX was created by Troy Sobotka. These LUTs use Eary Chow's version of AgX:
+https://github.com/EaryChow/AgX
+
+The LUTs come from Blender 4.5's bundled colour-management configuration
+(datafiles/colormanagement) and are distributed under the GNU General Public
+License (GNU GPL).
+
+web/tools/agx_lut.py converts luminance_compensation_bt2020.cube (37^3) and
+AgX_Base_sRGB.cube (57^3) to agx_lut.bin.gz: RGB, red fastest, rounded to
+16-bit values at a scale of 64000, delta-coded along red modulo 65536,
+stored little-endian, then gzip-compressed. The cubes retain their bundled
+order: luminance compensation first, AgX base second.

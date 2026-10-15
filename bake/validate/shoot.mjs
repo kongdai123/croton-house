@@ -20,7 +20,7 @@ const browser = await chromium.launch({ headless: true, args: ['--use-angle=vulk
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.on('pageerror', e => console.log('[pageerror]', e.message));
 page.on('console', m => { const t = m.text(); if (/lightmaps|error|warn/i.test(m.type() + t) && !/deprecated|sigmaRadians|serialize/.test(t)) console.log('[console]', t.slice(0, 300)); });
-await page.goto(`http://127.0.0.1:${port}/index.html?capture&pins=0&pets=0&eye=1.35&x=0&y=0&${query}`, { waitUntil: 'load' });
+await page.goto(`http://127.0.0.1:${port}/index.html?capture&pins=0&pets=0&eye=1.35&x=0&y=0&${query}&autoexp=0`, { waitUntil: 'load' });
 const gpu = await page.evaluate(() => { const gl = document.createElement('canvas').getContext('webgl2'); const e = gl.getExtension('WEBGL_debug_renderer_info'); return gl.getParameter(e ? e.UNMASKED_RENDERER_WEBGL : gl.RENDERER); });
 console.log('renderer', gpu);
 if (/SwiftShader|llvmpipe|software/i.test(gpu)) { console.log('software rasteriser: refusing to render'); process.exit(2); }

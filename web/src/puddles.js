@@ -1,5 +1,6 @@
 // ?lightmap=sunrise&puddlerefl: one clipped, half-resolution ground reflection, independent of the HQ SSR pass.
 import * as THREE from 'three';
+import { fragmentSamplers, samplerLimit, warnDropped } from './sampler_budget.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -31,8 +32,14 @@ vec3 puddleRadiance( vec3 fallback, vec3 p, vec3 n ) {
 `;
 // Call AFTER wetPatch/reflPatch. Replace the puddle's indirect specular, rather than adding a second reflection.
 // radiance remains the existing box-projected probe (or sky) result, including its baked specular occlusion.
-export function patchPuddleReflection(sh, uniforms) {
-  if (!sh.fragmentShader.includes('float wetPuddle =')) return false;
+// The first optional feature left out when the material would exceed the GPU's fragment texture units: the baked hook
+// decides (noPlanarPuddle), and this checks again with the final shader (sampler_budget.js).
+export function patchPuddleReflection(sh, uniforms, renderer = null, material = null) {
+  if (!sh.fragmentShader.includes('float wetPuddle =') || sh.noPlanarPuddle) return false;
+  if (renderer) {
+    const n = fragmentSamplers(sh) + 1, limit = samplerLimit(renderer, material);
+    if (n > limit) { warnDropped(material, n, limit, ['planar puddle']); return false; }
+  }
   Object.assign(sh.uniforms, uniforms);
   sh.fragmentShader = sh.fragmentShader.replace('void main() {', PLANAR_PUDDLE_GLSL + '\nvoid main() {')
     .replace('#include <lights_physical_fragment>', `
@@ -64,6 +71,19 @@ function isPuddle(x, z) {
   return 0.55 * noise(x, z) + 0.3 * noise(x * 2.1 + 5.2, z * 2.1 + 5.2) + 0.15 * noise(x * 4.3 + 9.1, z * 4.3 + 9.1) > 0.565;
 }
 const wetMaterial = m => m?.isMeshStandardMaterial && !/^garden-/.test(m.name || '') && !(m.alphaTest > 0) && !m.isFogVolumeMaterial;
+const outsideBox = b => !(insidePlan(b.min.x, -b.min.z) && insidePlan(b.max.x, -b.max.z) && insidePlan(b.min.x, -b.max.z) && insidePlan(b.max.x, -b.min.z));
+// A ground triangle that reaches clearly outside the house: its centroid, or a point 15 cm in from a corner, with a
+// 10 cm margin all round outside the plan. Floors and walls meeting the plan's outline (vertices on it) do not count.
+const clearlyOutside = (x, z) => !insidePlan(x - 0.1, -z) && !insidePlan(x + 0.1, -z) && !insidePlan(x, -z - 0.1) && !insidePlan(x, -z + 0.1);
+function outsideTriangle(a, b, c) {
+  const gx = (a.x + b.x + c.x) / 3, gz = (a.z + b.z + c.z) / 3;
+  if (clearlyOutside(gx, gz)) return true;
+  for (const v of [a, b, c]) {
+    const d = Math.hypot(gx - v.x, gz - v.z), t = d > 0.15 ? 0.15 / d : 1;
+    if (clearlyOutside(v.x + (gx - v.x) * t, v.z + (gz - v.z) * t)) return true;
+  }
+  return false;
+}
 // The source material's program key, kept live (it may depend on state). three's default key is the callback's source,
 // which after wrapping would be the same string for every material, so that one is frozen from the original callback.
 function cacheKey(m) {
@@ -73,13 +93,26 @@ function cacheKey(m) {
 function visible(o) { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }
 function reflectionVisible(o) { for (let p = o; p; p = p.parent) if (!p.visible && !(p.name === 'frozen' && p.userData.batch)) return false; return true; }
 
-export function createPuddles({ scene, renderer, wet = 1, params = {} }) {
+// furniture: roots of movable and animated objects (lightmap.js movables, dynamic), never given the planar reflection
+export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture = [] }) {
   const P = { ...PUDDLE_PARAMS, ...params }, flat = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
   flat.matrixWorldAutoUpdate = false; camera.userData.hqReflection = true; camera.userData.puddleReflection = true;
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true, samples: 0 });
   rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
   const uniforms = { uPuddleTex: { value: rt.texture }, uPuddleMatrix: { value: new THREE.Matrix4() }, uPuddleValid: { value: 0 }, uPuddleTime: { value: 0 }, uPuddleY: { value: P.ground }, uPuddleEdge: { value: P.edge }, uPuddleWind: { value: P.wind } };
   const sources = [], lights = [], samples = [], materials = new Map(), patches = [], candidates = [];
+  // Materials that can show a puddle: on a flat, up-facing triangle at a puddle plane's height outside the house (the
+  // wet mask is zero elsewhere). Only these take the planar reflection: never indoor floors or furniture, whose
+  // shaders have no texture unit to spare on Apple GPUs (16 per fragment shader).
+  const ground = new Set(), roots = new Set(furniture);
+  const isFurniture = o => { for (let p = o; p; p = p.parent) if (roots.has(p)) return true; return false; };
+  const markGround = (o, i) => {
+    if (isFurniture(o)) return;
+    const ms = o.material;
+    if (!Array.isArray(ms)) { if (wetMaterial(ms)) ground.add(ms); return; }
+    const g = o.geometry.groups.find(g => i >= g.start && i < g.start + g.count);
+    const m = g ? ms[g.materialIndex] : ms[0]; if (wetMaterial(m)) ground.add(m);
+  };
   const stats = { renders: 0, draws: 0, triangles: 0, width: 0, height: 0, visible: false, plane: P.ground, visibilityMs: 0, samples: 0 };
   const box = new THREE.Box3(), sphere = new THREE.Sphere(), size = new THREE.Vector2(), eye = new THREE.Vector3(), target = new THREE.Vector3(), up = new THREE.Vector3();
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), point = new THREE.Vector3();
@@ -104,7 +137,8 @@ export function createPuddles({ scene, renderer, wet = 1, params = {} }) {
   }
   // Ground samples come from real triangles, including merged batches, never the house's interior floor.
   function groundSamples(o, bounds) {
-    if (o.isInstancedMesh || bounds.min.y > P.terrace + 0.005 || bounds.max.y < -0.03 || ![].concat(o.material).some(wetMaterial)) return;
+    if (bounds.min.y > P.terrace + 0.005 || bounds.max.y < -0.03 || ![].concat(o.material).some(wetMaterial)) return;
+    if (o.isInstancedMesh) { if (outsideBox(bounds) && !isFurniture(o)) for (const m of [].concat(o.material)) if (wetMaterial(m)) ground.add(m); return; }
     const g = o.geometry, pos = g.attributes.position, idx = g.index, n = idx?.count ?? pos.count;
     for (let i = 0; i < n; i += 3) {
       a.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(o.matrixWorld);
@@ -113,6 +147,8 @@ export function createPuddles({ scene, renderer, wet = 1, params = {} }) {
       if (Math.max(a.y, b.y, c.y) - Math.min(a.y, b.y, c.y) > 0.002 || a.y < -0.03 || a.y > P.terrace + 0.005) continue;
       ab.subVectors(b, a); ac.subVectors(c, a);
       if (point.crossVectors(ab, ac).y <= 0) continue;
+      // the reflection shows within 4 cm of a puddle plane (puddleRadiance): ground 0.012, terrace 0.22
+      if ((Math.abs(a.y - P.ground) < 0.04 || Math.abs(a.y - P.terrace) < 0.04) && outsideTriangle(a, b, c)) markGround(o, i);
       const height = Math.abs(a.y - P.terrace) < 0.015 ? P.terrace : P.ground;
       const x0 = Math.max(-35, Math.min(a.x, b.x, c.x)), x1 = Math.min(35, Math.max(a.x, b.x, c.x));
       const z0 = Math.max(-35, Math.min(a.z, b.z, c.z)), z1 = Math.min(35, Math.max(a.z, b.z, c.z));
@@ -161,10 +197,10 @@ export function createPuddles({ scene, renderer, wet = 1, params = {} }) {
   scene.traverse(o => {
     if (!o.isMesh) return;
     for (const m of [].concat(o.material)) {
-      if (!wetMaterial(m) || patches.some(p => p.material === m)) continue;
+      if (!wetMaterial(m) || !ground.has(m) || patches.some(p => p.material === m)) continue;
       const compile = m.onBeforeCompile, oldKey = m.customProgramCacheKey, key = cacheKey(m);
-      const wrapped = function (sh, r) { compile.call(this, sh, r); patchPuddleReflection(sh, uniforms); };
-      m.onBeforeCompile = wrapped; m.customProgramCacheKey = () => key() + '|planar-puddle'; m.needsUpdate = true;
+      const wrapped = function (sh, r) { compile.call(this, sh, r); patchPuddleReflection(sh, uniforms, r, this); };
+      m.onBeforeCompile = wrapped; m.customProgramCacheKey = () => key() + '|planar-puddle'; m.needsUpdate = true; m.userData.planarPuddle = true;
       patches.push({ material: m, compile, oldKey, wrapped });
     }
   });
@@ -257,10 +293,10 @@ export function createPuddles({ scene, renderer, wet = 1, params = {} }) {
   const before = scene.onBeforeRender;
   const hook = function (r, s, cam, ...args) { before?.call(this, r, s, cam, ...args); update(cam); };
   scene.onBeforeRender = hook;
-  stats.samples = samples.length; stats.sources = sources.length;
+  stats.samples = samples.length; stats.sources = sources.length; stats.materials = patches.length;
   return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, patch: sh => patchPuddleReflection(sh, uniforms), setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
     if (scene.onBeforeRender === hook) scene.onBeforeRender = before;
-    for (const p of patches) if (p.material.onBeforeCompile === p.wrapped) { p.material.onBeforeCompile = p.compile; p.material.customProgramCacheKey = p.oldKey; p.material.needsUpdate = true; }
+    for (const p of patches) { delete p.material.userData.planarPuddle; if (p.material.onBeforeCompile === p.wrapped) { p.material.onBeforeCompile = p.compile; p.material.customProgramCacheKey = p.oldKey; p.material.needsUpdate = true; } }
     for (const { material } of materials.values()) material.dispose();
     rt.dispose(); uniforms.uPuddleValid.value = 0;
   } };

@@ -15,6 +15,7 @@ direct light and shadows stay live; everything else (sky light, every bounce, th
 | Merge | `scripts/composite_v2.py` | Blender's Python | `slot.exr`, `lamps.exr`, tone-curved arrays, `encoding.json` |
 | Encode | `scripts/encode_webp.py`, `scripts/compact_uv.py` | Python | `slot.webp`, `lamps.webp`, `lightmap_uv2.bin.gz` |
 | Validate | `validate/shoot.mjs <out> '<query>'` | headless Chrome on a GPU | the site through the reference cameras |
+| Switchable lamps | `export/switch_groups.mjs` (the site's switches), `scripts/lamp_groups.py` (groups, one physical light per switch, bake scene), `scripts/lamp_groups_tasks.py` (bake + probe tasks per group), `scripts/lamp_groups_pack.py` (merge, pack), `scripts/lamp_groups_render.py` (Cycles references with chosen groups on), `validate/shoot_lamps.mjs` | Chrome, Blender, Python | `v2/lampgroups/`: `encoding.json`, `lampgroups_<t>_0/1.webp`, `half/`, `quarter/`, `probes.bin` |
 
 Layers: **slot** = sky light and its bounces plus the sun's bounces; **lamps** = the house's lamps at unit level,
 scaled live. Values are Cycles' DIFFUSE bake without colour (E/pi), so the site multiplies by pi.
@@ -25,3 +26,10 @@ Encoding: 8-bit RGB, stored y = sqrt(x / (x + K)), decoded x = K y^2 / (1 - y^2)
 
 Environment: `BLENDER` (Blender 4.5 LTS), `CROTON_SITE_PACKAGES` (numpy for Blender's Python), `CROTON_SITE` (site
 folder that `shoot.mjs` serves). Cluster job wrappers are kept outside the repo in `bake/cluster/`.
+
+Lamp groups (web/src/lamp_groups.js): the house's light switches grouped by room and default state, every group baked
+alone at its physical level (lamps layer, 3000 K) and stored as luminance in one channel of an RGB atlas (three groups per
+WebP, K per group; the group's mean baked chromaticity in encoding.json), with its luminance SH at the light probes. A
+switch that is on is at full level at every time of day; a slot only picks which switches are on by default
+(`DEFAULT_ON`). Without `v2/lampgroups/` the site falls back to the shared lamps layer at the slot's level.
+

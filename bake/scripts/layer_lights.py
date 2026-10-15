@@ -1,7 +1,7 @@
 # Light set-up shared by the lightmap and probe bakes, so both see exactly the same light for a layer.
 #   sky    : the sky's light, direct and bounced (no sun, no lamps)
 #   sunind : the sun's bounced light only (its direct light is drawn live)
-#   lamps  : the house's lamps at unit level, direct and bounced
+#   lamps  : the house's lamps at unit level, direct and bounced; with lampGroup, one switch group's alone
 # Movable objects are hidden: they are lit by probes at run time.
 import bpy, math
 from slots import resolve
@@ -47,6 +47,11 @@ def configure(scene, cfg):
             o.hide_render = layer != 'lamps'
             bb = next((n for n in o.data.node_tree.nodes if n.type == 'BLACKBODY'), None) if o.data.node_tree else None
             if bb: bb.inputs[0].default_value = cfg.get('lampK', 3000)
+    # one switch group alone (lamp_groups.py: lights lampgrpNN_*, lamp surfaces tagged lamp_group = NN)
+    group = cfg.get('lampGroup') if layer == 'lamps' else None
+    if group is not None:
+        for o in scene.objects:
+            if o.type == 'LIGHT' and o.name.startswith('lamp'): o.hide_render = not o.name.startswith(f'lampgrp{group:02d}_')
     bpy.data.objects['mist'].hide_render = True
     # movable objects are lit by probes at run time: keep them out of the bake entirely (no ghost shadows)
     for o in scene.objects:
@@ -54,5 +59,6 @@ def configure(scene, cfg):
     # lamp shades glow only in the lamps layer
     for m in bpy.data.materials:
         b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
-        if b and b.inputs['Emission Strength'].default_value > 0 and layer != 'lamps': b.inputs['Emission Strength'].default_value = 0
+        if b and b.inputs['Emission Strength'].default_value > 0 and (layer != 'lamps' or (group is not None and m.get('lamp_group') != group)):
+            b.inputs['Emission Strength'].default_value = 0
     return layer

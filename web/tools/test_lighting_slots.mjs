@@ -17,7 +17,7 @@ assert.equal(nextSlot('sunrise', ['sunrise']), 'sunrise');
 assert.equal(nextSlot('noon', ['dusk', 'sunrise', 'noon']), 'dusk');
 const manifest = Object.fromEntries([...SLOT_ORDER].reverse().map(s => [`v2/${s}/encoding.json`, `v2/${s}/encoding.hash.json`]));
 assert.deepEqual(await discoverSlots('assets/lightmaps', manifest, () => { throw Error('manifest must prevent probing'); }), SLOT_ORDER);
-assert.deepEqual(await discoverSlots('assets/lightmaps', {}, fetcher), []);
+assert.deepEqual(await discoverSlots('assets/lightmaps', {}, fetcher), ['sunrise']);   // an empty manifest (dev checkout) probes like a missing one
 assert.deepEqual(await discoverSlots('', null, async url => {
   if (url.includes('sunrise')) return { ok: true, json: async () => encoding };
   if (url.includes('noon')) return { ok: true, json: async () => ({ K: { slot: NaN, lamps: 1 } }) };
@@ -44,8 +44,9 @@ for (const name of SLOT_ORDER) {
   const cfg = JSON.parse(execFileSync('python3', [fileURLToPath(new URL('../../bake/scripts/slots.py', import.meta.url)), name], { encoding: 'utf8' }));
   for (const k of ['az', 'el', 'strength', 'color']) assert.deepEqual(cfg.sun[k], SLOTS[name][k]);
   for (const k of ['ev', 'wet', 'lamps']) assert.equal(cfg[k], SLOTS[name][k]);
+  assert.deepEqual(cfg.autoExposure, SLOTS[name].autoExposure);
 }
-assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, wet: 1, lamps: 0.25 });
+assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { minEV: -0.5, maxEV: 3.5 }, wet: 1, lamps: 0.25 });
 const dir = await mkdtemp(join(tmpdir(), 'croton-slots-'));
 try {
   const built = await build({ stdin: { contents: "export { createSlotRuntime } from './src/lightmap_slots.js'; export { bakeFoliage } from './src/foliage_bake.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
@@ -60,7 +61,7 @@ try {
     layers: [texture(name + '/slot'), texture(name + '/lamps')], sky: texture(name + '/sky'),
     refl: { count: 1, uniforms: { uReflTex: { value: texture(name + '/refl') },
       uReflPos: { value: new Float32Array([0, 1, 0]) }, uReflMin: { value: new Float32Array([-1, 0, -1]) }, uReflMax: { value: new Float32Array([1, 2, 1]) }, uReflMips: { value: 1 } } },
-    volume: { uniforms: Object.fromEntries(['R', 'G', 'B'].map(ch => [`uProbe${ch}`, { value: texture(name + '/probe' + ch) }])), fill() {} }, foliage: { name },
+    volume: { uniforms: { uProbeSH: { value: texture(name + '/probe') } }, fill() {} }, foliage: { name },
   });
   const initial = data('sunrise'), scene = new T.Scene(), commits = [], params = [], renders = [];
   let fail = '', pendingLoad = null;
@@ -68,7 +69,7 @@ try {
   const runtime = createSlotRuntime({ scene, renderer, initial, available: SLOT_ORDER,
     disposeAtlas: t => t.dispose(),
     foliage: { stage(f) { return { begin() { begunFoliage.push(f.name); }, finish() { finishedFoliage.push(f.name); } }; } },
-    load: async name => { if (pendingLoad) await pendingLoad.promise; if (fail) throw Error(fail); return data(name); },
+    load: async (name, res) => { if (pendingLoad) await pendingLoad.promise; if (fail) throw Error(fail); return { ...data(name), resolution: res ?? 'half' }; },
     setParams: p => params.push(p), commit: d => commits.push(d.name),
   });
   const originalSky = scene.background, originalSlot = initial.layers[0];
@@ -87,13 +88,18 @@ try {
   const dusk = runtime.request('dusk'); await tick(); runtime.update(1.5); await dusk;
   assert.equal(runtime.name, 'dusk'); assert.equal(runtime.params.lamps, 1); assert.equal(runtime.params.strength, 0);
   assert.ok(disposed.includes('sunrise/slot')); // only two slots retained
-  const shader = { uniforms: {}, fragmentShader: 'texture( uProbeR, uvw ).x + texture( uProbeR, uvw ).y + texture( uProbeG, uvw ).z', vertexShader: 'vFoliage = vec3( decoded, foliage.z ); }' };
+  // a quality change releases the snapshot at the old resolution as soon as the new one is current
+  const noonDisposed = disposed.includes('noon/slot');
+  const quality = runtime.setQuality('quarter'); await tick(); runtime.update(1.5); await quality;
+  assert.equal(runtime.name, 'dusk'); assert.equal(disposed.filter(n => n === 'dusk/slot').length, 1); assert.equal(disposed.includes('noon/slot'), true);
+  assert.equal(noonDisposed, false);
+  const shader = { uniforms: {}, fragmentShader: 'vec4 probeSH( vec3 uvw, float ch ) { return probeTex( uProbeSH, uvw, ch ); }', vertexShader: 'vFoliage = vec3( decoded, foliage.z ); }' };
   runtime.patchProbe(shader); runtime.patchFoliage(shader);
   assert.equal(shader.uniforms.uProbeBlend, runtime.uniforms.uSlotBlend);
-  assert.ok(shader.fragmentShader.includes('texture( uProbeNextR, uvw )')); assert.ok(shader.vertexShader.includes('uSlotLampA * vFoliage.y'));
+  assert.ok(shader.fragmentShader.includes('probeTex( uProbeNextSH, uvw, ch )')); assert.equal((shader.fragmentShader.match(/sampler3D/g) ?? []).length, 1); assert.ok(shader.vertexShader.includes('uSlotLampA * vFoliage.y'));
   runtime.combine(0.6); assert.equal(runtime.uniforms.uSlotLampA.value, 0.6);
-  runtime.dispose(); assert.equal(new Set(disposed).size, disposed.length);
-  assert.equal(disposed.length, 21); // 7 textures per slot
+  runtime.dispose(); assert.equal(new Set(disposed).size, 15);   // dusk's names twice: both resolutions
+  assert.equal(disposed.length, 20); // 5 textures per slot snapshot (one packed probe volume): sunrise, noon, dusk at half and quarter
   // Match and stage actual foliage attributes without touching the active encoded layer until commit.
   globalThis.location = { search: '' };
   const plantScene = new T.Scene(), plantMaterial = new T.MeshStandardMaterial(); plantMaterial.name = 'plant-fixture';

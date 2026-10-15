@@ -3,7 +3,8 @@
 # evaluate shGetIrradianceAt() directly. Points inside geometry (mostly back faces around them) are marked invalid.
 # usage: blender -b scene/scene_lm.blend -P scripts/probe.py -- '<json>'
 #   {"layer", "chunk", "chunks", "probes": "scene/probes.json", "out": "bakes/<slot>/probes_<layer>_cNN.json",
-#    "samples": n, ... the slot's light settings (see layer_lights.py)}
+#    "samples": n, ... the slot's light settings (see layer_lights.py); optional "near": [[x, y, z]...] and "maxDist"
+#    skip points farther than maxDist from every near point (zeros: a lamp group's light does not reach them)}
 import bpy, sys, json, math, time, os
 import numpy as np
 from mathutils import Vector
@@ -80,9 +81,13 @@ mine = [i for i in range(len(probes)) if i % cfg['chunks'] == cfg['chunk']]
 dg = bpy.context.evaluated_depsgraph_get()
 dirs = [Vector(d) for d in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))]
 results = []; t1 = time.time()
+# a lamp group's probes (lamp_groups_tasks.py): points farther than maxDist from all of its lights get no light (zeros)
+near = [Vector(q) for q in cfg.get('near', [])]; far = cfg.get('maxDist')
 for n, i in enumerate(mine):
     bxp, byp, bzp = probes[i]['b']
     p = Vector((bxp, byp, bzp))
+    if far and (not near or min((p - q).length for q in near) > far):
+        results.append([i, 1] + [0.0] * 27); continue
     # inside geometry: rays leave through back faces
     back = 0
     for d in dirs:

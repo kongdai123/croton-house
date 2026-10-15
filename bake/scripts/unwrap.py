@@ -80,6 +80,15 @@ def material_skip(mi):
 
 # ---- gather units
 extras = lambda n: n.extras if isinstance(n.extras, dict) else {}
+# The exporter writes one glTF mesh for meshes that share both geometry and material (the leaves of a louvered bifold),
+# and each unit's lightmap UVs go into its primitives below: shared, only the last unit's layout would reach Blender and
+# all of them would bake into that one chart, leaving the others' empty. Every node gets its own mesh (primitives).
+import copy
+mesh_users = {}
+for ni, n in enumerate(g.nodes):
+    if n.mesh is not None: mesh_users.setdefault(n.mesh, []).append(ni)
+for mi, users in mesh_users.items():
+    for ni in users[1:]: g.meshes.append(copy.deepcopy(g.meshes[mi])); g.nodes[ni].mesh = len(g.meshes) - 1
 IDS = any('lm' in extras(n) for n in g.nodes)
 units = {}
 for ni, n in enumerate(g.nodes):
@@ -157,7 +166,7 @@ if not REUSE:
     layout, ATLAS = None, [atlas.width, atlas.height]
 
 # ---- write the Blender scene and the site sidecar
-header = {'atlas': list(ATLAS), 'units': []}; chunks = []; offset = 0
+header = {'atlas': list(ATLAS), 'units': [], 'ownPrimitives': True}; chunks = []; offset = 0   # the site trusts shared-geometry units
 if IDS: header['skipped'] = {k: v for k, v in skip_ids.items() if k}
 for i, u in enumerate(keep):
     vmap, nidx, uvs = layout[i] if REUSE else atlas[i]

@@ -132,20 +132,37 @@ try {
   assert.deepEqual(baked4.availableSlots, shipped);
   const multiShader = compile(mesh4.material);
   assert.ok(multiShader.fragmentShader.includes('mix( lmSample( lightMap'));
-  assert.ok(multiShader.fragmentShader.includes('uniform highp sampler2DArray uReflNextTex'));
+  assert.ok(multiShader.fragmentShader.includes('uniform float uReflNext;') && !multiShader.fragmentShader.includes('uReflNextTex'));
+  assert.equal((multiShader.fragmentShader.match(/sampler2DArray/g) ?? []).length, 1);   // current + next slot: one array
   const late4 = new THREE.Mesh(g, new THREE.MeshStandardMaterial()); scene4.add(late4); baked4.register(late4);
   const probeShader = compile(late4.material);
-  assert.ok(probeShader.fragmentShader.includes('texture( uProbeNextR, uvw )'));
+  assert.ok(probeShader.fragmentShader.includes('probeTex( uProbeNextSH, uvw, ch )'));
+  assert.equal((probeShader.fragmentShader.match(/uniform highp sampler3D/g) ?? []).length, 2);   // packed R/G/B: current + next
+  // sampler budget (Apple GPUs: 16 per fragment shader): too few units leave out optional features in order (here, with
+  // contact.js stubbed, the slot crossfade of the probe volume), with one warning naming the material
+  assert.equal(probeShader.samplerCount, 4);   // uSunDepth, uReflTex (both slots), uProbeSH + uProbeNextSH
+  const tight = { ...renderer, capabilities: { ...renderer.capabilities, maxTextures: 3 } }, warnings = [], warn = console.warn;
+  console.warn = (...a) => warnings.push(a.join(' '));
+  const fitted = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+  try { late4.material.onBeforeCompile(fitted, tight); } finally { console.warn = warn; }
+  assert.ok(!fitted.fragmentShader.includes('uProbeNextSH') && fitted.fragmentShader.includes('probeIrradiance('));
+  assert.equal(fitted.samplerCount, 3); assert.equal(warnings.length, 1); assert.match(warnings[0], /4 fragment samplers > 3 texture units; dropped slot crossfade$/);
   assert.equal(multiShader.uniforms.uSlotBlend, probeShader.uniforms.uProbeBlend);
   const pump = async promise => { let done = false; promise.finally(() => { done = true; }); for (let i = 0; i < 40 && !done; i++) { await new Promise(setImmediate); baked4.updateMovables(0.25); } assert.ok(done, 'transition must complete'); await promise; };
   const dawnAtlas = baked4.target.texture, dawnBackground = scene4.background;
   fail = '/dusk/quarter/slot.webp'; await assert.rejects(baked4.setSlot('dusk'), /404/);
   assert.equal(baked4.target.texture, dawnAtlas); assert.equal(scene4.background, dawnBackground); assert.equal(baked4.slotName, 'sunrise');
-  fail = ''; await pump(baked4.setSlot('dusk'));
+  const slotProgress = [];
+  fail = ''; await pump(baked4.setSlot('dusk', (fraction, detail) => slotProgress.push({ fraction, ...detail })));
+  const stagedSlot = slotProgress.find(p => p.phase === 'staged');
+  assert.equal(stagedSlot.loaded, 8); assert.equal(stagedSlot.total, 8); assert.equal(stagedSlot.fraction, 1);
+  assert.equal(slotProgress.at(-1).phase, 'transition'); assert.equal(slotProgress.at(-1).name, 'dusk');
   assert.equal(baked4.slotName, 'dusk'); assert.equal(sun4.intensity, 0); assert.equal(renderer.toneMappingExposure, 1);
   assert.equal(multiShader.uniforms.uSlotBlend.value, 0); assert.equal(multiShader.uniforms.uWet.value, 0);
   assert.equal(mesh4.material.lightMap, baked4.target.texture);
-  await pump(baked4.setSlot('sunrise')); assert.equal(baked4.target.texture, dawnAtlas);
+  const previousProgressCount = slotProgress.length, cachedProgress = [];
+  await pump(baked4.setSlot('sunrise', (_, d) => cachedProgress.push(d.phase))); assert.equal(baked4.target.texture, dawnAtlas);
+  assert.deepEqual(cachedProgress, ['transition']); assert.equal(slotProgress.length, previousProgressCount);
   await pump(baked4.setQuality('laptop')); assert.equal(baked4.stats.resolution, 'half');
   await pump(baked4.setSlot('golden')); assert.equal(baked4.slotName, 'golden');
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });

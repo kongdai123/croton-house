@@ -1,0 +1,844 @@
+{
+ "version": 1,
+ "curve": "sqrt(x/(x+K))",
+ "lampK": 3000,
+ "textures": 5,
+ "size": [
+  5896,
+  5897
+ ],
+ "groups": [
+  {
+   "name": "living",
+   "index": 0,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "niche-recessed-can@0.00,0.00,0.00",
+     "id": "niche-recessed-can",
+     "root": [
+      0,
+      0,
+      0
+     ],
+     "name": "Alcove recessed can",
+     "exterior": false,
+     "lit": true,
+     "energy": 70.0,
+     "w": 0.5
+    },
+    {
+     "key": "decor-track-light@3.00,-2.77,2.40",
+     "id": "decor-track-light",
+     "root": [
+      3,
+      -2.77,
+      2.405
+     ],
+     "name": "Track light 1",
+     "exterior": false,
+     "lit": true,
+     "energy": 23.333,
+     "w": 0.1667
+    },
+    {
+     "key": "decor-track-light@3.00,-2.35,2.40",
+     "id": "decor-track-light",
+     "root": [
+      3,
+      -2.35,
+      2.405
+     ],
+     "name": "Track light 2",
+     "exterior": false,
+     "lit": true,
+     "energy": 23.333,
+     "w": 0.1667
+    },
+    {
+     "key": "decor-track-light@3.00,-1.93,2.40",
+     "id": "decor-track-light",
+     "root": [
+      3,
+      -1.93,
+      2.405
+     ],
+     "name": "Track light 3",
+     "exterior": false,
+     "lit": true,
+     "energy": 23.333,
+     "w": 0.1667
+    }
+   ],
+   "tex": 0,
+   "ch": 0,
+   "K": 0.17375,
+   "color": [
+    1.85722,
+    0.82193,
+    0.23977
+   ],
+   "gain": 1.5
+  },
+  {
+   "name": "livingCenter",
+   "index": 1,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "decor-track-light@0.20,-0.62,2.40",
+     "id": "decor-track-light",
+     "root": [
+      0.2,
+      -0.62,
+      2.405
+     ],
+     "name": "Track light 1",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    },
+    {
+     "key": "decor-track-light@0.20,-0.20,2.40",
+     "id": "decor-track-light",
+     "root": [
+      0.2,
+      -0.2,
+      2.405
+     ],
+     "name": "Track light 2",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    },
+    {
+     "key": "decor-track-light@0.20,0.22,2.40",
+     "id": "decor-track-light",
+     "root": [
+      0.2,
+      0.22,
+      2.405
+     ],
+     "name": "Track light 3",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    }
+   ],
+   "tex": 0,
+   "ch": 1,
+   "K": 0.01252,
+   "color": [
+    2.20288,
+    0.72417,
+    0.19036
+   ],
+   "gain": 2.0
+  },
+  {
+   "name": "kitchenPendant",
+   "index": 2,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "kitchen-pendant@-1.33,-1.28,0.00",
+     "id": "kitchen-pendant",
+     "root": [
+      -1.33,
+      -1.28,
+      0
+     ],
+     "name": "Oak pendant",
+     "exterior": false,
+     "lit": true,
+     "energy": 35.0,
+     "w": 1.0
+    }
+   ],
+   "tex": 0,
+   "ch": 2,
+   "K": 0.05627,
+   "color": [
+    1.88818,
+    0.81325,
+    0.23454
+   ],
+   "gain": 1.5
+  },
+  {
+   "name": "kitchen",
+   "index": 3,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "kitchen-west-run-b@-2.93,-3.02,1.65",
+     "id": "kitchen-west-run-b",
+     "root": [
+      -2.933,
+      -3.022,
+      1.646
+     ],
+     "name": "Range hood lamp 1",
+     "exterior": false,
+     "lit": false,
+     "energy": 10.0,
+     "w": 0.1111
+    },
+    {
+     "key": "kitchen-west-run-b@-2.93,-2.52,1.65",
+     "id": "kitchen-west-run-b",
+     "root": [
+      -2.933,
+      -2.522,
+      1.646
+     ],
+     "name": "Range hood lamp 2",
+     "exterior": false,
+     "lit": false,
+     "energy": 10.0,
+     "w": 0.1111
+    },
+    {
+     "key": "decor-track-light@-1.33,-3.42,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -1.33,
+      -3.42,
+      2.405
+     ],
+     "name": "Track light 1",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.2593
+    },
+    {
+     "key": "decor-track-light@-1.33,-3.00,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -1.33,
+      -3,
+      2.405
+     ],
+     "name": "Track light 2",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.2593
+    },
+    {
+     "key": "decor-track-light@-1.33,-2.58,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -1.33,
+      -2.58,
+      2.405
+     ],
+     "name": "Track light 3",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.2593
+    }
+   ],
+   "tex": 1,
+   "ch": 0,
+   "K": 0.0297,
+   "color": [
+    1.89788,
+    0.80975,
+    0.24065
+   ],
+   "gain": 2.0
+  },
+  {
+   "name": "dining",
+   "index": 4,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "dining-pendant@1.85,3.50,0.00",
+     "id": "dining-pendant",
+     "root": [
+      1.85,
+      3.5,
+      0
+     ],
+     "name": "Paper lantern",
+     "exterior": false,
+     "lit": true,
+     "energy": 55.0,
+     "w": 1.0
+    }
+   ],
+   "tex": 1,
+   "ch": 1,
+   "K": 0.73436,
+   "color": [
+    1.93155,
+    0.80245,
+    0.21384
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "family",
+   "index": 5,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "decor-track-light@-1.32,3.20,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -1.32,
+      3.2,
+      2.405
+     ],
+     "name": "Track light 1",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    },
+    {
+     "key": "decor-track-light@-0.90,3.20,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -0.9,
+      3.2,
+      2.405
+     ],
+     "name": "Track light 2",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    },
+    {
+     "key": "decor-track-light@-0.48,3.20,2.40",
+     "id": "decor-track-light",
+     "root": [
+      -0.48,
+      3.2,
+      2.405
+     ],
+     "name": "Track light 3",
+     "exterior": false,
+     "lit": false,
+     "energy": 23.333,
+     "w": 0.3333
+    }
+   ],
+   "tex": 1,
+   "ch": 2,
+   "K": 0.01679,
+   "color": [
+    2.12151,
+    0.74647,
+    0.20899
+   ],
+   "gain": 2.0
+  },
+  {
+   "name": "primary",
+   "index": 6,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "decor-recessed-light@-4.30,2.60,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      -4.3,
+      2.6,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@-4.30,4.50,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      -4.3,
+      4.5,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@-2.85,2.45,-0.23",
+     "id": "decor-recessed-light",
+     "root": [
+      -2.85,
+      2.45,
+      -0.23
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@-2.85,4.65,-0.23",
+     "id": "decor-recessed-light",
+     "root": [
+      -2.85,
+      4.65,
+      -0.23
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@-4.15,1.20,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      -4.15,
+      1.2,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    }
+   ],
+   "tex": 2,
+   "ch": 0,
+   "K": 0.18537,
+   "color": [
+    1.87226,
+    0.81803,
+    0.23411
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "primaryLamps",
+   "index": 7,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "props-rooms-egg-lamp@-5.55,2.95,0.54",
+     "id": "props-rooms-egg-lamp",
+     "root": [
+      -5.55,
+      2.95,
+      0.536
+     ],
+     "name": "Woven rattan egg lamp",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.5
+    },
+    {
+     "key": "props-rooms-linen-lamp@-2.64,2.38,0.28",
+     "id": "props-rooms-linen-lamp",
+     "root": [
+      -2.64,
+      2.38,
+      0.28
+     ],
+     "name": "Stoneware lamp with glowing linen shade",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.5
+    }
+   ],
+   "tex": 2,
+   "ch": 1,
+   "K": 0.51105,
+   "color": [
+    1.91958,
+    0.80571,
+    0.21681
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "primaryBath",
+   "index": 8,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "decor-recessed-light@-6.95,4.40,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      -6.95,
+      4.4,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.5
+    },
+    {
+     "key": "decor-recessed-light@-6.95,2.90,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      -6.95,
+      2.9,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.5
+    }
+   ],
+   "tex": 2,
+   "ch": 2,
+   "K": 0.54043,
+   "color": [
+    1.83113,
+    0.82922,
+    0.24443
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "bedroomB",
+   "index": 9,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "nightstandPine@7.64,4.51,0.00",
+     "id": "nightstandPine",
+     "root": [
+      7.64,
+      4.51,
+      0
+     ],
+     "name": "Rattan bedside lamp",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "nightstandPine@7.64,2.21,0.00",
+     "id": "nightstandPine",
+     "root": [
+      7.64,
+      2.21,
+      0
+     ],
+     "name": "Rattan bedside lamp",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@6.00,3.60,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      6,
+      3.6,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "decor-recessed-light@6.00,2.50,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      6,
+      2.5,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    },
+    {
+     "key": "props-rooms-linen-lamp@4.32,4.91,0.80",
+     "id": "props-rooms-linen-lamp",
+     "root": [
+      4.32,
+      4.91,
+      0.8
+     ],
+     "name": "Stoneware lamp with glowing linen shade",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.2
+    }
+   ],
+   "tex": 3,
+   "ch": 0,
+   "K": 0.79444,
+   "color": [
+    1.90838,
+    0.80815,
+    0.22568
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "bedroom3",
+   "index": 10,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "nightstandPine@7.64,-2.88,0.00",
+     "id": "nightstandPine",
+     "root": [
+      7.64,
+      -2.88,
+      0
+     ],
+     "name": "Rattan bedside lamp",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.3333
+    },
+    {
+     "key": "nightstandPine@7.64,-5.10,0.00",
+     "id": "nightstandPine",
+     "root": [
+      7.64,
+      -5.1,
+      0
+     ],
+     "name": "Rattan bedside lamp",
+     "exterior": false,
+     "lit": false,
+     "energy": 30.0,
+     "w": 0.3333
+    },
+    {
+     "key": "decor-recessed-light@6.00,-3.95,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      6,
+      -3.95,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.3333
+    }
+   ],
+   "tex": 3,
+   "ch": 1,
+   "K": 0.42471,
+   "color": [
+    1.94613,
+    0.79761,
+    0.21885
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "hall",
+   "index": 11,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "decor-recessed-light@4.55,-0.20,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      4.55,
+      -0.2,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.5
+    },
+    {
+     "key": "decor-recessed-light@4.55,1.00,0.00",
+     "id": "decor-recessed-light",
+     "root": [
+      4.55,
+      1,
+      0
+     ],
+     "name": "Recessed can light",
+     "exterior": false,
+     "lit": true,
+     "energy": 30.0,
+     "w": 0.5
+    }
+   ],
+   "tex": 3,
+   "ch": 2,
+   "K": 0.21522,
+   "color": [
+    1.845,
+    0.82552,
+    0.24016
+   ],
+   "gain": 0.6
+  },
+  {
+   "name": "garage",
+   "index": 12,
+   "always": false,
+   "exterior": false,
+   "members": [
+    {
+     "key": "garage-garageDoorOpen@-6.52,-5.85,0.00",
+     "id": "garage-garageDoorOpen",
+     "root": [
+      -6.52,
+      -5.85,
+      0
+     ],
+     "name": "Garage opener lamp",
+     "exterior": false,
+     "lit": false,
+     "energy": 15.0,
+     "w": 0.1111
+    },
+    {
+     "key": "garage-shopLight@-5.70,-1.60,0.00",
+     "id": "garage-shopLight",
+     "root": [
+      -5.7,
+      -1.6,
+      0
+     ],
+     "name": "LED linear shop light 1.2 m",
+     "exterior": false,
+     "lit": true,
+     "energy": 60.0,
+     "w": 0.4444
+    },
+    {
+     "key": "garage-shopLight@-4.40,-3.60,0.00",
+     "id": "garage-shopLight",
+     "root": [
+      -4.4,
+      -3.6,
+      0
+     ],
+     "name": "LED linear shop light 1.2 m",
+     "exterior": false,
+     "lit": true,
+     "energy": 60.0,
+     "w": 0.4444
+    }
+   ],
+   "tex": 4,
+   "ch": 0,
+   "K": 0.50946,
+   "color": [
+    1.72105,
+    0.84912,
+    0.37138
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "porch",
+   "index": 13,
+   "always": false,
+   "exterior": true,
+   "members": [
+    {
+     "key": "decor-wall-light-black@0.80,-4.91,0.00",
+     "id": "decor-wall-light-black",
+     "root": [
+      0.8,
+      -4.912,
+      0
+     ],
+     "name": "Porch wall sconce (black, perforated)",
+     "exterior": true,
+     "lit": true,
+     "energy": 30.0,
+     "w": 1.0
+    }
+   ],
+   "tex": 4,
+   "ch": 1,
+   "K": 0.06971,
+   "color": [
+    1.80364,
+    0.83633,
+    0.25487
+   ],
+   "gain": 1.0
+  },
+  {
+   "name": "always",
+   "index": 14,
+   "always": true,
+   "exterior": false,
+   "members": [],
+   "tex": 4,
+   "ch": 2,
+   "K": 0.01,
+   "color": [
+    0.85255,
+    1.0311,
+    1.12613
+   ],
+   "gain": 1.0
+  }
+ ],
+ "rows": [
+  2948,
+  2949
+ ],
+ "tiers": {
+  "half": [
+   2948,
+   2949
+  ],
+  "quarter": [
+   1474,
+   1475
+  ]
+ },
+ "probes": {
+  "count": 3558,
+  "coefs": 9
+ }
+}

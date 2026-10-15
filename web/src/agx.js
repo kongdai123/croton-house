@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
-const GLSL = `uniform sampler2D tDiffuse; uniform highp sampler3D lumLut, agxLut; uniform float exposure; varying vec2 vUv;
+const GLSL = `uniform sampler2D tDiffuse, tAutoExposure; uniform bool autoExposure; uniform highp sampler3D lumLut, agxLut; uniform float exposure; varying vec2 vUv;
 const mat3 IN = mat3(0.559463047, 0.0762332609, 0.0655375095, 0.304775811, 0.787952395, 0.16454273, 0.135812941, 0.135774849, 0.769741528);
 const mat3 LOOK = mat3(0.967977806, 0.131809967, 0.0468677678, 0.117887618, 0.916062285, 0.0124191066, -0.0858536371, -0.047868188, 0.940833412);
 const mat3 VIEW = mat3(1.04730554, -0.153314683, -0.0501479231, -0.135979098, 1.11078232, -0.00788863052, 0.0886511001, 0.0425245458, 1.05790992);
@@ -31,7 +31,8 @@ vec3 tetra(highp sampler3D t, vec3 c) {
 }
 void main() {
   vec4 t = texture2D(tDiffuse, vUv);
-  vec3 c = dec(tetra(lumLut, enc(IN * (t.rgb * exposure))));
+  float gain = autoExposure ? texture2D(tAutoExposure, vec2(0.5)).r : exposure;
+  vec3 c = dec(tetra(lumLut, enc(IN * (t.rgb * gain))));
   c = dec((enc(LOOK * c) - 0.4) * 1.2 + 0.4);
   c = pow(max(tetra(agxLut, enc(VIEW * c)), 0.), vec3(2.4));
   // OCIO's sRGB encoding (its exact break point, not 0.0031308)
@@ -65,7 +66,7 @@ export async function loadAgXLuts(url = 'assets/agx/agx_lut.bin.gz') {
 export function blenderAgX(outputPass, url = 'assets/agx/agx_lut.bin.gz', staged = null) {
   return outputPass.blenderAgX ??= Promise.resolve(staged ?? loadAgXLuts(url)).then(([lumLut, agxLut]) => {
     const material = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, lumLut: { value: lumLut }, agxLut: { value: agxLut }, exposure: { value: 1 } },
+      uniforms: { tDiffuse: { value: null }, lumLut: { value: lumLut }, agxLut: { value: agxLut }, exposure: { value: 1 }, tAutoExposure: { value: null }, autoExposure: { value: false } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: GLSL, depthTest: false, depthWrite: false,
     });
@@ -73,6 +74,8 @@ export function blenderAgX(outputPass, url = 'assets/agx/agx_lut.bin.gz', staged
     outputPass.render = (renderer, writeBuffer, readBuffer, ...rest) => {
       if (renderer.toneMapping !== THREE.AgXToneMapping) return render(renderer, writeBuffer, readBuffer, ...rest);
       material.uniforms.tDiffuse.value = readBuffer.texture; material.uniforms.exposure.value = renderer.toneMappingExposure;
+      material.uniforms.tAutoExposure.value = outputPass.autoExposureTexture ?? null;
+      material.uniforms.autoExposure.value = !!outputPass.autoExposureTexture;
       renderer.setRenderTarget(outputPass.renderToScreen ? null : writeBuffer); quad.render(renderer);
     };
     return material;

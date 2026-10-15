@@ -175,16 +175,19 @@ ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, to
 let skyUrgent = false;
 let slotRequestId = 0;
 async function setBakedSlot(name) {
-  if (!baked || !baked.availableSlots.includes(name)) return false;
+  if (!state.ready || !firstFrameDrawn || state.bakedSlotPending || !baked || !baked.availableSlots.includes(name)) return false;
   const requestId = ++slotRequestId;
+  state.bakedSlotPending = name; ui.syncLegends();
+  const loading = ui.slotLoading(name);
   try {
-    const switched = await baked.setSlot(name);
+    const switched = await baked.setSlot(name, loading.progress);
     if (!switched || requestId !== slotRequestId || !baked) return false;
     state.bakedSlot = baked.slotName; state.dusk = baked.slotName === 'dusk';
     for (const o of layout.placed) o.userData.onTime?.(state.dusk, false);
     ui.syncLegends(); ui.toast(t(`slot_${baked.slotName}`));
     return true;
-  } catch (err) { console.warn('baked slot kept previous scene', err); if (requestId === slotRequestId) ui.toast(t('slotFailed')); return false; }
+  } catch (err) { console.warn('baked slot kept previous scene', err); loading.hide(); if (requestId === slotRequestId) ui.toast(t('slotFailed')); return false; }
+  finally { loading.hide(); state.bakedSlotPending = null; ui.syncLegends(); }
 }
 function toggleDusk() {
   if (baked) {
@@ -257,7 +260,7 @@ await step(0.96, 'shaders'); lapStart = lap('yield1', lapStart);
 // first frame is drawn shows a loading screen over the empty canvas until the warm draw below has put a frame on it.
 const warming = document.getElementById('warming');
 let firstFrameDrawn = false;
-document.getElementById('enter').addEventListener('click', () => { state.enteredAt ??= performance.now(); if (!firstFrameDrawn) warming.classList.remove('hidden'); });
+document.getElementById('enter').addEventListener('click', () => { state.enteredAt ??= performance.now(); if (!firstFrameDrawn) ui.showLoading(); });
 state.ready = true; state.loadMs = performance.now(); ui.ready(); fitView();
 await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 lapStart = lap('yield2', lapStart);
@@ -314,7 +317,7 @@ try {
 lapStart = lap('draw', lapStart);
 firstFrameDrawn = true;
 document.getElementById('warmbar').style.width = '100%';
-if (!warming.classList.contains('hidden')) { warming.classList.add('done'); setTimeout(() => warming.classList.add('hidden'), 450); }
+ui.hideLoading();
 state.lightingWarmupMs = performance.now() - warmupStart;
 // The other time of day (HDR download, CPU tint, PMREM and room bounce) waits until the walkthrough is up.
 // Both skies share the CubeUV environment layout and fixed light counts, so a dusk toggle reuses the compiled programs.

@@ -467,5 +467,5 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  return { reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  return { camera, indoorWeight, reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

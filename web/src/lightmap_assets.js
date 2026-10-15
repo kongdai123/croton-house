@@ -10,12 +10,12 @@ export async function lightmapAssets(base) {
 // bottom half) comes back as its flipped parts with the texture row each starts at: the bottom half first, so the
 // texture holds the same rows as one flipped atlas. The caller uploads each part with texSubImage2D into one texture
 // (no 2D canvas: it would colour-manage and hold a second full-size copy) and closes the parts.
-export async function lightmapBitmap(url, rows) {
+export async function lightmapBitmap(url, rows, track = work => work()) {
   const urls = Array.isArray(url) ? url : [url];
-  const results = await Promise.allSettled(urls.map(async u => {
+  const results = await Promise.allSettled(urls.map(u => track(async () => {
     const r = await fetch(u); if (!r.ok) throw new Error(`lightmap ${r.status}: ${u}`);
     return createImageBitmap(await r.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none', imageOrientation: 'flipY' });
-  }));
+  })));
   if (results.some(r => r.status === 'rejected')) {
     for (const r of results) if (r.status === 'fulfilled') r.value.close();
     throw results.find(r => r.status === 'rejected').reason;

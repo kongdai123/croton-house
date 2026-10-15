@@ -16,14 +16,18 @@ import * as THREE from 'three';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CONTACT, contactPatch } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
+import { createBakedAutoExposure } from './auto_exposure.js';
 import { createPuddles } from './puddles.js';
 import { bakeFoliage, loadFoliage, shaderReplace as rep, shaderPatch, shaderKey } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
+import { createLampGroups, lampGroupGLSL, lampGroupsWanted, loadGroupProbes, validGroupEncoding } from './lamp_groups.js';
+import { createSlotProgress } from './slot_progress.js';
 import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch, emitsLight } from './materials.js';
+import { auditPrograms, fitSamplers } from './sampler_budget.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
@@ -54,7 +58,7 @@ function wetPatch(sh, wet) {
   sh.fragmentShader = PUDDLE_GLSL + rep(sh.fragmentShader, '#include <lights_physical_fragment>', 'diffuseColor.rgb *= mix( 1.0, 0.62, wetMask ) * mix( 1.0, 0.55, wetPuddle ); roughnessFactor = mix( roughnessFactor, max( 0.06, roughnessFactor * 0.3 ), wetMask ); roughnessFactor = mix( roughnessFactor, 0.03, wetPuddle );\n#include <lights_physical_fragment>', 'wet physical');
 }
 // contact.js is shared with the live pass. Validate its replacement sites before invoking its baked hook.
-function checkedContact(sh, baked) {
+function checkedContact(sh, baked, sun = true) {
   if (sh.uniforms.uContactDepth) return;
   const check = (src, token, name) => rep(src, token, token, 'contact ' + name);
   check(sh.fragmentShader, 'getDirectionalLightInfo( directionalLight, directLight );', 'sun');
@@ -62,7 +66,17 @@ function checkedContact(sh, baked) {
     check(sh.vertexShader, '#include <project_vertex>', 'vertex');
     check(sh.fragmentShader, 'irradiance += lightMapIrradiance;', 'irradiance');
   } else if (sh.fragmentShader.includes('irradiance += probeIrradiance( vProbeWorld,')) check(sh.fragmentShader, 'irradiance += probeIrradiance( vProbeWorld,', 'probe');
-  contactPatch(sh, baked);
+  contactPatch(sh, baked, sun);
+}
+// Optional features, in the order they are left out when a material would exceed the GPU's fragment texture units
+// (sampler_budget.js; 16 on Apple GPUs). puddles.js marks the materials it will give a planar puddle reflection.
+// The reflection probes' next-slot blend and the contact AO cost no sampler (one array, uniforms) and always stay.
+const planarPuddle = (s, m) => ({ name: 'planar puddle', cost: m.userData.planarPuddle && s.fragmentShader.includes('float wetPuddle =') ? 1 : 0 });
+const contactSun = s => ({ name: 'contact sun', cost: CONTACT && !s.uniforms.uContactDepth ? 2 : 0 });
+function fitBaked(s, renderer, m, crossfade) {
+  const drop = fitSamplers(s, renderer, m, [planarPuddle(s, m), contactSun(s), crossfade]);
+  if (drop.has('planar puddle')) s.noPlanarPuddle = true;
+  return drop;
 }
 
 function wetten(c, cls, wet) {
@@ -370,8 +384,8 @@ function relayout(geometry, unit) {
 // files were, so the same lightmap UVs apply. A split layer (15 MB file cap) is uploaded part by part into one texture.
 // Tone-curved atlases get a full mip chain (three allocates it and fills it with an encoded box filter, which
 // linearMips then replaces); RGBM (no encoding.json, legacy) stays single-level.
-async function loadRGBM(url, rows, renderer, mips = true) {
-  const image = await lightmapBitmap(url, rows), opts = { flipY: false, premultiplyAlpha: false, colorSpace: THREE.NoColorSpace, channel: 1, generateMipmaps: mips, minFilter: mips ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, magFilter: THREE.LinearFilter, anisotropy: mips ? 4 : 1 };
+async function loadRGBM(url, rows, renderer, mips = true, track) {
+  const image = await lightmapBitmap(url, rows, track), opts = { flipY: false, premultiplyAlpha: false, colorSpace: THREE.NoColorSpace, channel: 1, generateMipmaps: mips, minFilter: mips ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter, magFilter: THREE.LinearFilter, anisotropy: mips ? 4 : 1 };
   if (Math.max(image.width, image.height) > renderer.capabilities.maxTextureSize) { if (image.parts) image.parts.forEach(p => p.bitmap.close()); else image.close(); throw new Error('lightmap atlas exceeds maxTextureSize'); }
   if (!image.parts) { const t = Object.assign(new THREE.Texture(image), opts); t.needsUpdate = true; t.userData.restore = () => renderer.initTexture?.(t); return t; }
   const t = Object.assign(new THREE.DataTexture(null, image.width, image.height), opts);
@@ -521,22 +535,28 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let enc = v2 ? await fetch(asset(`${dir}/${slot}/encoding.json`)).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   if (!v2 || !enc || !SLOTS[slot] || !['slot', 'lamps'].every(k => Number.isFinite(enc.K?.[k]) && enc.K[k] > 0)) throw new Error('Invalid baked encoding or slot');
   progress();
+  // Switchable lamps (lamp_groups.js): one baked layer per group of light switches, each at its physical level when on.
+  // Without them (missing, invalid, failed to load, ?lmgroups=0) the shared lamps layer at the slot's level.
+  let groupMeta = lampGroupsWanted() ? await fetch(asset(`${dir}/lampgroups/encoding.json`)).then(r => r.ok ? r.json() : null).catch(() => null) : null;
+  if (groupMeta && !validGroupEncoding(groupMeta)) { console.warn('lamp groups: invalid encoding, using the shared lamps layer'); groupMeta = null; }
+  let groups = groupMeta ? createLampGroups({ meta: groupMeta, switches: lighting.lightSwitches, dir, asset, renderer }) : null;
   let resolution = v2 && enc ? lmResolution(tier) : 'full', shadowSize = Math.min(TIERS[tier].shadowMap, renderer.capabilities.maxTextureSize);
   // A missing tier is a failed bake, never a reason to allocate the full atlas on a small device.
-  const loadAtlases = async (res, name = slot, meta = enc) => {
+  const loadAtlases = async (res, name = slot, meta = enc, track = work => work()) => {
     const divisor = { full: 1, half: 2, quarter: 4 }[res];
     if (header.atlas.some(n => Math.ceil(n / divisor) > renderer.capabilities.maxTextureSize)) throw new Error('lightmap atlas exceeds maxTextureSize');
     const path = `${dir}/${name}${res === 'full' ? '' : '/' + res}`;
     const readLayer = (layer, folder, encoding) => {
       const rows = res === 'full' ? encoding?.rows?.[layer] : null;
-      return loadRGBM(rows ? rows.map((_, i) => asset(`${folder}/${layer}_${i}.webp`)) : asset(`${folder}/${layer}.webp`), rows, renderer, true);
+      return loadRGBM(rows ? rows.map((_, i) => asset(`${folder}/${layer}_${i}.webp`)) : asset(`${folder}/${layer}.webp`), rows, renderer, true, track);
     };
     const lampsAtlas = async () => {
+      if (groups) { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1); t.needsUpdate = true; t.userData.unused = true; return t; }   // lamp groups instead
       if (name === 'sunrise') return readLayer('lamps', path, meta);
       const ownK = meta.K.lamps;
       const own = () => { meta.K.lamps = ownK; return readLayer('lamps', path, meta); };
       const shared = async () => {
-        const encoding = await fetch(asset(`${dir}/sunrise/encoding.json`)).then(r => r.ok ? r.json() : null);
+        const encoding = await track(() => fetch(asset(`${dir}/sunrise/encoding.json`)).then(r => r.ok ? r.json() : null));
         if (!validEncoding(encoding)) throw Error('Invalid shared lamp encoding');
         const t = await readLayer('lamps', `${dir}/sunrise${res === 'full' ? '' : '/' + res}`, encoding);
         meta.K.lamps = encoding.K.lamps; return t;
@@ -551,7 +571,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       throw reason;
     }
     const pair = Object.assign(result.map(r => r.value), { res });
-    if (pair.some(t => t.image.width !== Math.ceil(header.atlas[0] / divisor) || t.image.height !== Math.ceil(header.atlas[1] / divisor))) { pair.forEach(disposeAtlas); throw new Error('lightmap atlas dimensions disagree with UV data'); }
+    if (pair.some(t => !t.userData.unused && (t.image.width !== Math.ceil(header.atlas[0] / divisor) || t.image.height !== Math.ceil(header.atlas[1] / divisor)))) { pair.forEach(disposeAtlas); throw new Error('lightmap atlas dimensions disagree with UV data'); }
     if (enc) { pair.mips = linearMips(renderer, pair, [meta.K.slot, meta.K.lamps]); for (const t of pair) t.userData.mips = pair.mips; }
     return pair;
   };
@@ -569,15 +589,23 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     loadFoliage(asset(`${dir}/${slot}/foliage.bin.gz`)),
     lighting.outputPass && new URLSearchParams(location.search).get('agx') !== 'three' ? loadAgXLuts() : Promise.resolve(null),
   ];
+  const groupTask = groups ? Promise.all([groups.setResolution(resolution), groupMeta.probes ? loadGroupProbes(asset(`${dir}/lampgroups/probes.bin`), groupMeta.groups.length, groupMeta.probes.count) : null])
+    .catch(err => { console.warn('lamp groups failed, using the shared lamps layer', err); return false; }) : Promise.resolve(null);
   const staged = await Promise.allSettled(tasks.map(p => p.then(value => { progress(); return value; })));
   const release = (i, fn) => { if (staged[i].status === 'fulfilled' && staged[i].value) fn(staged[i].value); };
   const releaseStage = () => {
     release(1, t => t.dispose()); release(2, r => r.uniforms.uReflTex.value.dispose());
     release(3, ts => ts.forEach(disposeAtlas)); release(5, ts => ts.forEach(t => t.dispose()));
   };
-  if (staged.some(r => r.status === 'rejected')) { releaseStage(); throw staged.find(r => r.status === 'rejected').reason; }
+  if (staged.some(r => r.status === 'rejected')) { releaseStage(); groupTask.then(() => groups?.dispose()); throw staged.find(r => r.status === 'rejected').reason; }
   let [probes, skyBg, refl, layers, foliageData, agxLuts] = staged.map(r => r.value);
-  const volume = buildProbeVolume(probes);
+  const groupData = await groupTask;
+  if (groups && (groupData === false || (groupData[1] && probes.N !== groupMeta.probes.count))) {
+    // fall back to the shared lamps layer: the pair was loaded without it
+    groups.dispose(); groups = null; groupMeta = null; layers.forEach(disposeAtlas);
+    try { layers = await loadAtlases(resolution); } catch (err) { releaseStage(); throw err; }
+  } else if (groups) groups.probeSH = groupData[1];
+  const volume = buildProbeVolume(probes, groups);
   volume.wet = SLOTS[slot].wet ?? 0; volume.refl = refl; volume.multi = multi; refl.slots = multi;
   // Every fetch/decode/validation has completed. Nothing above changes scene objects or legacy lighting.
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -616,6 +644,26 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     tight(o); const u = list.find(u => !u.used && Math.abs(box.min.x - u.min[0]) + Math.abs(box.min.y - u.min[1]) + Math.abs(box.min.z - u.min[2]) + Math.abs(box.max.x - u.max[0]) + Math.abs(box.max.y - u.max[1]) + Math.abs(box.max.z - u.max[2]) < 0.006);
     if (u) { u.used = true; pairs.set(o, u); byBox++; }
   }
+  // Hinged and bifold door leaves take the probe volume in every pose, lit from the side each face looks at (probeLit,
+  // sided). The bake fits only the pose they were exported in (a swung leaf carried the closet's dark into the room),
+  // and their thin raised panels and louvre slats bake with dark rims at lightmap resolution that Cycles does not show;
+  // the probes match the Cycles renders of these doors closer, open and closed. The glazed garden doors (french,
+  // sliders) keep the bake: their frames stand in open sunlight the coarse outdoor probes underestimate.
+  const doorParts = new Set(), sharedUV = new Set();
+  for (const root of dynamic) {
+    const d = root.userData.door; if (!d || d.kind === 'french' || d.kind === 'slider') continue;
+    root.traverse(o => { if (o.isMesh && o.parent !== root) doorParts.add(o); });
+  }
+  for (const o of doorParts) if (pairs.has(o)) { pairs.get(o).used = false; pairs.delete(o); }
+  // The exporter writes one glTF mesh for meshes that share geometry and material, and an unwrap that kept the
+  // lightmap UVs on that shared primitive left Blender only the last unit's layout: all of them baked into one chart,
+  // the others' charts stayed empty (the louvered bifold leaves, black and speckled). Such meshes take the probe volume
+  // until a bake whose sidecar says every unit had its own primitive (unwrap.py, "ownPrimitives").
+  if (!header.ownPrimitives) {
+    const byMesh = new Map();
+    for (const o of pairs.keys()) { const k = o.geometry.uuid + ':' + [].concat(o.material).map(m => m?.uuid).join(':'); if (!byMesh.has(k)) byMesh.set(k, []); byMesh.get(k).push(o); }
+    for (const list of byMesh.values()) if (list.length > 1) for (const o of list) { pairs.get(o).used = false; pairs.delete(o); sharedUV.add(o); }
+  }
   for (const [o, u] of pairs) {
     originalMeshes.set(o, { geometry: o.geometry, material: o.material, castShadow: o.castShadow });
     matched++; triangles += u.ni / 3; tight(o);
@@ -645,10 +693,13 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         let maps = THREE.ShaderChunk.lights_fragment_maps;
         if (v2) {
           Object.assign(s.uniforms, lmUniforms, slots?.uniforms);
-          s.fragmentShader = (multi ? 'uniform sampler2D uSlotNext; uniform sampler2D uSlotNextLamps; uniform vec2 uSlotNextK; uniform float uSlotBlend; uniform float uSlotLampA; uniform float uSlotLampB;\n' : '') + 'uniform sampler2D uLmLamps; uniform float uLampLevel;\n' + (enc ? TONE_DECODE : RGBM_DECODE) + LM_SAMPLE + s.fragmentShader;
+          if (groups) Object.assign(s.uniforms, groups.uniforms);
+          s.fragmentShader = (multi ? 'uniform sampler2D uSlotNext; uniform sampler2D uSlotNextLamps; uniform vec2 uSlotNextK; uniform float uSlotBlend; uniform float uSlotLampA; uniform float uSlotLampB;\n' : '') + 'uniform sampler2D uLmLamps; uniform float uLampLevel;\n' + (enc ? TONE_DECODE : RGBM_DECODE) + LM_SAMPLE + (groups ? lampGroupGLSL(groupMeta.textures) : '') + s.fragmentShader;
           // Remove even the unused encoded bilinear lookup, keeping all reads in decoded linear space.
           maps = rep(maps, 'vec4 lightMapTexel = texture2D( lightMap, vLightMapUv );', '', 'lightmap texel');
           maps = rep(maps, 'vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapIntensity;',
+            groups ? (multi ? 'vec3 lightMapIrradiance = ( mix( lmSample( lightMap, vLightMapUv, uLmK.x ), lmSample( uSlotNext, vLightMapUv, uSlotNextK.x ), uSlotBlend ) + lampGroups( vLightMapUv ) ) * lightMapIntensity;'
+              : 'vec3 lightMapIrradiance = ( lmSample( lightMap, vLightMapUv, uLmK.x ) + lampGroups( vLightMapUv ) ) * lightMapIntensity;') :
             (multi ? 'vec3 lightMapIrradiance = mix( lmSample( lightMap, vLightMapUv, uLmK.x ) + uSlotLampA * lmSample( uLmLamps, vLightMapUv, uLmK.y ), lmSample( uSlotNext, vLightMapUv, uSlotNextK.x ) + uSlotLampB * lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y ), uSlotBlend ) * lightMapIntensity;' : 'vec3 lightMapIrradiance = ( lmSample( lightMap, vLightMapUv, uLmK.x ) + uLampLevel * lmSample( uLmLamps, vLightMapUv, uLmK.y ) ) * lightMapIntensity;'), 'lightmap decode');
         }
         maps = rep(maps, 'iblIrradiance += getIBLIrradiance( geometryNormal );', '', 'lightmap sky');
@@ -659,9 +710,13 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         if (puddles) { wetPatch(s, SLOTS[slot].wet); if (slots) s.uniforms.uWet = slots.wet; }
         if (refl) reflPatch(s, refl, mirror ? '1.0' : 'clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )');
         pcss.patch(s);
-        if (CONTACT) checkedContact(s, true);
+        // last resort, the next slot's atlases (its fade then jumps at the end): the samplers that dropping them frees
+        const next = ['lmSample( uSlotNext, vLightMapUv, uSlotNextK.x )', 'lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y )'];
+        const drop = fitBaked(s, renderer, c, { name: 'slot crossfade', cost: next.filter(t => s.fragmentShader.includes(t)).length, pending: false });
+        if (drop.has('slot crossfade')) s.fragmentShader = s.fragmentShader.replace(next[0], 'lmSample( lightMap, vLightMapUv, uLmK.x )').replace(next[1], 'lmSample( uLmLamps, vLightMapUv, uLmK.y )');
+        if (CONTACT) checkedContact(s, true, !drop.has('contact sun'));
       });
-      c.customProgramCacheKey = () => prevKey + '|baked-v3:' + [v2, !!enc, puddles, refl?.count ?? 0, CONTACT, LM_FILTER, multi, mirror].join(':');
+      c.customProgramCacheKey = () => prevKey + '|baked-v3:' + [v2, !!enc, puddles, refl?.count ?? 0, CONTACT, LM_FILTER, multi, mirror, groups ? 'lg' + groupMeta.textures : '', c.userData.samplerCut ?? 0].join(':');
       mats.set(key, c); return c;
     };
     o.material = Array.isArray(o.material) ? o.material.map(lm) : lm(o.material);
@@ -674,7 +729,10 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   scene.traverse(o => { if (o.isHemisphereLight) { lightVisibility.set(o, o.visible); o.visible = false; } });
   // every lit surface that did not get a lightmap takes the probe volume (and the soft sun)
   let probeLitCount = 0, foliage = null, envTarget = null, windows = null, stats = null;
-  const hooks = new Map(), envs = new Map();
+  const hooks = new Map(), envs = new Map(), sided = new Set();
+  // doors and toggles (blinds, curtains, the garage door) sit in walls and windows: lit from the side each face looks at
+  // (not their glass: its reflection keeps the occlusion of the cell it sits in, as every other pane)
+  for (const root of dynamic) root.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && !m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
   const register = object => {
     if (!object || disposed) return;
     object.traverse(o => {
@@ -684,7 +742,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         if (!hooks.has(m) && !m.userData.probeLit) {
           hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, bakedHooks: m.bakedHooks });
           if (!emitsLight(m)) m.emissiveIntensity = 0;
-          probeLit(m, volume, pcss); probeLitCount++;
+          probeLit(m, volume, pcss, sided.has(m)); probeLitCount++;
         }
         if (envTarget) setEnv(m);
       }
@@ -709,18 +767,39 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     const ms = [].concat(o.material); if (!shown(o) || !ms.some(m => m?.isMeshStandardMaterial && !m.lightMap)) continue;
     const m = ms[0] ?? {}, id = o.userData.lmId;
     const why = m.transmission > 0 || m.transparent ? 'glass' : m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '') ? 'plant'
-      : o.userData.lmSkip ?? (!id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
+      : doorParts.has(o) ? 'door' : sharedUV.has(o) ? 'sharedUV' : o.userData.lmSkip ?? (!id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
     unlit[why] = (unlit[why] ?? 0) + 1;
   }
   // main calls after layout.animate, garden wind and all interaction/parent transform updates.
-  const updateMovables = dt => { if (!disposed) { slots?.update(dt); pcss.update(dt); if (slots) setFixtureGlow(slots.params.lamps); } };
+  // switch levels follow the switches (and the slot's default switch set, blended through a slot fade)
+  const updateGroups = dt => { if (!groups) return; const fade = slots?.uniforms.uSlotBlend.value ?? 0; groups.update(dt, slots?.name ?? slot, fade > 0 ? slots.desired : undefined, fade); groups.applyGlow(); };
+  // Fragment sampler audit (sampler_budget.js), once a second over the programs linked since: stats.samplers holds the
+  // most samplers any baked program uses. A baked program that still failed to link over the texture units (the
+  // estimate missed) has its materials compile again with a lower limit, so the next fit leaves more out.
+  let auditClock = 1;
+  const audit = () => {
+    const a = auditPrograms(renderer);
+    for (const f of a.failed) {
+      if (f.handled) continue; f.handled = true;
+      if (!/texture image units|samplers?/i.test(f.log)) { console.warn(`baked shader "${f.name}" failed to link:`, f.log); continue; }
+      for (const m of [...mats.values(), ...hooks.keys()]) {
+        if (renderer.properties.get(m).currentProgram !== f.program || (m.userData.samplerCut ?? 0) >= 8) continue;
+        m.userData.samplerCut = (m.userData.samplerCut ?? 0) + 2; m.needsUpdate = true;
+        console.warn(`baked shader "${m.name || m.type}": over the GPU's fragment texture units after linking; recompiling with ${m.userData.samplerCut} fewer`);
+      }
+    }
+    if (stats) stats.samplers = { max: a.max, limit: a.limit, worst: a.worst, programs: a.programs, failed: a.failed.map(f => f.name) };
+  };
+  const updateMovables = dt => { if (!disposed) { slots?.update(dt); autoExposure?.update(dt); pcss.update(dt); if (slots) setFixtureGlow(slots.params.lamps); updateGroups(dt); if ((auditClock += dt) >= 1 && renderer.info?.programs && renderer.getContext) { auditClock = 0; audit(); } } };
   stats = { units: header.units.length, matched, byId: matched - byBox, byBox, unusedUnits: header.units.length - matched, unlit, triangles, materials: mats.size, movables: movables.length, probes: probes ? probes.N : 0, probeLit: probeLitCount, foliage, ms: Math.round(performance.now() - t0) };
   const atlasStats = () => { if (v2) Object.assign(stats, { resolution, atlas: [target.texture.image.width, target.texture.image.height], atlasMiB: atlasMiB(target.texture.image.width, target.texture.image.height) * (enc ? 4 / 3 : 1), mips: target.texture.userData.mips ?? null }); stats.shadowSize = shadowSize; };
   atlasStats();
   if (skyBg) skyBg.mapping = THREE.EquirectangularReflectionMapping;
   // after the walkthrough sets its time of day: the bake's sun, its sky as the background, and a Blender-like grade
+  let groupsReset = false;
   const afterTime = () => {
     if (disposed) return;
+    if (groups && !groupsReset) { groupsReset = true; groups.reset(slots?.name ?? slot); updateGroups(0); }
     const mood = slots?.params ?? SLOTS[slot];
     const raw = new URLSearchParams(location.search).has('rawtone'), e = raw ? 1 : Math.pow(2, mood.ev);
     Object.assign(lighting.tune, { dayOutdoor: e, dayIndoor: e });
@@ -756,6 +835,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (shadow.mapSize.x !== shadowSize) { shadow.map?.dispose(); shadow.map = null; shadow.mapSize.set(shadowSize, shadowSize); shadow.needsUpdate = true; }
     pcss.setSize(shadowSize); pcss.setTier(name); stats.shadowSize = shadowSize;
     wanted = v2 && enc ? lmResolution(name) : 'full';
+    groups?.setResolution(wanted).catch(err => console.warn('lamp groups: tier change failed', err));
     if (slots) return slots.setQuality(wanted);
     pending ??= (async () => {
       while (wanted !== resolution) {
@@ -771,21 +851,24 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let puddleRefl = null;
   const setFeatures = name => {
     tier = name;
-    if (TIERS[name].puddles && !puddleRefl) { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet }); api.puddleRefl = puddleRefl; }
+    if (TIERS[name].puddles && !puddleRefl) { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet, furniture: [...movables, ...dynamic] }); api.puddleRefl = puddleRefl; }
     puddleRefl?.setEnabled(TIERS[name].puddles && (!multi || slots.params.wet > 0));
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
+  const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
   const restore = () => {
     if (disposed) return;
     if (slots) slots.restore();
     else for (const t of layers) t.userData.restore?.();
     if (!slots && v2 && enc) { const m = linearMips(renderer, layers, [enc.K.slot, enc.K.lamps]); for (const t of layers) t.userData.mips = m; }
+    groups?.restore();
     pcss.invalidate(); lighting.sun.shadow.needsUpdate = true;
     if (slots) { afterTime(); } else if (envTarget) { envTarget.dispose(); envTarget = null; afterTime(); } };
   renderer.domElement?.addEventListener('webglcontextrestored', restore);
   const dispose = () => {
     if (disposed) return; disposed = true;
     renderer.domElement?.removeEventListener('webglcontextrestored', restore);
+    autoExposure?.dispose();
     scene.userData.contact?.dispose(); restoreEmission?.();
     Object.assign(lighting.tune ?? {}, legacyTune);
     for (const [k, v] of Object.entries(legacyGrade)) lighting.grade[k].value = v;
@@ -794,7 +877,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     lighting.sun.shadow.camera.copy(legacySunCamera); lighting.sun.shadow.needsUpdate = true;
     if (api.shafts) { (lighting.taa?.internal ?? lighting.composer)?.removePass(api.shafts); api.shafts.dispose(); }
     if (legacyShadow === undefined) delete lighting.sun.userData.bakedShadow; else lighting.sun.userData.bakedShadow = legacyShadow;
-    puddleRefl?.dispose(); windows?.dispose(); pcss.dispose(); if (!slots) envTarget?.dispose();
+    groups?.dispose(); puddleRefl?.dispose(); windows?.dispose(); pcss.dispose(); if (!slots) envTarget?.dispose();
     if (multi || scene.background === skyBg) scene.background = originalBackground;
     if (slots) slots.dispose();
     else { skyBg?.dispose(); refl?.uniforms.uReflTex.value.dispose();
@@ -808,7 +891,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     for (const m of mats.values()) m.dispose();
     if (!slots) layers.forEach(disposeAtlas);
   };
-  const api = { stats, combine, target, slot: SLOTS[slot], slotName: slot, availableSlots, sunShadow: pcss, updateMovables, afterTime, setQuality, register, dispose, puddleRefl, setFeatures };
+  if (groups) stats.lampGroups = { groups: groupMeta.groups.length, textures: groupMeta.textures, switches: groups.switches, matched: groups.matched, resolution: groups.resolution, probes: !!groups.probeSH, mips: groups.texture?.userData.mips ?? null };
+  const api = { lampGroups: groups, stats, auditSamplers: () => { audit(); return stats.samplers; }, combine, target, slot: SLOTS[slot], slotName: slot, availableSlots, sunShadow: pcss, updateMovables, afterTime, setQuality, register, dispose, puddleRefl, setFeatures };
   // Fixture switches update before this hook each frame. Apply the preset's physical lamp glow last.
   const setFixtureGlow = level => {
     for (const { toggle } of lighting.lightSwitches ?? []) for (const g of toggle.glows) {
@@ -818,13 +902,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level;
   };
   if (multi) {
-    const stageSlot = async (name, res) => {
-      const meta = await fetch(asset(`${dir}/${name}/encoding.json`)).then(r => r.ok ? r.json() : null);
+    const stageSlot = async (name, res, onProgress) => {
+      const progress = createSlotProgress(onProgress), track = work => progress.track(work);
+      const meta = await track(() => fetch(asset(`${dir}/${name}/encoding.json`)).then(r => r.ok ? r.json() : null));
       if (!validEncoding(meta)) throw Error('Invalid destination encoding');
       const results = await Promise.allSettled([
-        loadAtlases(res, name, meta), loadProbes(asset(`${base}/${name}/probes.bin`)),
-        new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(asset(`${base}/${name}/sky_bg.hdr`)),
-        loadReflections(`${base}/${name}/refl`, asset), loadFoliage(asset(`${dir}/${name}/foliage.bin.gz`)),
+        loadAtlases(res, name, meta, track), loadProbes(asset(`${base}/${name}/probes.bin`), track),
+        track(() => new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(asset(`${base}/${name}/sky_bg.hdr`))),
+        loadReflections(`${base}/${name}/refl`, asset, track), loadFoliage(asset(`${dir}/${name}/foliage.bin.gz`), track),
       ]);
       const cleanup = () => { if (results[0].status === 'fulfilled') results[0].value.forEach(disposeAtlas); if (results[2].status === 'fulfilled') results[2].value.dispose(); if (results[3].status === 'fulfilled') results[3].value.uniforms.uReflTex.value.dispose(); };
       if (results.some(r => r.status === 'rejected')) { cleanup(); throw results.find(r => r.status === 'rejected').reason; }
@@ -832,8 +917,9 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       sky.mapping = THREE.EquirectangularReflectionMapping;
       let nextVolume, env;
       try {
-        nextVolume = buildProbeVolume(P); nextVolume.fill(SLOTS[name].lamps);
+        nextVolume = buildProbeVolume(P, groups); nextVolume.fill(SLOTS[name].lamps);
         const pmrem = new THREE.PMREMGenerator(renderer); try { env = pmrem.fromEquirectangular(sky); } finally { pmrem.dispose(); }
+        progress.finish();
         return { name, enc: meta, layers: pair, volume: nextVolume, sky, refl: reflections, foliage: fol, env, resolution: pair.res,
           remip: () => linearMips(renderer, pair, [meta.K.slot, meta.K.lamps]) };
       } catch (err) { cleanup(); env?.dispose(); for (const u of Object.values(nextVolume?.uniforms ?? {})) if (u.value?.isTexture) u.value.dispose(); throw err; }
@@ -861,19 +947,23 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         envTarget = data.env ?? envTarget;
         scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m?.isMeshStandardMaterial && (m.lightMap || m.userData.probeLit)) setEnv(m); });
         api.slot = SLOTS[slot]; api.slotName = slot; atlasStats();
+        if (groups) { groups.reset(slot); updateGroups(0); }   // the new slot's default switch states
       },
     });
     volume.slots = slots; Object.assign(lmUniforms, slots.uniforms);
   }
-  api.setSlot = name => slots ? slots.request(name) : Promise.resolve(name === slot);
+  // Optional callback: (fraction, { name, loaded, total, phase }); transition marks the start of the fade.
+  api.setSlot = (name, onProgress) => slots ? slots.request(name, onProgress) : Promise.resolve(name === slot);
   api.nextSlot = () => nextSlot(slots?.desired ?? slot, availableSlots);
   return api;
 }
 
 // Probe grid for movable objects: per point, order-2 SH of incoming radiance (three's basis and frame) per layer.
-async function loadProbes(url) {
-  const response = await fetch(url); if (!response.ok) throw new Error(`probes ${response.status}: ${url}`);
-  const buf = await response.arrayBuffer();
+async function loadProbes(url, track = work => work()) {
+  const buf = await track(async () => {
+    const response = await fetch(url); if (!response.ok) throw new Error(`probes ${response.status}: ${url}`);
+    return response.arrayBuffer();
+  });
   const hl = new DataView(buf).getUint32(0, true), header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)));
   const N = header.count; let o = 4 + hl;
   const valid = new Uint8Array(buf.slice(o, o + N)); o += N; o = (o + 3) & ~3;
@@ -887,11 +977,13 @@ async function loadProbes(url) {
 // box from raycasts to its surroundings. Per pixel: the probe whose box holds the point (else the nearest), the
 // reflected ray intersected with that box and looked up from the probe's centre (parallax correction), sampled at a
 // blur level set by roughness. The patio then reflects the house and chairs, floors their own room, windows the garden.
-async function loadReflections(dir, asset) {
-  const response = await fetch(asset(`${dir}/meta.json`)); if (!response.ok) throw new Error(`reflections ${response.status}`);
-  const meta = (await response.json()).sort((a, b) => a.i - b.i);
+async function loadReflections(dir, asset, track = work => work()) {
+  const meta = (await track(async () => {
+    const response = await fetch(asset(`${dir}/meta.json`)); if (!response.ok) throw new Error(`reflections ${response.status}`);
+    return response.json();
+  })).sort((a, b) => a.i - b.i);
   if (!meta.length || meta.some(m => !['p', 'min', 'max'].every(k => m[k]?.length === 3 && m[k].every(Number.isFinite)))) throw new Error('Invalid reflection metadata');
-  const results = await Promise.allSettled(meta.map(m => new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(asset(`${dir}/probe_${String(m.i).padStart(2, '0')}.hdr`))));
+  const results = await Promise.allSettled(meta.map(m => track(() => new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(asset(`${dir}/probe_${String(m.i).padStart(2, '0')}.hdr`)))));
   if (results.some(r => r.status === 'rejected')) { for (const r of results) if (r.status === 'fulfilled') r.value.dispose(); throw results.find(r => r.status === 'rejected').reason; }
   const maps = results.map(r => r.value);
   const w = maps[0].image.width, h = maps[0].image.height, n = maps.length;
@@ -915,9 +1007,11 @@ async function loadReflections(dir, asset) {
   const v3 = k => Float32Array.from(meta.flatMap(m => m[k]));
   return { count: n, uniforms: { uReflTex: { value: tex }, uReflPos: { value: v3('p') }, uReflMin: { value: v3('min') }, uReflMax: { value: v3('max') }, uReflMips: { value: Math.floor(Math.log2(Math.max(w, h))) } } };
 }
+// With slots, the current and the next slot are two halves of one array (lightmap_slots.js): one sampler, the layer
+// offsets uReflBase / uReflNext pick the halves, and the second read happens only during a fade.
 const reflGLSL = (n, slots = false) => `
 #define REFL_COUNT ${n}
-${slots ? 'uniform highp sampler2DArray uReflNextTex; uniform float uReflBlend;' : ''}
+${slots ? 'uniform float uReflBlend; uniform float uReflBase; uniform float uReflNext;' : ''}
 uniform highp sampler2DArray uReflTex; uniform vec3 uReflPos[ REFL_COUNT ]; uniform vec3 uReflMin[ REFL_COUNT ]; uniform vec3 uReflMax[ REFL_COUNT ]; uniform float uReflMips;
 vec3 reflProbe( vec3 P, vec3 R, float rough ) {
   int best = 0; float bestScore = 1e9;
@@ -944,7 +1038,9 @@ vec3 reflProbe( vec3 P, vec3 R, float rough ) {
     }
   }
   vec2 uv = vec2( atan( dir.z, dir.x ) * 0.15915494 + 0.5, asin( clamp( dir.y, -1.0, 1.0 ) ) * 0.31830989 + 0.5 );
-  return ${slots ? 'mix( textureLod( uReflTex, vec3( uv, float( best ) ), clamp( rough, 0.0, 1.0 ) * uReflMips ).rgb, textureLod( uReflNextTex, vec3( uv, float( best ) ), clamp( rough, 0.0, 1.0 ) * uReflMips ).rgb, uReflBlend )' : 'textureLod( uReflTex, vec3( uv, float( best ) ), clamp( rough, 0.0, 1.0 ) * uReflMips ).rgb'};
+  float reflLod = clamp( rough, 0.0, 1.0 ) * uReflMips;
+  ${slots ? `vec3 reflCur = textureLod( uReflTex, vec3( uv, float( best ) + uReflBase ), reflLod ).rgb;
+  return uReflBlend > 0.0 ? mix( reflCur, textureLod( uReflTex, vec3( uv, float( best ) + uReflNext ), reflLod ).rgb, uReflBlend ) : reflCur;` : 'return textureLod( uReflTex, vec3( uv, float( best ) ), reflLod ).rgb;'}
 }
 `;
 // the reflection term for a patched material: world position varying + the lookup in place of three's sky map
@@ -981,7 +1077,7 @@ function reflPatch(sh, refl, occlusion) {
 // furniture, pets) samples it per pixel by world position, so a carried chair or a cat takes the baked light of
 // wherever it is, and foliage is lit by the same sunrise sky as the bake instead of the walkthrough's midday sky map.
 const VOL = { x0: -12.5, x1: 12.5, y0: -11.5, y1: 15.5, step: 0.5, heights: [0.35, 0.95, 1.55] };
-function buildProbeVolume(P) {
+function buildProbeVolume(P, groups = null) {
   const NX = Math.round((VOL.x1 - VOL.x0) / VOL.step) + 1, NZ = Math.round((VOL.y1 - VOL.y0) / VOL.step) + 1, NY = VOL.heights.length;
   const valid = []; for (let i = 0; i < P.N; i++) if (P.valid[i]) valid.push(i);
   // per cell, the 4 nearest valid probes and their weights (fixed); the lamp level only changes the sum
@@ -996,35 +1092,62 @@ function buildProbeVolume(P) {
     best.forEach(([d, i], k) => { near[c + k] = i; wts[c + k] = 1 / (d + 0.02); sum += wts[c + k]; });
     for (let k = 0; k < 4; k++) wts[c + k] /= sum;
   }
-  const make = () => { const t = new THREE.Data3DTexture(new Float32Array(NX * NZ * NY * 4), NX, NZ, NY); Object.assign(t, { format: THREE.RGBAFormat, type: THREE.FloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, wrapR: THREE.ClampToEdgeWrapping, unpackAlignment: 1 }); return t; };
-  const tex = [make(), make(), make()];
-  const fill = lamps => {
-    for (let c = 0; c < NX * NZ * NY; c++) for (let ch = 0; ch < 3; ch++) for (let k = 0; k < 4; k++) {
+  // One texture for the three colours: R, G and B stacked along its depth (3 x NY slices), one sampler per slot instead
+  // of three (Apple GPUs allow 16 per fragment shader). PROBE_GLSL clamps the depth inside each colour's slices.
+  // Half floats: linearly filtered in every WebGL2 (iOS has no OES_texture_float_linear), ample range for irradiance SH.
+  const tex = new THREE.Data3DTexture(new Uint16Array(NX * NZ * NY * 3 * 4), NX, NZ, NY * 3);
+  Object.assign(tex, { format: THREE.RGBAFormat, type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, wrapR: THREE.ClampToEdgeWrapping, unpackAlignment: 1 });
+  // lamp groups (lamp_groups.js): per group, its luminance SH resampled to the cells once; a fill weighs them by the
+  // groups' levels and colours, so a switch refills the volume (lamp_groups.js volumes) in a few milliseconds
+  const cells = NX * NZ * NY, sh = groups?.probeSH, G = sh ? groups.groups.length : 0, cellG = sh ? new Float32Array(G * cells * 4) : null;
+  if (sh) for (let g = 0; g < G; g++) for (let c = 0; c < cells; c++) for (let k = 0; k < 4; k++) {
+    let v = 0; for (let j = 0; j < 4; j++) v += wts[c * 4 + j] * sh[(g * P.N + near[c * 4 + j]) * 9 + k];
+    cellG[(g * cells + c) * 4 + k] = v;
+  }
+  let last = 0;
+  const fill = (lamps = last) => {
+    last = lamps; const gw = sh ? groups.probeWeights : null;
+    for (let c = 0; c < cells; c++) for (let ch = 0; ch < 3; ch++) for (let k = 0; k < 4; k++) {
       let v = 0;
-      for (let j = 0; j < 4; j++) { const i = near[c * 4 + j], o = i * 27 + k * 3 + ch; v += wts[c * 4 + j] * (P.layers.sky[o] + P.layers.sunind[o] + lamps * P.layers.lamps[o]); }
-      tex[ch].image.data[c * 4 + k] = v;
+      for (let j = 0; j < 4; j++) { const i = near[c * 4 + j], o = i * 27 + k * 3 + ch; v += wts[c * 4 + j] * (P.layers.sky[o] + P.layers.sunind[o] + (gw ? 0 : lamps * P.layers.lamps[o])); }
+      if (gw) for (let g = 0; g < G; g++) { const w = gw[g * 3 + ch]; if (w) v += w * cellG[(g * cells + c) * 4 + k]; }
+      tex.image.data[(ch * cells + c) * 4 + k] = toHalf(v);
     }
-    for (const t of tex) t.needsUpdate = true;
+    tex.needsUpdate = true;
   };
+  if (sh) { const refill = () => fill(); groups.volumes.add(refill); tex.addEventListener('dispose', () => groups.volumes.delete(refill)); }
   // texture coordinates: cell centres sit at the texel centres
-  const uniforms = { uProbeR: { value: tex[0] }, uProbeG: { value: tex[1] }, uProbeB: { value: tex[2] },
+  const uniforms = { uProbeSH: { value: tex },
     uProbeOrigin: { value: new THREE.Vector3(VOL.x0, VOL.heights[0], -VOL.y0) }, uProbeScale: { value: new THREE.Vector3(1 / VOL.step, 1 / (VOL.heights[1] - VOL.heights[0]), -1 / VOL.step) },
     uProbeDims: { value: new THREE.Vector3(NX, NY, NZ) } };
   return { fill, uniforms };
 }
+const toHalf = THREE.DataUtils.toHalfFloat;
 const PROBE_GLSL = `
-uniform highp sampler3D uProbeR; uniform highp sampler3D uProbeG; uniform highp sampler3D uProbeB;
+uniform highp sampler3D uProbeSH;
 uniform vec3 uProbeOrigin; uniform vec3 uProbeScale; uniform vec3 uProbeDims;
 varying vec3 vProbeWorld;
-vec3 probeIrradiance( vec3 p, vec3 n ) {
+// x and north as texture coordinates, height in slices clamped to the first and last slice centres (as clamp-to-edge
+// did for the separate textures), kept a hair inside so filtering never reaches the next colour's slices
+vec3 probeUVW( vec3 p ) {
   vec3 g = ( p - uProbeOrigin ) * uProbeScale;              // grid units: x, height, z (north)
-  vec3 uvw = ( vec3( g.x, g.z, g.y ) + 0.5 ) / uProbeDims.xzy;
-  vec4 r = texture( uProbeR, uvw ), gg = texture( uProbeG, uvw ), b = texture( uProbeB, uvw );
+  return vec3( ( g.x + 0.5 ) / uProbeDims.x, ( g.z + 0.5 ) / uProbeDims.z, clamp( g.y, 0.01, uProbeDims.y - 1.01 ) );
+}
+vec4 probeTex( highp sampler3D t, vec3 uvw, float ch ) { return texture( t, vec3( uvw.xy, ( uvw.z + ch * uProbeDims.y + 0.5 ) / ( 3.0 * uProbeDims.y ) ) ); }
+// colour ch (0 R, 1 G, 2 B) of the L1 SH; the slot runtime blends the next slot's volume in here
+vec4 probeSH( vec3 uvw, float ch ) { return probeTex( uProbeSH, uvw, ch ); }
+vec3 probeIrradiance( vec3 p, vec3 n ) {
+  vec3 uvw = probeUVW( p );
+  vec4 r = probeSH( uvw, 0.0 ), gg = probeSH( uvw, 1.0 ), b = probeSH( uvw, 2.0 );
   vec4 basis = vec4( 0.886227, 1.023328 * n.y, 1.023328 * n.z, 1.023328 * n.x );
   return max( vec3( dot( r, basis ), dot( gg, basis ), dot( b, basis ) ), 0.0 );
 }
+// The volume's cells are 0.5 m: one at a door, blind or curtain mixes the rooms (closet, garden) on both sides of it.
+// A face that moves there is lit from a little way out along its normal (side, m): from the side it looks at.
+vec3 probeIrradiance( vec3 p, vec3 n, float side ) { return probeIrradiance( p + n * side, n ); }
 `;
-function probeLit(material, volume, pcss) {
+const PROBE_SIDE = ', 0.3';   // the side argument of the lookup above, for probeLit's sided materials
+function probeLit(material, volume, pcss, sided = false) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
   const leafSide = /^garden-/.test(material.name || '') ? ' * faceDirection' : '';
@@ -1032,6 +1155,7 @@ function probeLit(material, volume, pcss) {
   const occl = foliage && !material.foliageBake ? ' * mix( 0.45, 1.0, smoothstep( 0.0, 1.2, vProbeWorld.y ) )' : '';
   const wet = (volume.multi || volume.wet > 0) && !/^garden-/.test(material.name || '') && !(material.alphaTest > 0);
   const refl = volume.refl, sheer = !!material.userData.sheer, fol = material.foliageBake, mirror = isMirror(material);
+  const side = sided && !sheer && !fol && !leafSide ? PROBE_SIDE : '';   // doors and toggles: lit from the side they face
   const prev = material.bakedHooks?.compile ?? material.onBeforeCompile, prevKey = material.bakedHooks?.key ?? shaderKey(material);
   material.bakedHooks = { compile: prev, key: prevKey };
   material.onBeforeCompile = function (sh, renderer) { shaderPatch(sh, 'probe ' + prevKey, s => {
@@ -1047,20 +1171,22 @@ function probeLit(material, volume, pcss) {
       #endif
       vProbeWorld = ( modelMatrix * probePosition ).xyz;`, 'probe vertex');
     let maps = rep(THREE.ShaderChunk.lights_fragment_maps, 'iblIrradiance += getIBLIrradiance( geometryNormal );',
-      `irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal${leafSide}, viewMatrix ) )${occl};`, 'probe irradiance');
+      `irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal${leafSide}, viewMatrix )${side} )${occl};`, 'probe irradiance');
     maps = rep(maps, 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
-      'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 ) * smoothstep( -0.05, 0.35, inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix ).y );', 'probe specular');
-    maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ' * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryClearcoatNormal, viewMatrix ) ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );', 'probe clearcoat');
+      `radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix )${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 ) * smoothstep( -0.05, 0.35, inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix ).y );`, 'probe specular');
+    maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ` * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryClearcoatNormal, viewMatrix )${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );`, 'probe clearcoat');
     s.fragmentShader = PROBE_GLSL + rep(s.fragmentShader, '#include <lights_fragment_maps>', maps, 'probe maps');
     if (wet) { wetPatch(s, volume.wet); if (volume.slots) s.uniforms.uWet = volume.slots.wet; }
-    if (refl) reflPatch(s, refl, mirror ? '1.0' : 'clamp( dot( probeIrradiance( vProbeWorld, nW ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )');
+    if (refl) reflPatch(s, refl, mirror ? '1.0' : `clamp( dot( probeIrradiance( vProbeWorld, nW${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )`);
     pcss.patch(s);
     if (sheer) sheerProbePatch(s, material);
-    if (CONTACT) checkedContact(s, false);
+    // last resort, the next slot's probe volume (its fade then jumps at the end)
+    const drop = fitBaked(s, renderer, this ?? material, { name: 'slot crossfade', cost: volume.slots ? 1 : 0 });
+    if (CONTACT) checkedContact(s, false, !drop.has('contact sun'));
     fol?.patch(s, !!refl);
-    if (volume.slots) { if (fol) volume.slots.patchFoliage(s); volume.slots.patchProbe(s); }
+    if (volume.slots) { if (fol) volume.slots.patchFoliage(s); if (!drop.has('slot crossfade')) volume.slots.patchProbe(s); }
   }); };
-  material.customProgramCacheKey = () => prevKey + '|probe-v3:' + [leafSide, occl, wet, refl?.count ?? 0, CONTACT, sheer, !!fol, !!volume.multi, mirror].join(':');
+  material.customProgramCacheKey = function () { return prevKey + '|probe-v3:' + [leafSide, occl, wet, refl?.count ?? 0, CONTACT, sheer, !!fol, !!volume.multi, mirror, side, (this ?? material).userData.samplerCut ?? 0].join(':'); };
   material.needsUpdate = true;
 }
 

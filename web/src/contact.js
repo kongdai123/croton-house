@@ -71,15 +71,20 @@ float contactAO( vec3 P, vec3 N ) {
 `;
 
 // Called last, after PCSS/probes/wetness/reflections. Only the directional light matching the sun gets contact.
-export function contactPatch(sh, baked = true) {
+// sun = false leaves out the contact sun shadow (its two samplers) and keeps the moving AO: the baked hooks do this
+// when a material would exceed the GPU's fragment texture units (sampler_budget.js). Either way the material counts
+// as patched, so a later wrapper (createContact's) does not add the sun back.
+export function contactPatch(sh, baked = true, sun = true) {
   if (!CONTACT || sh.uniforms.uContactDepth) return;
   Object.assign(sh.uniforms, U, FLAT);
   sh.uniforms.uContactCaster = { value: 0 };
-  sh.fragmentShader = SUN_GLSL + sh.fragmentShader;
-  const begin = sh.fragmentShader.includes('#include <lights_fragment_begin>') ? THREE.ShaderChunk.lights_fragment_begin : null;
-  if (begin) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', begin);
-  sh.fragmentShader = sh.fragmentShader.replace('getDirectionalLightInfo( directionalLight, directLight );',
-    'getDirectionalLightInfo( directionalLight, directLight );\n if ( dot( directionalLight.direction, uContactDirection ) > 0.999 ) directLight.color *= contactSun( geometryPosition, geometryNormal );');
+  if (sun) {
+    sh.fragmentShader = SUN_GLSL + sh.fragmentShader;
+    const begin = sh.fragmentShader.includes('#include <lights_fragment_begin>') ? THREE.ShaderChunk.lights_fragment_begin : null;
+    if (begin) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', begin);
+    sh.fragmentShader = sh.fragmentShader.replace('getDirectionalLightInfo( directionalLight, directLight );',
+      'getDirectionalLightInfo( directionalLight, directLight );\n if ( dot( directionalLight.direction, uContactDirection ) > 0.999 ) directLight.color *= contactSun( geometryPosition, geometryNormal );');
+  }
   if (!baked) {
     // probe-lit surfaces (the unbaked garden ground and lawn, plants): the same moving AO on the probe irradiance, so a
     // pet or a carried chair stays grounded off the lightmapped floors too (its blob shadow is hidden in every case)

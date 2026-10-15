@@ -28,9 +28,12 @@ export function shaderPatch(sh, name, patch) {
 // Freeze before wrapping: three's default key reads this.onBeforeCompile, which would otherwise read the new hook.
 export const shaderKey = m => m.customProgramCacheKey();
 
-export async function loadFoliage(url) {
-  const res = await fetch(url); if (!res.ok) throw new Error(`foliage ${res.status}: ${url}`);
-  let buf = await res.arrayBuffer(); const b = new Uint8Array(buf, 0, 2);
+export async function loadFoliage(url, track = work => work()) {
+  let buf = await track(async () => {
+    const res = await fetch(url); if (!res.ok) throw new Error(`foliage ${res.status}: ${url}`);
+    return res.arrayBuffer();
+  });
+  const b = new Uint8Array(buf, 0, 2);
   if (b[0] === 0x1f && b[1] === 0x8b) buf = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
   const hl = new DataView(buf).getUint32(0, true), header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hl)));
   let o = 4 + hl;
@@ -68,8 +71,8 @@ const FOLIAGE = {
     const marker = 'void main() {';
     sh.fragmentShader = shaderReplace(sh.fragmentShader, marker, `varying vec3 vFoliage; uniform float uFolLamps;
 float foliageScale( vec3 p ) {
-  vec3 g = ( p - uProbeOrigin ) * uProbeScale, uvw = ( vec3( g.x, g.z, g.y ) + 0.5 ) / uProbeDims.xzy;
-  float mean = 0.886227 * dot( vec3( texture( uProbeR, uvw ).x, texture( uProbeG, uvw ).x, texture( uProbeB, uvw ).x ), vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 uvw = probeUVW( p );
+  float mean = 0.886227 * dot( vec3( probeSH( uvw, 0.0 ).x, probeSH( uvw, 1.0 ).x, probeSH( uvw, 2.0 ).x ), vec3( 0.2126, 0.7152, 0.0722 ) );
   return min( PI * ( vFoliage.x + uFolLamps * vFoliage.y ) / max( mean, 1e-5 ), 8.0 );
 }
 void main() {`, 'foliage main');

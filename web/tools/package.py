@@ -107,7 +107,7 @@ def copy_folder(src, dst, folder, scratch):
 
 def copy_lightmaps(src, dst):
     """Publish only runtime bake files, byte-for-byte, under immutable content names."""
-    encodings = sorted((src / "v2").glob("*/encoding.json"))
+    encodings = sorted(e for e in (src / "v2").glob("*/encoding.json") if e.parent.name != "lampgroups")
     if not encodings:
         raise RuntimeError(f"Missing lightmap slot encodings: {src}")
     files = ["v2/lightmap_uv2.bin.gz"]
@@ -138,6 +138,15 @@ def copy_lightmaps(src, dst):
                 files += [slot_name, lamps_name]   # require both layers at every published tier
         probes = json.loads((src / f"{slot}/refl/meta.json").read_text())
         files += [f"{slot}/refl/probe_{int(p['i']):02d}.hdr" for p in probes]
+    # switchable lamp groups (lamp_groups.js): every tier present; the site falls back to the shared lamps layer without
+    groups = src / "v2/lampgroups/encoding.json"
+    if groups.exists():
+        meta = json.loads(groups.read_text())
+        files.append("v2/lampgroups/encoding.json")
+        if (src / "v2/lampgroups/probes.bin").exists(): files.append("v2/lampgroups/probes.bin")
+        for t in range(int(meta["textures"])):
+            for name in [f"v2/lampgroups/lampgroups_{t}_{i}.webp" for i in range(2)] + [f"v2/lampgroups/{r}/lampgroups_{t}.webp" for r in ("half", "quarter")]:
+                if (src / name).exists(): files.append(name)
     manifest = {}
     for name in sorted(set(files)):
         path = src / name

@@ -28,7 +28,11 @@ try {
   const caps = { getContext: () => gl, capabilities: { maxTextureSize: 4096 } };
   assert.equal(bakedCapabilityError(caps, [2952, 2950]), null);
   assert.match(bakedCapabilityError(caps, [5903, 5900]), /maxTextureSize/);
-  for (const name of [...ext]) { ext.delete(name); assert.match(bakedCapabilityError(caps), new RegExp(name)); ext.add(name); }
+  // iOS: no OES_texture_float_linear (every linearly filtered baked texture is half float); half-float targets suffice
+  ext.delete('OES_texture_float_linear'); assert.equal(bakedCapabilityError(caps), null);
+  ext.delete('EXT_color_buffer_float'); assert.match(bakedCapabilityError(caps), /half-float render targets/);
+  ext.add('EXT_color_buffer_half_float'); assert.equal(bakedCapabilityError(caps), null);
+  ext.delete('EXT_color_buffer_half_float'); ext.add('EXT_color_buffer_float'); ext.add('OES_texture_float_linear');
   assert.match(bakedCapabilityError({ getContext: () => ({}) }), /WebGL2/);
   for (const name of ['hq', 'laptop', 'mobile']) {
     assert.equal(TIERS[name].contact, name !== 'mobile'); assert.equal(TIERS[name].puddles, name === 'hq');

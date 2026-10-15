@@ -101,7 +101,7 @@ float puddle() { vec2 p = vWetWorld.xz * 0.35; float n = 0.55 * wetNoise( p ) + 
 // ---- Soft sun shadows (PCSS), as Blender's sun has a size: the penumbra grows with the distance to whatever blocks the
 // light, so leaves 20 m away cast wide soft dapples while a window frame stays crisp. three's shadow map only answers
 // "lit or not", so the sun's depth is rendered once more into a readable texture (alpha cut-outs kept) and filtered here.
-const SUN_RADIUS = THREE.MathUtils.degToRad(0.6);   // half of Blender's 1.2 degree sun angle in the bake
+const SUN_RADIUS = THREE.MathUtils.degToRad(0.265);   // the real sun's angular radius (0.53 degrees across): crisp penumbrae like real sunlight
 const spiral = n => Array.from({ length: n }, (_, j) => { const r = Math.sqrt((j + 0.5) / n), a = j * 2.399963229728653; return `vec2(${(Math.cos(a) * r).toFixed(6)}, ${(Math.sin(a) * r).toFixed(6)})`; }).join(', ');
 // Taps per quality tier, [blocker search, filter]: hq keeps the full set; laptop and mobile trade a little more grain in
 // the penumbrae for fewer depth reads (PCSS was ~3.8 ms of a GPU-bound 4x-1440p living frame on the A6000 at 16/24).
@@ -627,6 +627,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const byId = new Map(), byCount = new Map();
   for (const u of header.units) { if (u.id) byId.set(u.id, u); if (!byCount.has(u.vc)) byCount.set(u.vc, []); byCount.get(u.vc).push(u); }
   const weather = new Map(), emissionCopies = new Map();
+  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level; };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
   pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them
@@ -678,7 +679,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       if (mats.has(key)) return mats.get(key);
       // a clean copy: none of the walkthrough's fake-GI shader patches, the bake's light instead of the sky's diffuse
       const c = m.clone(); c.onBeforeRender = m.onBeforeRender;
-      if (multi && emitsLight(m)) emissionCopies.set(c, { source: m, base: m.emissiveIntensity });
+      if (emitsLight(m)) emissionCopies.set(c, { source: m, base: m.emissiveIntensity });   // copies must follow their switch even with one slot
       if (multi) weather.set(c, { cls: cls === 'ground' ? null : cls, color: c.color.clone(), roughness: c.roughness });
       wetten(c, cls === 'ground' ? null : cls, SLOTS[slot].wet);   // ground wetness is per pixel
       if (!emitsLight(m)) c.emissiveIntensity = 0;   // a raster glow stand-in: the bake has the real light
@@ -772,7 +773,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   }
   // main calls after layout.animate, garden wind and all interaction/parent transform updates.
   // switch levels follow the switches (and the slot's default switch set, blended through a slot fade)
-  const updateGroups = dt => { if (!groups) return; const fade = slots?.uniforms.uSlotBlend.value ?? 0; groups.update(dt, slots?.name ?? slot, fade > 0 ? slots.desired : undefined, fade); groups.applyGlow(); };
+  const updateGroups = dt => { if (!groups) return; const fade = slots?.uniforms.uSlotBlend.value ?? 0; groups.update(dt, slots?.name ?? slot, fade > 0 ? slots.desired : undefined, fade); groups.applyGlow(); syncEmissionCopies(slots?.params.lamps ?? lamps); };
   // Fragment sampler audit (sampler_budget.js), once a second over the programs linked since: stats.samplers holds the
   // most samplers any baked program uses. A baked program that still failed to link over the texture units (the
   // estimate missed) has its materials compile again with a lower limit, so the next fit leaves more out.
@@ -894,12 +895,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   if (groups) stats.lampGroups = { groups: groupMeta.groups.length, textures: groupMeta.textures, switches: groups.switches, matched: groups.matched, resolution: groups.resolution, probes: !!groups.probeSH, mips: groups.texture?.userData.mips ?? null };
   const api = { lampGroups: groups, stats, auditSamplers: () => { audit(); return stats.samplers; }, combine, target, slot: SLOTS[slot], slotName: slot, availableSlots, sunShadow: pcss, updateMovables, afterTime, setQuality, register, dispose, puddleRefl, setFeatures };
   // Fixture switches update before this hook each frame. Apply the preset's physical lamp glow last.
+  // With lamp groups each switch drives its own fixtures' glow (groups.applyGlow); the preset level only applies to the
+  // single shared lamps layer. Either way the lightmapped copies (what actually renders) follow their sources afterwards.
   const setFixtureGlow = level => {
-    for (const { toggle } of lighting.lightSwitches ?? []) for (const g of toggle.glows) {
+    if (!groups) for (const { toggle } of lighting.lightSwitches ?? []) for (const g of toggle.glows) {
       const property = g.wash ? 'opacity' : 'emissiveIntensity';
       g.material[property] = (g.wash ? g.base : g.base * 1.8) * level * (toggle.manual ? toggle.value : 1);
     }
-    for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level;
+    syncEmissionCopies(level);
   };
   if (multi) {
     const stageSlot = async (name, res, onProgress) => {

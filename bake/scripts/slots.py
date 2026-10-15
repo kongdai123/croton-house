@@ -12,7 +12,7 @@ SLOTS = {
                     lamps=0.25, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=1),
     'noon': dict(sun=dict(az=180, el=57, strength=36.0, color=[1.0, 0.95, 0.88]),
                  sky=0.55, dust=1.0, clouds=[0.62, 0.82], lampK=3000,
-                 lamps=0.0, ev=-0.3, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),
+                 lamps=0.0, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),
     'golden': dict(sun=dict(az=255, el=7, strength=16.0, color=[1.0, 0.56, 0.28]),
                    sky=0.38, dust=2.0, clouds=[0.56, 0.76], lampK=3000,
                    lamps=0.7, ev=-0.55, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),

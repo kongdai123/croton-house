@@ -174,17 +174,17 @@ ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, to
 // Toggling dusk needs the other sky now, so it opens the background preparation's quiet-moment gate (see below).
 let skyUrgent = false;
 let slotRequestId = 0;
-async function setBakedSlot(name) {
+async function setBakedSlot(name, { quiet = false } = {}) {   // quiet: the tour names the time in its own caption
   if (!state.ready || !firstFrameDrawn || state.bakedSlotPending || !baked || !baked.availableSlots.includes(name)) return false;
   const requestId = ++slotRequestId;
   state.bakedSlotPending = name; ui.syncLegends();
-  const loading = ui.slotLoading(name);
+  const loading = quiet ? { progress() {}, hide() {} } : ui.slotLoading(name);   // the tour switches without the loading screen
   try {
     const switched = await baked.setSlot(name, loading.progress);
     if (!switched || requestId !== slotRequestId || !baked) return false;
     state.bakedSlot = baked.slotName; state.dusk = baked.slotName === 'dusk';
     for (const o of layout.placed) o.userData.onTime?.(state.dusk, false);
-    ui.syncLegends(); ui.toast(t(`slot_${baked.slotName}`));
+    ui.syncLegends(); if (!quiet) ui.toast(t(`slot_${baked.slotName}`));
     return true;
   } catch (err) { console.warn('baked slot kept previous scene', err); loading.hide(); if (requestId === slotRequestId) ui.toast(t('slotFailed')); return false; }
   finally { loading.hide(); state.bakedSlotPending = null; ui.syncLegends(); }

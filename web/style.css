@@ -313,7 +313,7 @@ body.touring #crosshair, body.touring #label, body.in-pano #crosshair, body.in-p
 #label { font-family:var(--serif) }
 #panoload i { background:var(--hr) } #panoload b { background:var(--hi) }
 #caption { background:var(--hp-a); color:var(--hi); border:1px solid var(--hk); border-left:calc(5 * var(--u)) solid var(--hred); border-radius:0; text-shadow:none; box-shadow:0 calc(10 * var(--u)) calc(30 * var(--u)) rgba(0,0,0,.16) }
-#caption small { color:var(--hm); opacity:1; letter-spacing:.12em; text-transform:uppercase }
+#caption small { color:var(--hi); opacity:1; letter-spacing:.12em; text-transform:uppercase }
 #viewExit { background:var(--hp-a); color:var(--hi); border:1px solid var(--hi); border-radius:0; box-shadow:0 calc(8 * var(--u)) calc(24 * var(--u)) rgba(0,0,0,.16) }
 #viewExitBtn { color:var(--hi); background:none; border:1px solid var(--hk); border-radius:0 }
 #viewExitBtn:hover { background:rgba(26,25,23,.06) }

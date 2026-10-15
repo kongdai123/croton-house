@@ -17,13 +17,14 @@ export const DEFAULT_ON = {
                                                    // read as a dark house: -0.8 stops in the living view)
   noon: [],
   golden: ['living', 'kitchenPendant', 'dining'],  // evening: the living room, island and dining table
-  dusk: '*',                                       // blue hour: every interior lamp and the porch, the garage stays dark
+  dusk: '*',                                       // blue hour: every interior lamp and the porch
 };
-const DUSK_OFF = new Set(['garage']);
+// The garage has almost no daylight (dark walls, one small window): its lights start on at every time of day.
+const ALWAYS_DEFAULT = new Set(['garage']);
 export const defaultOn = (slot, group) => {
-  if (group.always) return true;
+  if (group.always || ALWAYS_DEFAULT.has(group.name)) return true;
   const set = DEFAULT_ON[slot];
-  if (set === '*') return !DUSK_OFF.has(group.name);
+  if (set === '*') return true;
   return !!set?.includes(group.name);
 };
 // The group array stays at half resolution or below unless ?lmgroups=full (five layers at full size are ~0.9 GB).

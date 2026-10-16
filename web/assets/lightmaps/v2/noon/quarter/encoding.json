@@ -1,1 +1,1 @@
-{"curve": "sqrt(x/(x+K))", "K": {"slot": 0.22277, "lamps": 0.94367}, "lampsSlot": "sunrise"}
+{"curve": "sqrt(x/(x+K))", "K": {"slot": 0.21786, "lamps": 0.76143}, "lampsSlot": "sunrise"}

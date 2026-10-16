@@ -13,4 +13,6 @@ class NoCache(http.server.SimpleHTTPRequestHandler):
 
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8780
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-http.server.ThreadingHTTPServer(('127.0.0.1', port), partial(NoCache, directory=root)).serve_forever()
+class Server(http.server.ThreadingHTTPServer):
+    request_queue_size = 256   # the page opens ~70 lightmap requests at once; the default backlog of 5 drops connections
+Server(('127.0.0.1', port), partial(NoCache, directory=root)).serve_forever()

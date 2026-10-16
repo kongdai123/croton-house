@@ -1,8 +1,8 @@
 # Switchable baked lamps, step 3: merge each lamp group's bakes and pack every group's light for the site.
 #   merge (Blender's Python, CROTON_SITE_PACKAGES for numpy/torch): one group folder's lamps_gKK.exr -> lum.npy
 #     blender -b --python-exit-code 1 -P scripts/lamp_groups_pack.py -- merge <bakes>/gNN [guides.npz]
-#     As composite_v2.py's lamps layer: covered texels of every object group, the chart-aware denoiser (lamp pools keep
-#     their falloff), charts grown 16 texels into the padding. Lamp light is warm white (3000 K), so a group keeps its
+#     As composite_v2.py's lamps layer: covered texels of every object group, the world fill (CROTON_HOLES: the slot
+#     composite's holes.npy), the chart-aware denoiser (lamp pools keep their falloff), charts grown 16 texels into the padding. Lamp light is warm white (3000 K), so a group keeps its
 #     luminance (Rec. 709) per texel and one colour (its mean lit chromaticity, luminance 1) in color.json.
 #   pack (any Python with numpy + Pillow): every group -> lampgroups/ for web/assets/lightmaps/v2/
 #     python scripts/lamp_groups_pack.py pack <groups.json> <bakes> <coverage.npy> <out> [--probes scene/probes.json]
@@ -29,12 +29,20 @@ def merge(folder, guides=None):
         a = load(p); m = a[..., 3] > 0.5
         if acc is None: acc = np.zeros_like(a[..., :3]); cov = np.zeros(m.shape, bool)
         acc[m] = a[m, :3]; cov |= m; del a
-    out, filled = acc, cov.copy()
+    out, valid = acc, cov
     guides = guides or os.environ.get('CROTON_GUIDES')
     if guides and os.path.exists(guides) and os.environ.get('CROTON_DENOISE') != '0':
         import denoise
-        out, set_ = denoise.denoise(out, cov, denoise.load_guides(guides), log=lambda m: print(m, flush=True), rel=1e-4); filled |= set_
-    else: print('not denoised')
+        G = denoise.load_guides(guides)
+        # as composite_v2.py: the slot bake's holes (holes.npy, top-first; lamp light alone cannot tell a hole from a
+        # dark corner) and the texels the rasteriser skipped take the light of the surface around them
+        holes = os.environ.get('CROTON_HOLES'); hole = np.zeros(cov.shape, bool)
+        if holes: hole = cov & np.load(holes)[::-1]; valid = cov & ~hole
+        filled = denoise.world_fill([out], valid, G, log=lambda m: print(m, flush=True))
+        dark = hole & ~filled; valid = valid | filled   # buried holes stay black (composite_v2.py)
+        out, set_ = denoise.denoise(out, valid, G, log=lambda m: print(m, flush=True), rel=1e-4); filled = valid | set_ | dark
+        out[dark] = 0   # buried holes stay black
+    else: print('not denoised'); filled = cov.copy()
     for _ in range(16):
         s = np.zeros_like(out); n = np.zeros(filled.shape, np.float32)
         for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):

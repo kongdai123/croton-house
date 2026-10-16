@@ -141,7 +141,10 @@ def atrous(cur, valid, var, G, levels, sigma_x, sigma_l, rel, sigma_n=64.0, plan
                 dp = shifted(pos, dy, dx) - pos; d2 = (dp * dp).sum(0); dpl = (nrm * dp).sum(0).abs()
                 wgt = h[i] * h[j] * m * (nrm * shifted(nrm, dy, dx)).sum(0).clamp_min(0) ** sigma_n * (-d2 / (2 * sigma_x ** 2) - dpl / (plane * st * ts + 1e-6)).exp()
                 q = shifted(cur, dy, dx); lq = lum(q); vq = shifted(var, dy, dx)   # symmetric, so bright and dark texels trade energy evenly
-                wgt = wgt * (-(lq - lp).abs() / (sigma_l * (0.5 * (var + vq)).clamp_min(0).sqrt() + rel * 0.5 * (lp + lq).abs() + 1e-6)).exp()
+                agree = (-(lq - lp).abs() / (sigma_l * (0.5 * (var + vq)).clamp_min(0).sqrt() + rel * 0.5 * (lp + lq).abs() + 1e-6)).exp()
+                # a texel without a value yet has nothing to agree with: its placeholder 0 would pull the fill towards the
+                # darkest neighbours (black slits through thin charts), so it takes its chart's neighbours unweighted
+                wgt = wgt * torch.where(valid, agree, 1.0)
                 if dy == dx == 0: wgt = torch.where(valid, wgt, 0)
                 acc += wgt * q; wsum += wgt; vacc += wgt * wgt * vq
         ok = wsum > 0
@@ -168,5 +171,47 @@ def denoise(rgb, cov, G, levels=6, sigma_x=0.4, sigma_l=4.5, rel=0.08, log=print
     cur, fil = atrous(col, valid, var, G, levels, sigma_x, sigma_l, rel, log=log, t0=t0)
     out = np.array(rgb, np.float32, copy=True); m = ((chart >= 0) & fil).cpu().numpy(); out[m] = cur.permute(1, 2, 0).cpu().numpy()[m]
     return out, m
+
+def holes(cov, layers, isolated=2):
+    """The texels a bake holds no usable light for: covered but black in every given layer (sky and sun bounce: any
+    surface the visitor can see gets some). They lie inside other geometry: piping sunk into an arm, a cushion pressed
+    into the frame, overlapping boxes; their zeros would bleed into the visible part of the same few texels. A lit texel
+    with at most `isolated` lit texels in its 5x5 window is light leaking through a crack into such a surface: a hole too."""
+    from scipy.ndimage import convolve
+    dark = cov.copy()
+    for a in layers: dark &= ~np.any(a > 0, axis=-1)
+    lit = cov & ~dark
+    return dark | (lit & (convolve(lit.astype(np.uint8), np.ones((5, 5), np.uint8), mode='constant') <= isolated))
+
+def world_fill(layers, valid, G, k=16, reach=3.0, min_dot=0.5, chunk=1 << 19, log=print):
+    """Fill every chart texel that has no valid value (the bake's rasteriser skips texel centres in thin UV triangles:
+    piping, pinched edges, pole fans; or it was a hole, see holes()) from the valid texels nearest to it on the SURFACE,
+    by the guides' world positions and normals, within reach x its own texel size; a chart neighbour in the atlas is
+    usually an unrelated object. layers: (H, W, 3) arrays in Blender row order, filled in place. Returns the mask of
+    texels filled. Texels with no valid texel near enough facing the same way (enclosed surfaces) stay as they were."""
+    from scipy.spatial import cKDTree
+    t0 = time.time(); H, W = G['H'], G['W']
+    chart = G['chart'].reshape(-1).cpu().numpy()
+    v = np.flatnonzero(valid.reshape(-1) & (chart >= 0)); q = np.flatnonzero(~valid.reshape(-1) & (chart >= 0))
+    filled = np.zeros(H * W, bool)
+    if not len(v) or not len(q): return filled.reshape(H, W)
+    pos = G['pos'].permute(1, 2, 0).reshape(-1, 3); nrm = G['nrm'].permute(1, 2, 0).reshape(-1, 3); ts = G['tsize'].reshape(-1)
+    pv = pos[torch.as_tensor(v, device=pos.device)].cpu().numpy().astype(np.float64)
+    nv = nrm[torch.as_tensor(v, device=pos.device)].cpu().numpy()
+    tree = cKDTree(pv)
+    flat = [a.reshape(-1, 3) for a in layers]
+    if not all(np.shares_memory(f, a) for f, a in zip(flat, layers)): raise ValueError('world_fill fills contiguous arrays in place')
+    for s in range(0, len(q), chunk):
+        qi = q[s:s + chunk]; ix = torch.as_tensor(qi, device=pos.device)
+        pq = pos[ix].cpu().numpy().astype(np.float64); nq = nrm[ix].cpu().numpy(); r = reach * np.maximum(ts[ix].cpu().numpy(), 1e-3)
+        d, j = tree.query(pq, k=k, distance_upper_bound=float(r.max()), workers=-1)
+        ok = np.isfinite(d) & (d <= r[:, None]); j = np.where(ok, j, 0)
+        dot = np.einsum('qc,qkc->qk', nq, nv[j])
+        w = np.where(ok & (dot > min_dot), np.exp(-(d / (0.5 * r[:, None])) ** 2) * dot * dot, 0).astype(np.float32)
+        sw = w.sum(1); f = sw > 0; src = v[j[f]]; wf = w[f] / sw[f, None]
+        for a in flat: a[qi[f]] = np.einsum('qk,qkc->qc', wf, a[src])
+        filled[qi[f]] = True
+    log(f'world fill: {len(q)} chart texels without light, {filled.sum()} filled from the surface around them, {time.time() - t0:.0f} s')
+    return filled.reshape(H, W)
 
 if __name__ == '__main__' and sys.argv[1] == 'guides': build_guides(*sys.argv[2:5])

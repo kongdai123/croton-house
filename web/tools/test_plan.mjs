@@ -35,7 +35,7 @@ function vectors() {
   // boundaries and decided edges: office / dining, the vestibule nub, bedroom B's nub, the hall strip, garage notch, porch
   pts.push([1.1185, 3], [1.12, 3], [1.1, 3], [0.42, 3], [-4.5, 1.2], [-4.5, 0.7], [4.5, 1.5], [4.5, 1.6], [4.03, 0.2], [4.03, 0.75], [-4.93, -0.714], [-4.9, -0.65], [-4.2, -0.3],
     [-3.5, -5.2], [-3.45, -5.2], [3.95, -5.2], [4.0, -5.2], [8.1, 0], [8.15, 0], [-8.1, 0], [0, 5.55], [0, -4.8], [-6.5, 0.2], [-6.3, 1.0], [6.0, -1.7], [3.7, 2.8], [-6.3, 2.0], [0, 0], [-100, -100], [200, 0]);
-  const margins = [0, plan.outline.insideMargin, 0.15];
+  const margins = [0, null, plan.outline.insideMargin, 0.15];   // null: the default (insideMargin with its per-edge exceptions)
   return {
     note: 'Shared test vectors for web/src/plan.js and bake/scripts/plan.py (generated from plan.js by UPDATE_VECTORS=1 node web/tools/test_plan.mjs).',
     margins,

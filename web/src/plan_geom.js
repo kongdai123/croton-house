@@ -67,16 +67,16 @@ export function dist(x, y, P) {
   return best;
 }
 
-// Outward offset of a counter-clockwise rectilinear polygon by m (the Minkowski sum with a 2m square, i.e. the outline
-// "dilated by a margin"), in 0.1 mm integers. Each vertex joins one horizontal and one vertical edge: move each edge
-// along its outward normal and take the corner of the two moved lines.
+// Outward offset of a counter-clockwise rectilinear polygon by m (a number: the Minkowski sum with a 2m square, i.e.
+// the outline "dilated by a margin"; an array: one distance per edge P[i] -> P[i + 1]), in 0.1 mm integers. Each
+// vertex joins one horizontal and one vertical edge: move each edge along its outward normal, take the corner.
 export function offset(P, m) {
-  const n = P.length, k = Math.round(m * 1e4), I = P.map(([x, y]) => [Math.round(x * 1e4), Math.round(y * 1e4)]), out = [];
+  const n = P.length, K = P.map((_, i) => Math.round((typeof m === 'number' ? m : m[i]) * 1e4)), I = P.map(([x, y]) => [Math.round(x * 1e4), Math.round(y * 1e4)]), out = [];
   for (let i = 0; i < n; i++) {
     const a = I[(i + n - 1) % n], b = I[i], c = I[(i + 1) % n];
     // CCW: outward normal of edge p->q is (dy, -dx) normalised
-    const shift = (p, q) => [Math.sign(q[1] - p[1]) * k, -Math.sign(q[0] - p[0]) * k];
-    const s1 = shift(a, b), s2 = shift(b, c);
+    const shift = (p, q, k) => [Math.sign(q[1] - p[1]) * k, -Math.sign(q[0] - p[0]) * k];
+    const s1 = shift(a, b, K[(i + n - 1) % n]), s2 = shift(b, c, K[i]);
     const x = a[0] === b[0] ? b[0] + s1[0] : b[0] + s2[0], y = a[1] === b[1] ? b[1] + s1[1] : b[1] + s2[1];
     out.push([x / 1e4, y / 1e4]);
   }

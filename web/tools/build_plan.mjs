@@ -131,6 +131,7 @@ export function buildPlan(house, overlay) {
 export function validate(plan) {
   const err = [], ids = new Set(), byId = new Map(plan.spaces.map(s => [s.id, s]));
   const fp = plan.outline.polygon;
+  for (const { edge } of plan.outline.insideMarginEdges ?? []) if (!fp.some((p, i) => { const q = fp[(i + 1) % fp.length]; return JSON.stringify([p, q]) === JSON.stringify(edge) || JSON.stringify([q, p]) === JSON.stringify(edge); })) err.push(`insideMarginEdges: ${JSON.stringify(edge)} is not an outline edge`);
   for (const s of plan.spaces) {
     if (ids.has(s.id)) err.push(`space ${s.id}: duplicate id`); ids.add(s.id);
     const P = s.polygon;

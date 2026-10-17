@@ -42,19 +42,23 @@ export function roomName(x, y) {
 export const rectOf = id => { const s = space(id); return s ? bbox(s.polygon) : null; };
 
 // ---- inside the house -----------------------------------------------------------------------------------------------------
-// The outline grown by `margin` (default: the stucco skin), as closed rects: one test for JS, GLSL and Python.
-const RECTS = new Map();
-export function insideRects(margin = data.outline.insideMargin) {
-  let r = RECTS.get(margin);
-  if (!r) RECTS.set(margin, r = rects(margin ? offset(data.outline.polygon, margin) : data.outline.polygon));
+// The outline grown by `margin` metres on every edge, or by default by insideMargin with the per-edge exceptions
+// (insideMarginEdges: the porch sides), as closed rects: one test for JS, GLSL and Python.
+const RECTS = new Map(), OUTLINE = data.outline.polygon;
+const sameEdge = (e, p, q) => (e[0][0] === p[0] && e[0][1] === p[1] && e[1][0] === q[0] && e[1][1] === q[1]) || (e[0][0] === q[0] && e[0][1] === q[1] && e[1][0] === p[0] && e[1][1] === p[1]);
+export const edgeMargins = () => OUTLINE.map((p, i) => (data.outline.insideMarginEdges ?? []).find(x => sameEdge(x.edge, p, OUTLINE[(i + 1) % OUTLINE.length]))?.margin ?? data.outline.insideMargin);
+export function insideRects(margin) {
+  const key = margin ?? 'default';
+  let r = RECTS.get(key);
+  if (!r) RECTS.set(key, r = rects(margin === 0 ? OUTLINE : offset(OUTLINE, margin ?? edgeMargins())));
   return r;
 }
-export function isInside(x, y, margin = data.outline.insideMargin) {
+export function isInside(x, y, margin) {
   for (const r of insideRects(margin)) if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return true;
   return false;
 }
 // GLSL of the same test: `float name(vec2 p)` returns 1.0 outside, 0.0 inside (p = plan x, y).
-export function insideGLSL(name = 'outsideHouse', margin = data.outline.insideMargin) {
+export function insideGLSL(name = 'outsideHouse', margin) {
   const n = glslNum, t = insideRects(margin).map(r => `(p.x >= ${n(r.x0)} && p.x <= ${n(r.x1)} && p.y >= ${n(r.y0)} && p.y <= ${n(r.y1)})`);
   return `float ${name}(vec2 p) { return (${t.join(' || ')}) ? 0.0 : 1.0; }`;
 }

@@ -34,8 +34,9 @@ class PlanReader(unittest.TestCase):
 
     def test_inside_rects_and_glsl(self):
         for m in V['margins']:
-            self.assertEqual(P.inside_rects(m), V['insideRects'][str(m)], f'margin {m}')
-            self.assertEqual(P.inside_glsl('outsideHouse', m), V['insideGLSL'][str(m)], f'margin {m}')
+            k = 'null' if m is None else str(m)
+            self.assertEqual(P.inside_rects(m), V['insideRects'][k], f'margin {m}')
+            self.assertEqual(P.inside_glsl('outsideHouse', m), V['insideGLSL'][k], f'margin {m}')
 
     def test_frames(self):
         self.assertEqual([planlib.to_scene(1, 2, 3), planlib.to_plan(1, 3, -2)], V['toScene'])

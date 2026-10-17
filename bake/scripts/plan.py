@@ -75,10 +75,12 @@ def _sign(v): return (v > 0) - (v < 0)
 
 
 def offset(P, m):
-    n = len(P); k = jround(m * 1e4); I = [(jround(x * 1e4), jround(y * 1e4)) for x, y in P]; out = []
+    """m: one distance, or one per edge P[i] -> P[i + 1]."""
+    n = len(P); K = [jround((m if isinstance(m, (int, float)) else m[i]) * 1e4) for i in range(n)]
+    I = [(jround(x * 1e4), jround(y * 1e4)) for x, y in P]; out = []
     for i in range(n):
         a, b, c = I[i - 1], I[i], I[(i + 1) % n]
-        s1 = (_sign(b[1] - a[1]) * k, -_sign(b[0] - a[0]) * k); s2 = (_sign(c[1] - b[1]) * k, -_sign(c[0] - b[0]) * k)
+        s1 = (_sign(b[1] - a[1]) * K[i - 1], -_sign(b[0] - a[0]) * K[i - 1]); s2 = (_sign(c[1] - b[1]) * K[i], -_sign(c[0] - b[0]) * K[i])
         x = b[0] + s1[0] if a[0] == b[0] else b[0] + s2[0]
         y = b[1] + s1[1] if a[1] == b[1] else b[1] + s2[1]
         out.append((x / 1e4, y / 1e4))
@@ -155,13 +157,21 @@ class Plan:
     def rect_of(self, id):
         s = self.space(id); return bbox(s['polygon']) if s else None
 
-    # ---- inside the house
+    # ---- inside the house: the outline grown by `margin`, or by default by insideMargin with the per-edge exceptions
+    def edge_margins(self):
+        P = self.outline['polygon']; out = []
+        for i, p in enumerate(P):
+            q = P[(i + 1) % len(P)]
+            m = next((e['margin'] for e in self.outline.get('insideMarginEdges', []) if sorted(map(tuple, e['edge'])) == sorted([tuple(p), tuple(q)])), self.outline['insideMargin'])
+            out.append(m)
+        return out
+
     def inside_rects(self, margin=None):
-        if margin is None: margin = self.outline['insideMargin']
-        if margin not in self._rects:
+        key = 'default' if margin is None else margin
+        if key not in self._rects:
             P = self.outline['polygon']
-            self._rects[margin] = rects(offset(P, margin) if margin else P)
-        return self._rects[margin]
+            self._rects[key] = rects(P if margin == 0 else offset(P, self.edge_margins() if margin is None else margin))
+        return self._rects[key]
 
     def is_inside(self, x, y, margin=None):
         for r in self.inside_rects(margin):

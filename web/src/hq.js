@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pieces as planPieces } from './plan.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -131,7 +132,7 @@ export function prepareMirrors(scene, mirrors, house) {
   const start = performance.now();
   scene.updateMatrixWorld(true);
   const sources = [], lights = [], bounds = new THREE.Box3(), position = new THREE.Vector3();
-  const walls = house.pieces.map(p => new THREE.Box3(new THREE.Vector3(p.x0, p.z0, -p.y1), new THREE.Vector3(p.x1, p.z1, -p.y0)));
+  const walls = planPieces.map(p => new THREE.Box3(new THREE.Vector3(p.x0, p.z0, -p.y1), new THREE.Vector3(p.x1, p.z1, -p.y0)));
   scene.traverse(source => {
     if (source.isLight) lights.push(source);
     if (!source.isMesh || source.isReflector || source.userData.batched || source.userData.lightHit) return;

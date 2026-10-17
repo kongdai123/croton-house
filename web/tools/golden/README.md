@@ -13,7 +13,11 @@ it changes nothing unintended.
 - `classify.json`: today's answer of each classifier per material, mesh and placed root.
 - `spatial.json`: every room / inside classifier sampled on a 5 cm lattice, x -16..16, y -15..20 (plan frame), as run-length
   rows of `[labelIndex, length]`. JS ones from `harness/spatial.mjs`, Python ones (`py:*`, plus lamp group per switch) from
-  `bake/scripts/capture_spatial.py`.
+  `bake/scripts/capture_spatial.py`. Since the plan model (step 2 of docs/architecture-lighting.md) the old classifiers
+  are retired as their consumers move to it: the golden tracks `js:plan.*` (spaceAt, roomName, isInside, insideGLSL
+  evaluated, indoorWeight) and `py:plan.*`, the remaining consumers' wrappers (`js:roam.areaOf`, `js:roam.isIndoor`,
+  `py:lamp_groups.room`), the probe volume's wall boxes and the site-side quotes still in use.
+- `plan_vectors.json`: the shared test vectors of the two plan readers (`../test_plan.mjs`, `bake/scripts/test_plan.py`).
 - `known_failures.json`: recorded violations of `../test_scene_invariants.mjs`.
 
 Commands (run from the repo root):
@@ -25,11 +29,11 @@ Commands (run from the repo root):
 
 ## Classifiers called from the real source
 
-`emitsLight`, lightmap.js `isMirror` / `weatherClass` / `insidePlan`, photo.js `presentation` / `weatherClass` / `insideHouse`,
-foliage_bake.js `isPlant`, puddles.js `wetMaterial` / `indoors` / `insidePlan`, light_switch.js `glowing`, pets/roam.js
-`areaOf` / `isIndoor` / `ROOMS`, rooms.js `roomAt`, `lighting.indoorWeight`. Module-private ones are exposed by appending an
-export at bundle time (no change to `web/src`). Python: `reflprobe_layout.py` imported; `lamp_groups.py`, `unwrap.py`,
-`setup.py`, `make_tasks.py` functions lifted by AST.
+`emitsLight`, lightmap.js `isMirror` / `weatherClass` / `probeWalls`, photo.js `presentation` / `weatherClass`,
+foliage_bake.js `isPlant`, puddles.js `wetMaterial` / `indoors`, light_switch.js `glowing`, pets/roam.js `areaOf` /
+`isIndoor`, plan.js (all of it), `lighting.indoorWeight`. Module-private ones are exposed by appending an export at bundle
+time (no change to `web/src`). Python: `plan.py` and `reflprobe_layout.py` imported; `lamp_groups.py` functions lifted by
+AST (with its `import plan` and `PLAN`).
 
 ## Quoted, to be replaced
 
@@ -52,7 +56,7 @@ today's behaviour; a replacement must reproduce it).
 | `probe.occl` | web/src/lightmap.js:1288 (foliageBake absent in the headless scene) | `foliage && !material.foliageBake` |
 | `mesh.sided` | web/src/lightmap.js:743 (material of a mesh under a door root or an animated root with a toggle) | `!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh under dynamic roots` |
 | `mesh.doorPart` | web/src/lightmap.js:660-664 | `root.userData.door && kind not in {french, slider}: every mesh whose parent is not the door root` |
-| `mesh.interior` | web/src/lighting.js:258-262 inside() + :285 | `inside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)` |
+| `mesh.interior` | web/src/lighting.js collectMaterials region | `plan.isInside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)` |
 | `mesh.isPlantRoot` | web/src/lightmap.js:193 | `any ancestor userData.id matches /^(plants\|garden\|flowers)-/` |
 | `mesh.pcssPlant` | web/src/lightmap.js:201 | `any material foliage \|\| isPlantRoot` |
 | `mesh.contactExcluded` | web/src/contact.js:171-173 depthOf | `m.transparent \|\| m.transmission > 0 \|\| m.isShaderMaterial \|\| m.alphaTest > 0 \|\| /^(garden-\|plant)/.test(m.name) (first of the mesh materials that triggers)` |
@@ -64,5 +68,5 @@ today's behaviour; a replacement must reproduce it).
 | `placed.exterior` | web/src/furniture/light_switch.js:138 (duplicated bake/export/switch_groups.mjs:40) | `/porch\|wall-light-black\|outdoor-front-lamp/.test(fixture.userData.id)` |
 | `placed.isPlantRoot` | web/src/lightmap.js:193 | `/^(plants\|garden\|flowers)-/ on the id of the root or an ancestor` |
 
-Also quoted in `spatial.mjs`: lighting.js `inside`, webgpu/scene.js inside, the two GLSL `outsideHouse` copies, daylight.js
-volume, grass.js `outdoor`, house.js `garagePts`, vpaudit.mjs `roomAt`, note-area and footprint polygons.
+Also quoted in `spatial.mjs`: grass.js `outdoor` (a planting keep-out, not yet from the plan), house.js `garagePts` (the
+garage + laundry floor slab), vpaudit.mjs `roomAt` (a manual tool over house.json).

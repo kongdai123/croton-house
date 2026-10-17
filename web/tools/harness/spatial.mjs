@@ -37,6 +37,14 @@ export function decode(c) {   // -> Uint16Array ny*nx of label indices
 
 const inPoly = (x, y, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
 
+// Evaluate generated GLSL `float f(vec2 p) { return (<bool expr over p.x, p.y>) ? 0.0 : 1.0; }` as JS, so the golden
+// proves the shader text and plan.isInside agree on every lattice point.
+function glslOutside(src) {
+  const body = src.match(/return \((.*)\) \? 0\.0 : 1\.0;/)[1];
+  if (/[^-\w\s.()&|<>=]/.test(body)) throw new Error('unexpected GLSL: ' + body);
+  return new Function('x', 'y', `const p = { x, y }; return (${body}) ? 0 : 1;`);
+}
+
 export function jsClassifiers(w) {
   const H = w.house, T = w.T;
   const rect = (r, x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
@@ -68,6 +76,13 @@ export function jsClassifiers(w) {
     ['js:plan.houseRooms', 'web/tools/vpaudit.mjs:15 roomAt over house.json rooms + notes', true, (x, y) => { const r = H.rooms.find(r => inPoly(x, y, r.pts)); return r ? label(r) : 'outside'; }],
     ['js:plan.notesArea', 'house.json notes[].area polygons (reflprobe_layout.room_of order)', true, (x, y) => H.notes.find(n => n.area && inPoly(x, y, n.area))?.label ?? ''],
     ['js:plan.footprint', 'house.json footprint polygon', true, (x, y) => inPoly(x, y, H.footprint)],
+    // the plan model (web/src/plan.js over data/plan.json): what the classifiers above are replaced by
+    ['js:plan.spaceAt', 'web/src/plan.js spaceAt (exact, empty in walls)', false, (x, y) => w.plan.spaceAt(x, y)?.id ?? ''],
+    ['js:plan.roomName', 'web/src/plan.js roomName (walls take the room they face)', false, (x, y) => { const r = w.plan.roomName(x, y); return r.outside ? 'outside:' + r.en : r.en; }],
+    ['js:plan.isInside', 'web/src/plan.js isInside, default margin (outline + insideMargin)', false, (x, y) => w.plan.isInside(x, y)],
+    ['js:plan.isInside@0', 'web/src/plan.js isInside margin 0 (the outline)', false, (x, y) => w.plan.isInside(x, y, 0)],
+    ['js:plan.insideGLSL', 'web/src/plan.js insideGLSL() text, evaluated (1 = outside)', false, glslOutside(w.plan.insideGLSL())],
+    ['js:plan.indoorWeight@1m', 'web/src/plan.js indoorWeight, h = 1.0', false, (x, y) => Math.round(w.plan.indoorWeight(x, y, 1.0) * 1000)],
   ];
   return C;
 }

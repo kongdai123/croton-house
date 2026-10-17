@@ -3,7 +3,9 @@
 #   version: scene/<version>/scene_lm.blend -> bakes/<version>/<slot>/; the light probes (probe.py, 8 chunks per layer)
 #   come along without a version, or with one when 'probes' is given (packed by probe_pack.py)
 import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from slots import SLOTS
+import plan as planlib
 slot, G = sys.argv[1], int(sys.argv[2]); samples = int(sys.argv[3]) if len(sys.argv) > 3 else 1024
 VER = sys.argv[4] if len(sys.argv) > 4 else ''
 SCENE = f'scene/{VER}/scene_lm.blend' if VER else 'scene/scene_lm.blend'
@@ -20,10 +22,11 @@ B = os.environ.get('BLENDER', 'blender')   # Blender 4.5 LTS
 os.makedirs('tasks/pending', exist_ok=True)
 import struct
 with open(f'{BAKES}/lightmap_uv.bin', 'rb') as f: n = struct.unpack('<I', f.read(4))[0]; W, H = json.loads(f.read(n))['atlas']
-# probe grid: 0.5 m inside the house, 1 m outside near it, at three heights a movable piece can stand at
+# probe grid: 0.5 m inside the house, 1 m outside near it, at three heights a movable piece can stand at; "inside" is
+# the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
+PLAN = planlib.load()
 def inside(x, y):
-    f = -5.94 if (x < -3.5 or x > 3.97) else -4.82
-    return -8.1 <= x <= 8.1 and f <= y <= 5.62
+    return PLAN.is_inside(x, y)
 pts = []
 for z in (0.35, 0.95, 1.55):
     for i in range(33):

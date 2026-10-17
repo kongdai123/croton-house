@@ -1,8 +1,11 @@
 # Build the Blender scene for the "after the rain, sun just rising" stills.
 # usage: blender -b -P setup.py -- croton.glb lights.json out.blend
 # Plan coordinates map straight onto Blender's: x east, y north, z up (the glTF importer turns three's -z into +y).
-import bpy, sys, json, math
+import bpy, sys, json, math, os
 from mathutils import Vector
+# plan.py: in the repo next door (bake/scripts), on the cluster the shared scripts/ copy (run from the bake root)
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts'), 'scripts']
+import plan as planlib
 
 DRY = '--dry' in sys.argv
 GLB, LIGHTS, OUT = sys.argv[sys.argv.index('--') + 1:][:3]
@@ -13,9 +16,9 @@ for ob in [o for o in scene.objects if o.type == 'LIGHT']:
     bpy.data.objects.remove(ob, do_unlink=True)
 
 
-def inside(x, y):
-    front = -5.94 if (x < -3.5 or x > 3.97) else -4.82
-    return -8.1 <= x <= 8.1 and front <= y <= 5.62
+PLAN = planlib.load()
+def inside(x, y):   # under the roof: the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
+    return PLAN.is_inside(x, y)
 
 
 def bsdf_of(mat):

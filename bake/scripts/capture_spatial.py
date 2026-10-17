@@ -73,14 +73,8 @@ def main():
     lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'PLAN', 'room', 'where', 'group_of', 'ORDER'})
     import plan as planlib
     P = planlib.load(str(ROOT / 'web/data/plan.json'))
-    unwrap = lift(ROOT / 'bake/scripts/unwrap.py', {'inside_plan'})
-    setup = lift(ROOT / 'bake/export/setup.py', {'inside'})
-    tasks = lift(ROOT / 'bake/scripts/make_tasks.py', {'inside'})
     C = [
         ('py:lamp_groups.room', 'bake/scripts/lamp_groups.py room(): lampGroup (or id) of the plan space, near 0.3; outside outdoors', lambda x, y: lg['room']([x, y, 0])),
-        ('py:unwrap.inside_plan', 'bake/scripts/unwrap.py:125', lambda x, y: js_bool(unwrap['inside_plan'](x, y))),
-        ('py:setup.inside', 'bake/export/setup.py:16', lambda x, y: js_bool(setup['inside'](x, y))),
-        ('py:make_tasks.inside', 'bake/scripts/make_tasks.py:24', lambda x, y: js_bool(tasks['inside'](x, y))),
         # the plan model (bake/scripts/plan.py over web/data/plan.json), same answers as web/src/plan.js
         ('py:plan.space_at', 'bake/scripts/plan.py space_at (exact, empty in walls)', lambda x, y: (P.space_at(x, y) or {}).get('id', '')),
         ('py:plan.is_inside', 'bake/scripts/plan.py is_inside, default margin', lambda x, y: js_bool(P.is_inside(x, y))),

@@ -122,9 +122,11 @@ print(f'units {len(units)}, ids {IDS}, kept {len(keep)}, skipped {skipped}, area
 # ---- unwrap and pack
 # Texel density by class, by scaling each piece before packing (xatlas sizes charts by area): furniture gets the finest
 # texels (crisp contact shading on small pieces), architecture medium, outdoor coarse. DENSITY scales all three.
-def inside_plan(x, y):
-    f = -5.94 if (x < -3.5 or x > 3.97) else -4.82
-    return -8.1 <= x <= 8.1 and f <= y <= 5.62
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import plan as planlib
+PLAN = planlib.load()
+def inside_plan(x, y):   # under the roof: the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
+    return PLAN.is_inside(x, y)
 def reuse(path):
     buf = open(path, 'rb').read(); n = struct.unpack('<I', buf[:4])[0]; old = json.loads(buf[4:4 + n]); base = 4 + n
     by = {u['id']: u for u in old['units'] if 'id' in u}

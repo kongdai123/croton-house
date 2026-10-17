@@ -46,7 +46,7 @@ function vectors() {
     neighbors: Object.fromEntries(P.spaces.map(s => [s.id, P.neighbors(s.id)])),
     otherSide: Object.fromEntries(P.openings.map(o => { const cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2, d = o.dir === 'H' ? [0, 1] : [1, 0]; return [o.id, [P.otherSide(o.id, cx - d[0], cy - d[1])?.id, P.otherSide(o.id, cx + d[0], cy + d[1])?.id]]; })),
     rectOf: Object.fromEntries(['garage', 'laundry', 'walkin', 'linen', 'porch', 'patio'].map(id => [id, P.rectOf(id)])),
-    insideRects: Object.fromEntries(margins.map(m => [m, P.insideRects(m)])),
+    insideShape: Object.fromEntries(margins.map(m => [m, P.insideShape(m)])),
     insideGLSL: Object.fromEntries(margins.map(m => [m, P.insideGLSL('outsideHouse', m)])),
     toScene: [P.toScene(1, 2, 3), P.toPlan(1, 3, -2)],
   };
@@ -64,6 +64,16 @@ if (process.env.UPDATE_VECTORS) {
       check(!bad && golden.points.length === fresh.points.length, `plan.js differs from plan_vectors.json at ${bad} points`);
     } else check(JSON.stringify(golden[k]) === JSON.stringify(fresh[k]), `plan.js differs from plan_vectors.json in ${k}`);
   }
+}
+// 3b. the specialised outline distance equals the general edge loop everywhere (random points, edges and corners)
+{
+  const { chebyshev, inPoly } = await importSrc('src/plan_geom.js');
+  const O = plan.outline.polygon, xs = [...new Set(O.map(p => p[0]))], ys = [...new Set(O.map(p => p[1]))];
+  let bad = 0, seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const probe = (x, y) => { const d = chebyshev(x, y, O), want = inPoly(x, y, O) ? d : -d; if (P.outlineDistance(x, y) !== want && bad++ < 3) console.log(`  outlineDistance(${x}, ${y}) = ${P.outlineDistance(x, y)}, edge loop ${want}`); };
+  for (let k = 0; k < 200000; k++) probe(rnd() * 24 - 12, rnd() * 24 - 12);
+  for (const x of xs) for (const y of ys) for (const dx of [-0.2, -1e-9, 0, 1e-9, 0.2]) for (const dy of [-0.2, -1e-9, 0, 1e-9, 0.2]) probe(x + dx, y + dy);
+  check(!bad, `outlineDistance differs from the edge loop at ${bad} points`);
 }
 // 4. the hot path stays cheap: indoorWeight (every frame) under 0.5 us per distinct call
 {

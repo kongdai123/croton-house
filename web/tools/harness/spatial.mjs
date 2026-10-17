@@ -37,12 +37,14 @@ export function decode(c) {   // -> Uint16Array ny*nx of label indices
 
 const inPoly = (x, y, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
 
-// Evaluate generated GLSL `float f(vec2 p) { return (<bool expr over p.x, p.y>) ? 0.0 : 1.0; }` as JS, so the golden
-// proves the shader text and plan.isInside agree on every lattice point.
+// Evaluate generated GLSL `float f(vec2 p) { return (<bool expr over p, vec2 and the vector comparisons>) ? 0.0 : 1.0; }`
+// as JS, so the golden proves the shader text and plan.isInside agree on every lattice point.
 function glslOutside(src) {
   const body = src.match(/return \((.*)\) \? 0\.0 : 1\.0;/)[1];
-  if (/[^-\w\s.()&|<>=]/.test(body)) throw new Error('unexpected GLSL: ' + body);
-  return new Function('x', 'y', `const p = { x, y }; return (${body}) ? 0 : 1;`);
+  if (/[^-\w\s.,()&|<>=!]/.test(body)) throw new Error('unexpected GLSL: ' + body);
+  const lib = 'const vec2 = (x, y) => [x, y], all = a => a[0] && a[1], P = [x, y], cmp = f => (p, v) => [f(P[0], v[0]), f(P[1], v[1])];'
+    + ' const greaterThan = cmp((a, b) => a > b), lessThan = cmp((a, b) => a < b), greaterThanEqual = cmp((a, b) => a >= b), lessThanEqual = cmp((a, b) => a <= b), p = P;';
+  return new Function('x', 'y', `${lib} return (${body}) ? 0 : 1;`);
 }
 
 export function jsClassifiers(w) {

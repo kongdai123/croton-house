@@ -98,6 +98,24 @@ export function rects(P) {
   }
   return out;
 }
+// The polygon as its bbox (closed) minus open "holes": the bbox \ polygon slabs, merged like rects(); a hole side on the
+// bbox boundary is pushed 1 m out, so every hole test is strict and a point on a polygon edge stays inside. Two
+// comparisons per axis per term: the cheap form of the inside test for shaders and per-frame code.
+export function boxHoles(P) {
+  const box = bbox(P), xs = [...new Set(P.map(p => p[0]))].sort((a, b) => a - b), holes = [];
+  let prev = [];
+  for (let s = 0; s + 1 < xs.length; s++) {
+    const xm = (xs[s] + xs[s + 1]) / 2, ys = [box.y0];
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) if (P[i][1] === P[j][1] && Math.min(P[i][0], P[j][0]) < xm && Math.max(P[i][0], P[j][0]) > xm) ys.push(P[i][1]);
+    ys.push(box.y1); ys.sort((a, b) => a - b);
+    const spans = []; for (let k = 0; k + 1 < ys.length; k += 2) if (ys[k] < ys[k + 1]) spans.push([ys[k], ys[k + 1]]);
+    const same = spans.length === prev.length && spans.every((sp, k) => sp[0] === prev[k].y0 && sp[1] === prev[k].y1);
+    if (same) for (const r of prev) r.x1 = xs[s + 1];
+    else { prev = spans.map(([y0, y1]) => ({ x0: xs[s], x1: xs[s + 1], y0, y1 })); holes.push(...prev); }
+  }
+  for (const h of holes) { if (h.x0 === box.x0) h.x0 -= 1; if (h.x1 === box.x1) h.x1 += 1; if (h.y0 === box.y0) h.y0 -= 1; if (h.y1 === box.y1) h.y1 += 1; }
+  return { box, holes };
+}
 const rectOverlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
 export const overlapArea = (A, B) => { let s = 0; for (const a of rects(A)) for (const b of rects(B)) s += rectOverlap(a, b); return s; };
 export const area = P => Math.abs(signedArea(P));

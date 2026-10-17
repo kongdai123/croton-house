@@ -102,6 +102,28 @@ def rects(P):
     return out
 
 
+def box_holes(P):
+    """plan_geom.js boxHoles: the closed bbox minus open holes (bbox \\ polygon slabs), hole sides on the bbox pushed 1 m out."""
+    box = bbox(P); xs = sorted(set(p[0] for p in P)); holes = []; prev = []
+    for s in range(len(xs) - 1):
+        xm = (xs[s] + xs[s + 1]) / 2; ys = [box['y0']]; j = len(P) - 1
+        for i in range(len(P)):
+            if P[i][1] == P[j][1] and min(P[i][0], P[j][0]) < xm < max(P[i][0], P[j][0]): ys.append(P[i][1])
+            j = i
+        ys.append(box['y1']); ys.sort()
+        spans = [(ys[k], ys[k + 1]) for k in range(0, len(ys) - 1, 2) if ys[k] < ys[k + 1]]
+        if len(spans) == len(prev) and all(sp[0] == r['y0'] and sp[1] == r['y1'] for sp, r in zip(spans, prev)):
+            for r in prev: r['x1'] = xs[s + 1]
+        else:
+            prev = [dict(x0=xs[s], x1=xs[s + 1], y0=a, y1=b) for a, b in spans]; holes += prev
+    for h in holes:
+        if h['x0'] == box['x0']: h['x0'] -= 1
+        if h['x1'] == box['x1']: h['x1'] += 1
+        if h['y0'] == box['y0']: h['y0'] -= 1
+        if h['y1'] == box['y1']: h['y1'] += 1
+    return dict(box=box, holes=holes)
+
+
 def glsl_num(v):   # plan_geom.js glslNum: shortest round-trip text (repr == JavaScript String here), with a decimal point
     s = repr(q4(v))
     return s if ('.' in s or 'e' in s) else s + '.0'
@@ -166,22 +188,25 @@ class Plan:
             out.append(m)
         return out
 
-    def inside_rects(self, margin=None):
+    def inside_shape(self, margin=None):
         key = 'default' if margin is None else margin
         if key not in self._rects:
             P = self.outline['polygon']
-            self._rects[key] = rects(P if margin == 0 else offset(P, self.edge_margins() if margin is None else margin))
+            self._rects[key] = box_holes(P if margin == 0 else offset(P, self.edge_margins() if margin is None else margin))
         return self._rects[key]
 
     def is_inside(self, x, y, margin=None):
-        for r in self.inside_rects(margin):
-            if r['x0'] <= x <= r['x1'] and r['y0'] <= y <= r['y1']: return True
-        return False
+        sh = self.inside_shape(margin); b = sh['box']
+        if x < b['x0'] or x > b['x1'] or y < b['y0'] or y > b['y1']: return False
+        for h in sh['holes']:
+            if h['x0'] < x < h['x1'] and h['y0'] < y < h['y1']: return False
+        return True
 
     def inside_glsl(self, name='outsideHouse', margin=None):
-        n = glsl_num
-        t = [f"(p.x >= {n(r['x0'])} && p.x <= {n(r['x1'])} && p.y >= {n(r['y0'])} && p.y <= {n(r['y1'])})" for r in self.inside_rects(margin)]
-        return f"float {name}(vec2 p) {{ return ({' || '.join(t)}) ? 0.0 : 1.0; }}"
+        n = glsl_num; sh = self.inside_shape(margin); b = sh['box']
+        v = lambda x, y: f'vec2({n(x)}, {n(y)})'
+        hole = ''.join(f" && !(all(greaterThan(p, {v(h['x0'], h['y0'])})) && all(lessThan(p, {v(h['x1'], h['y1'])})))" for h in sh['holes'])
+        return f"float {name}(vec2 p) {{ return (all(greaterThanEqual(p, {v(b['x0'], b['y0'])})) && all(lessThanEqual(p, {v(b['x1'], b['y1'])})){hole}) ? 0.0 : 1.0; }}"
 
     # ---- indoor weight
     def outline_distance(self, x, y):

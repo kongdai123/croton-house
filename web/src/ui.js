@@ -38,17 +38,17 @@ let lang = localStorage.getItem('croton-lang') || 'en';
 export const getLang = () => lang;
 export const t = (k) => DICT[lang][k] ?? DICT.en[k] ?? k;
 export function setLang(l) { lang = l; localStorage.setItem('croton-lang', l); document.documentElement.lang = l; for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n); for (const el of document.querySelectorAll('[data-i18n-title]')) { el.title = t(el.dataset.i18nTitle); if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title); }  for (const b of document.querySelectorAll('[data-lang]')) b.classList.toggle('on', b.dataset.lang === l); dispatchEvent(new Event('langchange')); }
-// Landing plan drawing: walls solid, openings cut out, windows as a single glazing line; scale bar and north mark.
+// Landing plan drawing from the plan model (walls incl. the garage annex, doors and windows): walls solid, openings
+// cut out, windows as a single glazing line; scale bar and north mark.
 function drawPlan(h) {
   const svg = document.getElementById('lcPlan'); if (!svg) return;
   const [vx, vy, vw, vh] = h.viewBox, p = 0.3;
   svg.setAttribute('viewBox', `${vx - p} ${-(vy + vh) - p} ${vw + 2 * p} ${vh + 2 * p + 0.9}`);
   const rect = (o, c) => `<rect class="${c}" x="${o.x0}" y="${-o.y1}" width="${o.x1 - o.x0}" height="${o.y1 - o.y0}"/>`;
-  // the garage block is built outside house.json: west + front walls with the 8' door, porch-side jamb
-  const garage = [{ x0: -8.018, x1: -7.903, y0: -5.85, y1: 1.481 }, { x0: -8.018, x1: -6.92, y0: -5.85, y1: -5.735 }, { x0: -4.48, x1: -3.393, y0: -5.85, y1: -5.735 }, { x0: -3.507, x1: -3.393, y0: -5.85, y1: -4.72 }];
-  let s = h.walls.concat(garage).map(w => rect(w, 'w')).join('');
+  let s = h.walls.map(w => rect(w, 'w')).join('');
   s += '<path class="v" d="M-0.95 -1.9 L-1.75 -3.6 L-0.15 -3.6 Z"/><circle class="vp" cx="-0.95" cy="-1.9" r="0.22"/>';   // where the landing photo looks from
   for (const o of h.openings) {
+    if (o.kind === 'open') continue;   // open-plan seams: no wall to cut
     s += rect(o, 'o');
     if (o.kind !== 'window') continue;
     const mx = (o.x0 + o.x1) / 2, my = -(o.y0 + o.y1) / 2;
@@ -73,7 +73,7 @@ export class UI {
     new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', `${Math.ceil(document.getElementById('topbar').getBoundingClientRect().height)}px`)).observe(document.getElementById('topbar'));
     document.getElementById('btn-lang').onclick = () => setLang(lang === 'zh' ? 'en' : 'zh');
     for (const b of document.querySelectorAll('[data-lang]')) b.onclick = () => setLang(b.dataset.lang);
-    fetch('data/house.json').then(r => r.json()).then(drawPlan).catch(() => {});
+    fetch('data/plan.json').then(r => r.json()).then(drawPlan).catch(() => {});
     document.getElementById('panelClose').onclick = () => this.closePanel();
     this.toastTimer = 0;
   }

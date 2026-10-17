@@ -4,9 +4,10 @@ import { THREE } from './kit.js';
 import { getLang, t } from './ui.js';
 import { EXT_FP, pointInPoly, PATIO, COURT_A, COURT_B, WALK, DRIVE, PAD, PORCH, GARDEN, FRONT_BED } from './house.js';
 import { BEDS, SHELL, PAVED } from './layout.js';
+import { plan } from './plan.js';
 
-const VB = [-8.246258596094643, -5.699660161646401, 16.50411768657405, 11.778618533436845];   // svg viewBox (image y = -plan y)
-const LOT = { x0: -14.5, x1: 14.5, y0: -14.2, y1: 19.5 };
+const VB = plan.viewBox;   // floor_shape.svg viewBox (image y = -plan y)
+const LOT = plan.lot;
 // The radar's CSS size at the 1440 × 900 design size (style.css #minimap, scaled by --u on larger windows).
 const MAP_CSS = 190;
 export class Minimap {
@@ -40,10 +41,10 @@ export class Minimap {
   isVisible(kind) { return !this.markers || (this.markers.visible && this.markers.enabled[kind]); }
   setExtra(blips) { this.extraBlips = blips; this.rebuildBlips(); }
   // plan -> canvas px for the small radar (heading-up, centred on the player)
-  // The plan both maps draw: house.json walls plus the garage block (built outside house.json), as on the landing plan.
+  // The plan both maps draw: the plan model's walls (the garage annex included) and its doors and windows (open-plan
+  // seams have no wall to cut), as on the landing plan; room names still from house.json's notes.
   setPlan(house) {
-    const garage = [{ x0: -8.018, x1: -7.903, y0: -5.85, y1: 1.481 }, { x0: -8.018, x1: -6.92, y0: -5.85, y1: -5.735 }, { x0: -4.48, x1: -3.393, y0: -5.85, y1: -5.735 }, { x0: -3.507, x1: -3.393, y0: -5.85, y1: -4.72 }];
-    this.plan = { walls: house.walls.concat(garage), openings: house.openings, notes: house.notes ?? [] };
+    this.plan = { walls: plan.walls, openings: plan.openings.filter(o => o.kind !== 'open'), notes: house.notes ?? [] };
     this.site = null; this.zoomR = this.radiusM; this.zoomT = performance.now();
   }
   // The garden as plan symbols, gathered once: every planting as a circle of its spread (trees larger, as canopies),

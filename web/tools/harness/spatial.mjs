@@ -47,6 +47,8 @@ function glslOutside(src) {
 
 export function jsClassifiers(w) {
   const H = w.house, T = w.T;
+  // the wall boxes the light-probe volume tests visibility against (lightmap.js probeWalls, scene frame), at 0.95 m
+  const probeWalls = w.probeWalls(w.probeWallPieces).filter(b => b[2] <= 0.95 && 0.95 <= b[3]);
   const rect = (r, x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
   const hx = w.houseConsts;
   const label = (n) => H.notes.filter(m => m.room === n.id).map(m => m.label).join('/') || n.id.slice(0, 6);
@@ -64,6 +66,7 @@ export function jsClassifiers(w) {
     ['js:plan.houseRooms', 'web/tools/vpaudit.mjs:15 roomAt over house.json rooms + notes', true, (x, y) => { const r = H.rooms.find(r => inPoly(x, y, r.pts)); return r ? label(r) : 'outside'; }],
     ['js:plan.notesArea', 'house.json notes[].area polygons (reflprobe_layout.room_of order)', true, (x, y) => H.notes.find(n => n.area && inPoly(x, y, n.area))?.label ?? ''],
     ['js:plan.footprint', 'house.json footprint polygon', true, (x, y) => inPoly(x, y, H.footprint)],
+    ['js:lightmap.probeWalls@0.95m', 'web/src/lightmap.js probeWalls(PROBE_WALL_PIECES): in a wall box the probe volume treats as blocking, h 0.95', false, (x, y) => probeWalls.some(b => x >= b[0] && x <= b[1] && -y >= b[4] && -y <= b[5])],
     // the plan model (web/src/plan.js over data/plan.json): what the classifiers above are replaced by
     ['js:plan.spaceAt', 'web/src/plan.js spaceAt (exact, empty in walls)', false, (x, y) => w.plan.spaceAt(x, y)?.id ?? ''],
     ['js:plan.roomName', 'web/src/plan.js roomName (walls take the room they face)', false, (x, y) => { const r = w.plan.roomName(x, y); return r.outside ? 'outside:' + r.en : r.en; }],

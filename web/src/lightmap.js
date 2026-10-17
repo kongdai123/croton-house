@@ -612,7 +612,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     try { layers = await loadAtlases(resolution); } catch (err) { releaseStage(); throw err; }
   } else if (groups) { groups.probeSH = groupData[1]; if (groupData[2]) attachLampReflections(refl, groupData[2], groups, multi); }
   // main.js loads this plan for Layout/hq.js; bundle its pieces here and reuse the boxes across slots.
-  const walls = probeWalls(housePlan.pieces), volume = buildProbeVolume(probes, groups, walls);
+  const walls = probeWalls(PROBE_WALL_PIECES), volume = buildProbeVolume(probes, groups, walls);
   volume.wet = SLOTS[slot].wet ?? 0; volume.refl = refl; volume.multi = multi; refl.slots = multi;
   // Every fetch/decode/validation has completed. Nothing above changes scene objects or legacy lighting.
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -1169,6 +1169,7 @@ function reflPatch(sh, refl, occlusion, mirror = false) {
 // wherever it is, and foliage is lit by the same sunrise sky as the bake instead of the walkthrough's midday sky map.
 const VOL = { x0: -12.5, x1: 12.5, y0: -11.5, y1: 15.5, step: 0.5, heights: [0.35, 0.95, 1.55] };
 // Plan pieces already exclude openings (solid sides, sills and lintels). Inset 1 cm to allow face contact.
+const PROBE_WALL_PIECES = housePlan.pieces;
 const probeWalls = pieces => pieces.map(p => [p.x0 + 0.01, p.x1 - 0.01, p.z0 + 0.01, p.z1 - 0.01, -p.y1 + 0.01, -p.y0 - 0.01]).filter(b => b[0] < b[1] && b[2] < b[3] && b[4] < b[5]);
 function probeBlocked(px, py, pz, qx, qy, qz, walls) {
   const x0 = Math.min(px, qx), x1 = Math.max(px, qx), y0 = Math.min(py, qy), y1 = Math.max(py, qy), z0 = Math.min(pz, qz), z1 = Math.max(pz, qz);
@@ -1371,4 +1372,4 @@ export function applyBakedSun(lighting, renderer, s, shadowSize = lighting.sun.s
 }
 
 // Internals exported for node tests (no runtime use).
-export { probeWalls, probeBlocked, buildProbeVolume, VOL, probeLit, reflGLSL, loadProbes, loadReflections, createSunPCSS, TONE_DECODE, RGBM_DECODE, LM_SAMPLE, loadRGBM, attachLampReflections };
+export { PROBE_WALL_PIECES, probeWalls, probeBlocked, buildProbeVolume, VOL, probeLit, reflGLSL, loadProbes, loadReflections, createSunPCSS, TONE_DECODE, RGBM_DECODE, LM_SAMPLE, loadRGBM, attachLampReflections };

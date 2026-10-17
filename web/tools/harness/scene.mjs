@@ -68,7 +68,7 @@ export async function buildRealScene() {
       export { buildGarden } from './src/grass.js';
       export { areaOf, isIndoor } from './src/pets/roam.js';
       export * as plan from './src/plan.js';
-      export { __weatherClass as lightmapWeatherClass, __isMirror as lightmapIsMirror } from './src/lightmap.js';
+      export { __weatherClass as lightmapWeatherClass, __isMirror as lightmapIsMirror, PROBE_WALL_PIECES as probeWallPieces, probeWalls } from './src/lightmap.js';
       export { __presentation as photoPresentation, __weatherClass as photoWeatherClass } from './src/photo.js';
       export { __isPlant as foliageIsPlant } from './src/foliage_bake.js';
       export { __wetMaterial as puddlesWetMaterial, __indoors as puddlesIndoors } from './src/puddles.js';

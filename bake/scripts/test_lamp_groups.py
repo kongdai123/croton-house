@@ -1,13 +1,16 @@
 """Group routing without importing Blender or starting a bake."""
 import ast
 import json
+import sys
 from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'bake/scripts'))
 tree = ast.parse((ROOT / 'bake/scripts/lamp_groups.py').read_text())
 keep = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ('room', 'where', 'group_of') or
-        isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in ('ROOMS', 'ORDER') for t in n.targets)]
+        isinstance(n, ast.Import) and any(a.name == 'plan' for a in n.names) or
+        isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in ('PLAN', 'ORDER') for t in n.targets)]
 ns = {}
 exec(compile(ast.Module(body=keep, type_ignores=[]), '<group routing>', 'exec'), ns)
 

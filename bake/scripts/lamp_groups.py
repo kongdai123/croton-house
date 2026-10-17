@@ -9,22 +9,22 @@
 # a third of the 70 W track spot), or a lamp at the glowing surface for fixtures without a spec. setup.py's 0.17 for
 # bake-only cans is undone (the runtime's per-group gain sets their level). Lamp surfaces (shades, lenses) stop casting
 # shadows so a lamp inside its shade lights the room like a translucent shade would.
-import bpy, sys, json, math
+import bpy, sys, json, math, os
 from mathutils import Vector
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import plan as planlib
 
 SWITCHES, OUT, GROUPS_OUT = sys.argv[sys.argv.index('--') + 1:][:3]
 sw = json.load(open(SWITCHES))['switches']
 scene = bpy.context.scene
 
-# plan rects (web/src/pets/roam.js ROOMS)
-ROOMS = [('kitchen', -3.507, -0.8, -4.72, 1.6), ('living', -0.8, 3.97, -4.72, 1.7), ('dining', 0.42, 3.97, 1.7, 5.47), ('family', -2.28, 0.42, 1.6, 5.47),
-         ('primary', -5.9, -2.28, 1.6, 5.47), ('primaryBath', -7.9, -5.9, 1.6, 5.47), ('bedroomB', 4.08, 7.9, 1.95, 5.47), ('bathB', 5.1, 7.9, 0.2, 1.95),
-         ('hallBath', 5.1, 7.9, -1.27, 0.2), ('bedroom3', 3.97, 7.9, -5.74, -2.14), ('hall', 3.97, 5.1, -2.14, 1.95), ('garage', -7.9, -3.507, -5.74, 0.16),
-         ('closets', -7.9, -3.507, 0.16, 1.6)]
+# The room part of a lamp group: the plan space at p (plan.py; a point in a wall takes the room it faces) gives its
+# lampGroup, or its id when it has none yet (hall closet, closets, laundry: no light); 'outside' outdoors.
+PLAN = planlib.load()
 def room(p):
-    for n, x0, x1, y0, y1 in ROOMS:
-        if x0 <= p[0] <= x1 and y0 <= p[1] <= y1: return n
-    return 'outside'
+    s = PLAN.space_at(p[0], p[1], 0.3)
+    if s is None or s['zone'] == 'exterior': return 'outside'
+    return s.get('lampGroup') or s['id']
 
 def where(s):
     if s['lights']: return s['lights'][0]['p']
@@ -40,7 +40,6 @@ def group_of(s):
     if i == 'niche-recessed-can': return 'livingNiche'
     if r == 'living': return 'livingCenter' if i == 'decor-track-light' and abs(s['root'][0] - 0.2) < 0.3 else 'living'
     if r == 'kitchen': return 'kitchenPendant' if i == 'kitchen-pendant' else 'kitchenCabinet' if 'kitchen-west-run' in i else 'kitchen'
-    if r == 'closets': return 'closet' if -6.25 <= where(s)[0] <= -4.93 else 'primary'
     if r == 'primary': return 'primaryLamps' if 'props-rooms' in i else 'primary'
     if r in ('bedroomB', 'bedroom3') and (i == 'nightstandPine' or 'props-rooms' in i): return r + 'Lamps'
     return r

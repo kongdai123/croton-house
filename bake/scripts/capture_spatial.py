@@ -17,9 +17,11 @@ GRID = dict(x0=-16000, y0=-15000, step=50, nx=641, ny=701)   # mm, must equal GR
 
 
 def lift(path, names):
-    """Module-level functions and assignments called `names` from a Blender script, executed in a bare namespace."""
+    """Module-level functions and assignments called `names` from a Blender script, executed in a bare namespace (with the
+    script's `import plan` lines, so plan-reading functions run on the repo's plan.json)."""
     tree = ast.parse(Path(path).read_text())
     keep = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names
+            or isinstance(n, ast.Import) and any(a.name == 'plan' for a in n.names)
             or isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in names for t in n.targets)]
     ns = {}
     exec(compile(ast.Module(body=keep, type_ignores=[]), str(path), 'exec'), ns)
@@ -68,7 +70,7 @@ def main():
             b = rl.plan_box(plan, p)
             out.append(dict(i=i, p=[p[0], p[2], -p[1]], min=b['min'] if b else None, max=b['max'] if b else None))
         json.dump(out, sys.stdout); return
-    lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'ROOMS', 'room', 'where', 'group_of', 'ORDER'})
+    lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'PLAN', 'room', 'where', 'group_of', 'ORDER'})
     import reflprobe_layout as rl
     plan = rl.load_plan(str(ROOT / 'web/data/house.json'))
     import plan as planlib
@@ -77,7 +79,7 @@ def main():
     setup = lift(ROOT / 'bake/export/setup.py', {'inside'})
     tasks = lift(ROOT / 'bake/scripts/make_tasks.py', {'inside'})
     C = [
-        ('py:lamp_groups.room', 'bake/scripts/lamp_groups.py:24 room() (first of 13 rects, else outside)', lambda x, y: lg['room']([x, y, 0])),
+        ('py:lamp_groups.room', 'bake/scripts/lamp_groups.py room(): lampGroup (or id) of the plan space, near 0.3; outside outdoors', lambda x, y: lg['room']([x, y, 0])),
         ('py:reflprobe_layout.inside_lot', 'bake/scripts/reflprobe_layout.py:24', lambda x, y: js_bool(rl.inside_lot(x, y))),
         ('py:reflprobe_layout.in_plan', 'bake/scripts/reflprobe_layout.py:79 (footprint polygon)', lambda x, y: js_bool(rl.in_plan(plan, x, y))),
         ('py:reflprobe_layout.annex_of', 'bake/scripts/reflprobe_layout.py:82 (ANNEX rect)', lambda x, y: rl.annex_of(x, y) or ''),

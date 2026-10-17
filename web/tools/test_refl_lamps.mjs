@@ -11,8 +11,6 @@ const dir = await mkdtemp(join(tmpdir(), 'croton-refl-'));
 try {
   const internals = { name: 'fixture-exports', setup(b) {
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;', loader: 'js' }));
-    b.onLoad({ filter: /\/lightmap\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { reflGLSL, attachLampReflections };', loader: 'js' }));
-    b.onLoad({ filter: /\/lightmap_slots\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { reflArray };', loader: 'js' }));
   } };
   const result = await build({ stdin: { contents: "export { reflGLSL, attachLampReflections } from './src/lightmap.js'; export { reflArray } from './src/lightmap_slots.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, result.outputFiles[0].contents);

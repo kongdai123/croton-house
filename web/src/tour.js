@@ -12,7 +12,7 @@ const EYE = 1.58;
 // Listing compositions: g04/06, g08, g15, g49, g52, g35, g33, g23, g39, g42/41, g43, g45.
 // Positive drift.yaw turns LEFT (player yaw is the negative of plan heading).
 // Front-yard stops are aerial (eye in metres): the planting screens the front door from the street on purpose.
-const STOPS = [
+export const STOPS = [
   { x: -6, y: -22, heading: 22, pitch: -0.3, eye: 8, hold: 6, zh: '2513 Croton Ave · 1962 年的砌块房子，2025 年整体翻新', en: '2513 Croton Ave · a 1962 block house, fully renovated in 2025', drift: { yaw: 2, push: 1.2 } },
   { x: 4, y: -13.6, heading: 340, pitch: -0.42, eye: 6, hold: 5, zh: '前院 · 热带植物环绕抬高的露台，把入户门藏进绿意', en: 'The front garden · tropical planting around the raised terrace screens the front door', drift: { yaw: 2, push: 0.6 } },
   { x: 0.0, y: -3.8, heading: 0, pitch: -0.03, hold: 5, via: { x: 0.35, y: -9.3, heading: 0 }, zh: '玄关 · 厨房中岛与通向餐厅的开阔视线', en: 'Foyer · the kitchen island and the open view into the dining room', drift: { yaw: 1, push: 0.15 } },

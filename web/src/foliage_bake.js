@@ -67,7 +67,7 @@ function find(units, o, tol = 0.08) {
 const uniforms = { uFolK: { value: new THREE.Vector2(1, 1) }, uFolLamps: { value: 0.25 } };
 // probeLit (lightmap.js) calls this last on a covered material: every probe lookup in main() is scaled to the baked
 // level (irradiance, specular occlusion, reflection occlusion)
-const FOLIAGE = {
+export const FOLIAGE = {
   patch(sh, reflections) {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = 'attribute vec3 foliage; varying vec3 vFoliage; uniform vec2 uFolK;\n' + shaderReplace(sh.vertexShader, '#include <begin_vertex>', `#include <begin_vertex>

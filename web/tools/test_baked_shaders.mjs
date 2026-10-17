@@ -9,8 +9,6 @@ const dir = await mkdtemp(join(tmpdir(), 'croton-baked-'));
 try {
   const internals = { name: 'fixture-exports', setup(b) {
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;', loader: 'js' }));
-    b.onLoad({ filter: /\/lightmap\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { probeLit, createSunPCSS, reflGLSL, TONE_DECODE, RGBM_DECODE, LM_SAMPLE, loadRGBM };', loader: 'js' }));
-    b.onLoad({ filter: /\/foliage_bake\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { FOLIAGE };', loader: 'js' }));
   } };
   const result = await build({ stdin: { contents: "export * from './src/lightmap.js'; export * from './src/foliage_bake.js'; export * as THREE from 'three'; export { leafMat } from './src/furniture/plants_parts.js';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, result.outputFiles[0].contents);

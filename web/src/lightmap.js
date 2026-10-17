@@ -1250,7 +1250,7 @@ function buildProbeVolume(P, groups = null, walls = []) {
   const uniforms = { uProbeSH: { value: tex },
     uProbeOrigin: { value: new THREE.Vector3(VOL.x0, VOL.heights[0], -VOL.y0) }, uProbeScale: { value: new THREE.Vector3(1 / VOL.step, 1 / (VOL.heights[1] - VOL.heights[0]), -1 / VOL.step) },
     uProbeDims: { value: new THREE.Vector3(NX, NY, NZ) } };
-  return { fill, uniforms };
+  return { fill, uniforms, near, wts };
 }
 const toHalf = THREE.DataUtils.toHalfFloat;
 const PROBE_GLSL = `
@@ -1369,3 +1369,6 @@ export function applyBakedSun(lighting, renderer, s, shadowSize = lighting.sun.s
   renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = Math.pow(2, s.ev);
   // The output transform was staged and installed by applyLightmaps before startup can finish.
 }
+
+// Internals exported for node tests (no runtime use).
+export { probeWalls, probeBlocked, buildProbeVolume, VOL, probeLit, reflGLSL, loadProbes, loadReflections, createSunPCSS, TONE_DECODE, RGBM_DECODE, LM_SAMPLE, loadRGBM, attachLampReflections };

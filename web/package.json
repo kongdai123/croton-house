@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tools/run_tests.mjs",
+    "lint": "eslint src tools"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +18,8 @@
   },
   "devDependencies": {
     "esbuild": "^0.27.4",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
     "playwright": "^1.58.2"
   }
 }

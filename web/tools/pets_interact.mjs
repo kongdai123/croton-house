@@ -1,3 +1,4 @@
+/* global T -- defined on window by the page.evaluate setup below */
 // Pet interaction checks in the real app: node tools/pets_interact.mjs [outDir]
 // 1. "Pet the …" label only when close + facing + not through a wall; click pets (reaction, extension, then roams again).
 // 2. HUD call buttons bring the right pet from another room / the garden to ~0.8 m in front of the player, sitting and

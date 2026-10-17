@@ -10,8 +10,6 @@ try {
   const internals = { name: 'runtime-fixtures', setup(b) {
     b.onLoad({ filter: /\/contact\.js$/ }, () => ({ contents: 'export const CONTACT = false; export function contactPatch() {}', loader: 'js' }));
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;', loader: 'js' }));
-    b.onLoad({ filter: /\/tour\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { STOPS };', loader: 'js' }));
-    b.onLoad({ filter: /\/lightmap\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { probeLit, reflGLSL };', loader: 'js' }));
   } };
   const built = await build({ stdin: { contents: `export * as THREE from 'three'; export * from './src/tour.js';
     export { Viewpoints } from './src/viewpoints.js'; export { Interact } from './src/interact.js';

@@ -27,7 +27,6 @@ const dir = await mkdtemp(join(tmpdir(), 'croton-slot-progress-'));
 try {
   const internals = { name: 'progress-fixture', setup(b) {
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;' }));
-    b.onLoad({ filter: /\/lightmap\.js$/ }, async ({ path }) => ({ contents: await readFile(path, 'utf8') + '\nexport { loadProbes, loadReflections };' }));
   } };
   const built = await build({ stdin: { contents: "export { loadProbes, loadReflections } from './src/lightmap.js'; export { loadFoliage } from './src/foliage_bake.js'; export { createSlotRuntime } from './src/lightmap_slots.js'; export { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js'; export * as T from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, plugins: [internals], bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);

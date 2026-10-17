@@ -7,7 +7,7 @@ const copyUniforms = uniforms => Object.fromEntries(Object.entries(uniforms).map
 // allow 16 per fragment shader): two halves of `count` layers, picked by uReflBase / uReflNext. A slot's own probe
 // texture is CPU-side staging only; it is copied into the half the current slot does not use when its fade begins.
 // The lamp groups' reflection layers (lightmap.js attachLampReflections; the same for every slot) follow both halves.
-function reflArray(src, count, lamps = null) {
+export function reflArray(src, count, lamps = null) {
   const { width = 1, height = 1, data = null } = src.image ?? {};
   const extra = lamps?.count ?? 0;
   const t = new THREE.DataArrayTexture(data ? new data.constructor(data.length * 2 + (extra ? lamps.data.length : 0)) : null, width, height, count * 2 + extra);

@@ -1,5 +1,6 @@
 // CPU fixtures for the combined rebake: no browser, renderer or network.
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,8 +22,8 @@ try {
   const context = new Proxy({}, { get: (o, k) => o[k] ?? (() => {}) });
   globalThis.document = { createElement: () => ({ getContext: () => context }) };
   const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, WALL_SWITCHES, defaultOn, lampGroupGLSL, createLampGroups, emitsLight, sheerProbePatch } = await import(pathToFileURL(file));
-    const routing = await readFile(new URL('../../bake/scripts/lamp_groups.py', import.meta.url), 'utf8');
-  const names = [...routing.match(/ORDER = (\[[\s\S]*?\])/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+  const py = "import ast,sys,json; t=ast.parse(open(sys.argv[1]).read()); print(json.dumps(next(ast.literal_eval(n.value) for n in t.body if isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == 'ORDER')))";
+  const names = JSON.parse(execFileSync('python3', ['-c', py, fileURLToPath(new URL('../../bake/scripts/lamp_groups.py', import.meta.url))], { encoding: 'utf8' }));
   assert.deepEqual(new Set(WALL_SWITCHES.map(s => s[0])), new Set(names.filter(n => n !== 'always')));
   assert.equal(names.length, 22);
   for (const name of names) for (const slot of ['sunrise', 'noon', 'golden', 'dusk']) {

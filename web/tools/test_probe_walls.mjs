@@ -1,4 +1,4 @@
-// Node-only probe selection fixtures; export private results through the same bundle hook as the shader tests.
+// Node-only probe selection fixtures; the probe functions are named exports of lightmap.js.
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -9,8 +9,6 @@ const root = fileURLToPath(new URL('../', import.meta.url)), dir = await mkdtemp
 try {
   const internals = { name: 'probe-fixtures', setup(b) {
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;', loader: 'js' }));
-    b.onLoad({ filter: /\/lightmap\.js$/ }, async ({ path }) => ({ contents: (await readFile(path, 'utf8'))
-      .replace('return { fill, uniforms };', 'return { fill, uniforms, near, wts };') + '\nexport { probeWalls, probeBlocked, buildProbeVolume, VOL };', loader: 'js' }));
   } };
   const built = await build({ stdin: { contents: "export * from './src/lightmap.js';", resolveDir: root }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);

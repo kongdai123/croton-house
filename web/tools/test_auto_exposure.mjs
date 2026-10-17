@@ -113,6 +113,7 @@ try {
     assert.equal(outputPass.render, agxRender); assert.equal(outputPass.material.fragmentShader, originalShader);
   }
   const adaptation = createBakedAutoExposure({ renderer, lighting, getSlot: () => mood, query: query('localadapt=0') });
+  assert.equal((outputPass.material.fragmentShader.match(/precision highp sampler2D;/g) ?? []).length, 1);
   assert.equal(lighting.autoExposure, adaptation);
   const read = new T.WebGLRenderTarget(1280, 720), write = read.clone();
   const draw = () => { draws.length = 0; adaptation.update(1 / 60); outputPass.render(renderer, write, read); return draws; };

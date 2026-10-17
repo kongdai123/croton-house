@@ -8,10 +8,13 @@ globalThis.fetch = async (url, opts) => {
   assert.equal(url, `${base}/manifest.json`); assert.equal(opts.cache, 'no-store');
   return { ok: true, json: async () => ({ 'sunrise/probes.bin': 'sunrise/probes.abc.bin' }) };
 };
-assert.equal((await lightmapAssets(base))(logical), `${base}/sunrise/probes.abc.bin`);
+assert.equal((await lightmapAssets(base, true))(logical), `${base}/sunrise/probes.abc.bin`);
 globalThis.fetch = async () => ({ ok: false });
-assert.equal((await lightmapAssets(base))(logical), logical);
+assert.equal((await lightmapAssets(base, true))(logical), logical);
 globalThis.fetch = async () => { throw new Error('offline'); };
+assert.equal((await lightmapAssets(base, true))(logical), logical);
+
+globalThis.fetch = () => { throw new Error('dev must not request a manifest'); };
 assert.equal((await lightmapAssets(base))(logical), logical);
 
 const rows = { top: [1, 2], bottom: [3, 4, 5], single: [1, 2, 3, 4, 5] }, closed = [];

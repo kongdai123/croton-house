@@ -204,6 +204,8 @@ def main():
             target = staged / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, target)
+            if name == "index.html" and "</head>" in target.read_text():
+                target.write_text(target.read_text().replace("</head>", '<meta name="croton-packaged" content="1">\n</head>'))
         copy_folder(ROOT / "data", staged / "data", "data", scratch)
         for folder in ASSET_FOLDERS:
             if folder == "lightmaps":

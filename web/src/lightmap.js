@@ -13,12 +13,13 @@
 //                     bounces only; lamps = the lamps at unit level, direct and bounced. Summed here on the GPU.
 // The bakes hold Cycles' diffuse light without colour (radiance / albedo = irradiance / PI), hence the PI below.
 import * as THREE from 'three';
+import { warmPrograms, shaderYield } from './shader_warmup.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CONTACT, contactPatch } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
 import { createPuddles } from './puddles.js';
-import { bakeFoliage, loadFoliage, shaderReplace as rep, shaderPatch, shaderKey } from './foliage_bake.js';
+import { bakeFoliage, loadFoliage, shaderReplace as rep, shaderPatch, shaderKey, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
@@ -337,7 +338,10 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   const track = (objects, hot = false) => { for (const o of [].concat(objects)) if (o) { roots.add(o); if (hot) always.add(o); } invalidate(); };
   const setSize = n => { if (rt.width === n) return; rt.setSize(n, n); base.setSize(n, n); uniforms.uSunTexel.value = 1 / n; invalidate(); };
   const setTier = name => { uniforms.uSunTaps.value = PCSS_TIER[name] ?? 0; };
-  return { uniforms, render: () => refresh(true), patch, update, invalidate, track, setSize, setTier, stats, matrix: sun.shadow.matrix, get version() { return version; },
+  const depthEntries = () => {
+    const jobs = []; scene.traverse(o => { if (o.isMesh && o.castShadow) for (const m of [].concat(o.material)) jobs.push({ object: o, material: o.customDepthMaterial ?? depthOf(m) }); }); return jobs;
+  };
+  return { uniforms, depthEntries, warm: () => warmPrograms(renderer, scene, sync(), base, depthEntries(), false), render: () => refresh(true), patch, update, invalidate, track, setSize, setTier, stats, matrix: sun.shadow.matrix, get version() { return version; },
     dispose() { rt.dispose(); base.dispose(); for (const d of cache.values()) d.dispose(); cache.clear(); entries.clear(); swaps.length = 0; for (const o of dynamic) o.layers.disable(DYN_LAYER); roots.clear(); always.clear(); promoted.clear(); } };
 }
 
@@ -517,7 +521,7 @@ const disposeAtlas = t => { t.dispose(); t.userData.release?.(); t.image.close?.
 const atlasMiB = (w, h) => w * h * 8 / 1048576;
 
 export async function applyLightmaps({ scene, renderer, lighting, movables = [], dynamic = [], base = 'assets/lightmaps', slot = 'sunrise', lamps = 0.25, tier = 'laptop', onProgress = () => {} }) {
-  const t0 = performance.now(); let disposed = false;
+  const t0 = performance.now(), patchStart = shaderPatchCount(); let disposed = false;
   const legacyTune = { ...lighting.tune }, legacyGrade = Object.fromEntries(Object.entries(lighting.grade ?? {}).map(([k, u]) => [k, u.value]));
   const legacyTone = renderer.toneMapping, legacyExposure = renderer.toneMappingExposure, legacyAO = lighting.gtao?.blendIntensity;
   const legacySunCamera = lighting.sun.shadow.camera.clone();
@@ -793,6 +797,9 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     }
     if (stats) stats.samplers = { max: a.max, limit: a.limit, worst: a.worst, programs: a.programs, failed: a.failed.map(f => f.name) };
   };
+  const checkPatches = () => assertShaderPatches(patchStart);
+  // After startup a late failure (a pet, the visitor, a mirror compiled on first sight) leaves that one material stock:
+  // shaderPatch already warned once, and dropping the whole walk to legacy mid-visit is the worse outcome.
   const updateMovables = dt => { if (!disposed) { slots?.update(dt); autoExposure?.update(dt); pcss.update(dt); if (slots) setFixtureGlow(slots.params.lamps); updateGroups(dt); if ((auditClock += dt) >= 1 && renderer.info?.programs && renderer.getContext) { auditClock = 0; audit(); } } };
   stats = { units: header.units.length, matched, byId: matched - byBox, byBox, unusedUnits: header.units.length - matched, unlit, triangles, materials: mats.size, movables: movables.length, probes: probes ? probes.N : 0, probeLit: probeLitCount, foliage, ms: Math.round(performance.now() - t0) };
   const atlasStats = () => { if (v2) Object.assign(stats, { resolution, atlas: [target.texture.image.width, target.texture.image.height], atlasMiB: atlasMiB(target.texture.image.width, target.texture.image.height) * (enc ? 4 / 3 : 1), mips: target.texture.userData.mips ?? null }); stats.shadowSize = shadowSize; };
@@ -866,7 +873,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (!slots && v2 && enc) { const m = linearMips(renderer, layers, [enc.K.slot, enc.K.lamps]); for (const t of layers) t.userData.mips = m; }
     groups?.restore();
     pcss.invalidate(); lighting.sun.shadow.needsUpdate = true;
-    if (slots) { afterTime(); } else if (envTarget) { envTarget.dispose(); envTarget = null; afterTime(); } };
+    if (!slots) { envTarget?.dispose(); envTarget = null; }
+    afterTime(); };
   renderer.domElement?.addEventListener('webglcontextrestored', restore);
   const dispose = () => {
     if (disposed) return; disposed = true;
@@ -895,7 +903,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (!slots) layers.forEach(disposeAtlas);
   };
   if (groups) stats.lampGroups = { groups: groupMeta.groups.length, textures: groupMeta.textures, switches: groups.switches, matched: groups.matched, resolution: groups.resolution, probes: !!groups.probeSH, mips: groups.texture?.userData.mips ?? null };
-  const api = { lampGroups: groups, stats, auditSamplers: () => { audit(); return stats.samplers; }, combine, target, slot: SLOTS[slot], slotName: slot, availableSlots, sunShadow: pcss, updateMovables, afterTime, setQuality, register, dispose, puddleRefl, setFeatures };
+  const api = { checkPatches, warmDepth: async () => { await pcss.warm(); checkPatches(); }, lampGroups: groups, stats, auditSamplers: () => { audit(); return stats.samplers; }, combine, target, slot: SLOTS[slot], slotName: slot, availableSlots, sunShadow: pcss, updateMovables, afterTime, setQuality, register, dispose, puddleRefl, setFeatures };
   // Fixture switches update before this hook each frame. Apply the preset's physical lamp glow last.
   // With lamp groups each switch drives its own fixtures' glow (groups.applyGlow); the preset level only applies to the
   // single shared lamps layer. Either way the lightmapped copies (what actually renders) follow their sources afterwards.
@@ -961,6 +969,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   // Optional callback: (fraction, { name, loaded, total, phase }); transition marks the start of the fade.
   api.setSlot = (name, onProgress) => slots ? slots.request(name, onProgress) : Promise.resolve(name === slot);
   api.nextSlot = () => nextSlot(slots?.desired ?? slot, availableSlots);
+  try {
+    const materials = new Set([...mats.values(), ...hooks.keys(), ...pcss.depthEntries().map(e => e.material)]);
+    for (const m of materials) {
+      const lib = m.isMeshDepthMaterial ? THREE.ShaderLib.depth : m.isMeshPhysicalMaterial ? THREE.ShaderLib.physical : THREE.ShaderLib.standard;
+      m.onBeforeCompile({ uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader }, renderer);
+      checkPatches(); await shaderYield();
+    }
+  } catch (err) { dispose(); throw err; }
   return api;
 }
 

@@ -105,6 +105,7 @@ try {
   const taaDepth = new T.DepthTexture(640, 360), jitter = new T.Vector2(0.001, -0.002);
   lighting.taa = { resolve: { uniforms: { tDepth: { value: taaDepth }, uJitter: { value: jitter }, uInvVP: { value: new T.Matrix4() } } } };
   draw(); assert.equal(draws[1].uniforms.tLocalDepth, taaDepth);
+  assert.deepEqual(draws.at(-2).uniforms.uLocalInvProjection.elements, camera.matrixWorldInverse.elements);
   assert.deepEqual(draws[1].uniforms.uLocalJitter.toArray(), jitter.toArray());
   delete lighting.taa;
   write.depthTexture = sceneBuffer.depthTexture; draw();

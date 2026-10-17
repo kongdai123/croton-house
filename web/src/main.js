@@ -1,5 +1,6 @@
 // 2513 Croton Ave · interactive photoreal walkthrough. Entry point.
 import * as THREE from 'three';
+import { warmPrograms } from './shader_warmup.js';
 import { createLighting } from './lighting.js';
 import { buildHouse, CEIL, getDoors } from './house.js';
 import { buildGarden } from './grass.js';
@@ -43,7 +44,7 @@ const pixelRatio = p => {
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: detected.tier === 'hq', powerPreference: 'high-performance', preserveDrawingBuffer: true });
 const bakedWanted = bakedRequested(location.search);
-const bakedUnavailable = bakedWanted ? bakedCapabilityError(renderer) : null;
+let bakedUnavailable = bakedWanted ? bakedCapabilityError(renderer) : null;
 renderer.setPixelRatio(pixelRatio(preset));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 300);
@@ -86,6 +87,7 @@ const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json(
 
 // ---- Lighting: daylight openings, practical fixtures and separate room / sky reflections.
 const lighting = createLighting(renderer, scene, camera, house, preset);
+if (bakedWanted && !lighting.renderConfig.hdr) bakedUnavailable = 'HDR framebuffer unavailable';
 const { fixtures, composer, gtao } = lighting;
 post = composer; fitView();
 async function applyTime() {
@@ -93,7 +95,7 @@ async function applyTime() {
   await lighting.applyTime(baked ? false : state.dusk);   // baked slots own their sky, sun and physical lamp level
   for (const o of layout.placed) o.userData.onTime?.(state.dusk, !state.ready);
   pets?.relight();
-  baked?.afterTime();
+  if (baked) { try { await baked.warmDepth(); baked.afterTime(); } catch (err) { await fallbackLegacy(err); } }
   ui.syncLegends();
 }
 
@@ -214,16 +216,16 @@ function setFoliageAA(on) {
     if (m.alphaToCoverage !== on || m.alphaTest !== cutoff) { m.alphaToCoverage = on; m.alphaTest = cutoff; m.needsUpdate = true; }
   }
 }
-setFoliageAA(!lighting.taa && preset.msaa > 0);
+setFoliageAA(!lighting.taa && lighting.renderConfig.samples > 0);
 let mirrorsReady = false;
-const mirrorsOn = () => TIERS[state.quality].mirrors;
+const mirrorsOn = () => lighting.renderConfig.hdr && TIERS[state.quality].mirrors;
 function setQuality(name) {
   const p = TIERS[name]; if (!p) return Promise.resolve(); state.quality = name;
   garden.setQuality(p.grass); lighting.setQuality(p);
   applyFeatures(p);
   const switching = baked?.setQuality(name).catch(fallbackLegacy);
-  activePreset = p; setFoliageAA(!lighting.taa && p.msaa > 0); fitView();
-  if (p.mirrors && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
+  activePreset = p; setFoliageAA(!lighting.taa && lighting.renderConfig.samples > 0); fitView();
+  if (mirrorsOn() && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
   ui.syncLegends();
   return switching ?? Promise.resolve();
 }
@@ -236,7 +238,7 @@ async function fallbackLegacy(err) {
   const file = await daylightFile;
   if (!lighting.daylight?.load(file)) lighting.bakeDaylight();
   lighting.setQuality(TIERS[state.quality]);
-  collectFoliageMaterials(); setFoliageAA(TIERS[state.quality].msaa > 0);
+  collectFoliageMaterials(); setFoliageAA(lighting.renderConfig.samples > 0);
   await applyTime();
   if (mirrorsReady) layout.prepareMirrors();
 }
@@ -271,9 +273,11 @@ lapStart = lap('yield2', lapStart);
 // The race guards drivers whose completion poll never flips: after the timeout the warm draw finishes the compile.
 // Compile with the composer's buffer bound: three bakes "render target or screen" into each program (tone mapping,
 // output colour space), so compiling for the screen here would compile every material twice.
-renderer.setRenderTarget(composer.readBuffer);
-const compiling = renderer.compileAsync(scene, camera).catch(err => console.warn('compileAsync', err));
-renderer.setRenderTarget(null);
+const warmScene = () => warmPrograms(renderer, scene, camera, lighting.renderConfig.direct ? null : composer.readBuffer);
+const compiling = warmScene().then(() => baked?.checkPatches()).catch(async err => {
+  if (!baked) throw err;
+  await fallbackLegacy(err); await warmScene();
+}).catch(err => console.warn('shader warmup', err));   // never reject: the load awaits this below
 // Real progress for the loading screen: KHR_parallel_shader_compile answers "is this program linked yet?" without
 // blocking, so the bar counts finished programs out of all of them. Without the extension the bar stays indeterminate.
 const stopCompileProgress = (() => {
@@ -356,7 +360,7 @@ function frame(dt) {
   garden.update(simT);
   minimap.draw();
   lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
-  baked?.updateMovables(dt);
+  try { baked?.updateMovables(dt); } catch (err) { fallbackLegacy(err); }
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
@@ -378,7 +382,7 @@ function frame(dt) {
 }
 // The demonstration (X): a scripted promenade through the controls.
 // Photo mode: a path-traced still of the current view (see photo.js).
-const photo = new PhotoMode({ renderer, scene, camera, lighting });
+const photo = new PhotoMode({ renderer, scene, camera, lighting, getTier: () => state.tier });
 const photoUI = new PhotoUI({ photo, player, ui });
 photoFit = () => photo.onResize?.();
 const demo = new Demo({ player, viewpoints, markers, pets, ui, tour: tourCtl, interact, layout });

@@ -89,6 +89,21 @@ try {
   baked.setFeatures('laptop'); assert.equal(puddles.params.enabled, false);
   baked.dispose();
   assert.equal(f.mesh.geometry, f.geometry); assert.equal(f.mesh.material, f.material); assert.equal(f.fixtureLight.visible, true);
+  // Replacement failures must restore the whole legacy path before activation escapes.
+  for (const kind of ['lightmap', 'probe', 'depth']) {
+    const broken = fixture();
+    const m = kind === 'probe' ? new T.MeshStandardMaterial() : broken.material;
+    if (kind === 'probe') broken.scene.add(new T.Mesh(broken.geometry, m));
+    m.bakedHooks = { key: 'fixture ' + kind, compile(sh) {
+      if (kind !== 'depth' || sh.vertexShader.includes('vHighPrecisionZW')) throw Error('fixture ' + kind + ' patch failure');
+    } };
+    const warn = console.warn; console.warn = () => {};
+    try { await assert.rejects(applyLightmaps({ ...broken, tier: 'mobile' }), /Baked shader patch failed/); }
+    finally { console.warn = warn; }
+    assert.equal(broken.mesh.material, broken.material); assert.equal(broken.mesh.geometry, broken.geometry);
+    assert.equal(broken.fixtureLight.visible, true); assert.equal(broken.lighting.sun.userData.bakedShadow, undefined);
+    if (kind === 'probe') assert.equal(m.userData.probeLit, undefined);
+  }
   // Oversize rejection precedes atlas download/decoding, and releases no scene resources.
   globalThis.fixtureRequests = []; const small = fixture(); small.renderer.capabilities.maxTextureSize = 1;
   await assert.rejects(applyLightmaps({ ...small, tier: 'mobile' }), /maxTextureSize/);

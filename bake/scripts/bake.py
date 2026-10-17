@@ -38,7 +38,21 @@ img.colorspace_settings.name = 'Non-Color'
 for o in scene.objects: o.select_set(False)
 for o in mine: o.select_set(True)
 bpy.context.view_layer.objects.active = mine[0]
+# Vertex colours: the glTF importer multiplies COLOR_0 into the base colour through a Color Attribute node with no name,
+# i.e. the mesh's default colour attribute. Joined into an object without one, the merged mesh had the attribute but no
+# default, the node read black, and the DIFFUSE bake (light divided by the albedo) wrote black: every vertex-coloured
+# mesh that was not its group's first object baked black (the walnut shelf cabinet; then filled from neighbouring
+# charts). Every member gets the attribute (white where it had none) and the joined mesh keeps it as the default.
+VC = sorted({a.name for o in mine for a in o.data.color_attributes})
+for o in mine:
+    for name in VC:
+        if name not in o.data.color_attributes:
+            a = o.data.color_attributes.new(name, 'BYTE_COLOR', 'CORNER'); a.data.foreach_set('color', [1.0] * (4 * len(o.data.loops)))
 if len(mine) > 1: bpy.ops.object.join()
+ca = bpy.context.view_layer.objects.active.data.color_attributes
+if len(ca):
+    first = ca.get('Color') or ca[0]; idx = list(ca).index(first)
+    ca.active_color_index = idx; ca.render_color_index = idx
 target = bpy.context.view_layer.objects.active; mine = [target]
 for o in mine:
     o.select_set(True)

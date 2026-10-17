@@ -11,6 +11,8 @@
 #     with its own K; full size split in two row halves (15 MB publishing cap), half and quarter tiers averaged over the
 #     covered area in linear light as downscale_atlas.py does (coverage.npy: composite_v2.py's top-first mask).
 #     probes.bin: per group, the luminance SH (9 coefficients) of its probe chunks (probe.py).
+#   refl (after pack): the reflection probes' lamp layers (reflprobe.py --lamps) -> <out>/refl/, listed in encoding.json
+#     python scripts/lamp_groups_pack.py refl <groups.json> <lamp refl dir> <out>
 import sys, os, glob, json, math, time
 args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:]
 if os.environ.get('CROTON_SITE_PACKAGES'): sys.path.append(os.environ['CROTON_SITE_PACKAGES'])
@@ -26,7 +28,7 @@ def merge(folder, guides=None):
     t0 = time.time(); acc = cov = None; paths = sorted(glob.glob(os.path.join(folder, 'lamps_g*.exr')))
     if not paths: raise SystemExit(f'no bakes in {folder}')
     for p in paths:
-        a = load(p); m = a[..., 3] > 0.5
+        a = load(p); m = a[..., 3] > 0   # alpha is the surface's opacity (composite_v2.py COVERED)
         if acc is None: acc = np.zeros_like(a[..., :3]); cov = np.zeros(m.shape, bool)
         acc[m] = a[m, :3]; cov |= m; del a
     out, valid = acc, cov
@@ -125,10 +127,40 @@ def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}
     print('total', f'{sum(sizes.values()) / 1e6:.1f} MB', 'full', f'{sum(v for k, v in sizes.items() if "/" not in k and k.endswith(".webp")) / 1e6:.1f} MB',
           'half', f'{sum(v for k, v in sizes.items() if k.startswith("half")) / 1e6:.1f} MB', 'quarter', f'{sum(v for k, v in sizes.items() if k.startswith("quarter")) / 1e6:.1f} MB')
 
+def refl(groups_json, src, out):
+    """The lamp layers of the reflection probes (reflprobe.py --lamps: lamps_NN.json + lamp_PP_K.hdr) -> <out>/refl/:
+    lamp_LLL.hdr in probe order and meta.json {version, probes, layers: [{probe, file, groups: {name: share}}]}, a layer's
+    shares being its groups' parts of its light (the site weighs it by sum(level x share)), and "merged": one panorama per
+    probe with all its groups (small devices); encoding.json gains "refl"."""
+    import shutil
+    names = {g['name'] for g in json.load(open(groups_json))['groups']}
+    entries = sorted((e for f in sorted(glob.glob(os.path.join(src, 'lamps_*.json'))) for e in json.load(open(f))), key=lambda e: e['i'])
+    idx = [e['i'] for e in entries]
+    if not entries or idx != list(range(len(entries))): raise SystemExit(f'lamp reflections: probes {idx} are not 0..N-1 exactly once')
+    os.makedirs(os.path.join(out, 'refl'), exist_ok=True); layers = []; merged = []
+    for e in entries:
+        for layer in e['layers']:
+            unknown = set(layer['groups']) - names
+            if unknown: raise SystemExit(f'probe {e["i"]}: groups {sorted(unknown)} are not in {groups_json}')
+            f = f'lamp_{len(layers):03d}.hdr'; shutil.copyfile(os.path.join(src, layer['file']), os.path.join(out, 'refl', f))
+            layers.append({'probe': e['i'], 'file': f, 'groups': layer['groups']})
+        if e.get('merged'):   # all of the probe's lamp groups in one panorama (the site's small-device set)
+            f = f'lamp_m{e["i"]:02d}.hdr'; shutil.copyfile(os.path.join(src, e['merged']['file']), os.path.join(out, 'refl', f))
+            merged.append({'probe': e['i'], 'file': f, 'groups': e['merged']['groups']})
+    meta = {'version': 1, 'probes': len(entries), 'layers': layers}
+    if merged and len(merged) == sum(1 for e in entries if e['layers']): meta['merged'] = merged
+    json.dump(meta, open(os.path.join(out, 'refl', 'meta.json'), 'w'), indent=1)
+    enc_path = os.path.join(out, 'encoding.json'); enc = json.load(open(enc_path))
+    enc['refl'] = {'meta': 'refl/meta.json', 'layers': len(layers)}; json.dump(enc, open(enc_path, 'w'), indent=1)
+    per = [sum(1 for l in layers if l['probe'] == i) for i in range(len(entries))]
+    print(f'lamp reflections: {len(layers)} layers for {len(entries)} probes (per probe {per}),',
+          f'{sum(os.path.getsize(os.path.join(out, "refl", l["file"])) for l in layers) / 1e6:.1f} MB')
+
 if __name__ == '__main__':
     if args[0] == 'merge': merge(args[1], args[2] if len(args) > 2 else None)
+    elif args[0] == 'refl': refl(*args[1:4])
     elif args[0] == 'pack':
         probes = args[args.index('--probes') + 1] if '--probes' in args else 'scene/probes.json'
         gains = dict((k, float(v)) for k, v in (kv.split('=') for kv in args[args.index('--gains') + 1].split(','))) if '--gains' in args else {}
         pack(*args[1:5], probes=probes, gains=gains)
-    else: raise SystemExit('usage: merge <group dir> [guides] | pack <groups.json> <bakes> <coverage.npy> <out> [--probes path]')
+    else: raise SystemExit('usage: merge <group dir> [guides] | pack <groups.json> <bakes> <coverage.npy> <out> [--probes path] | refl <groups.json> <lamp refl dir> <out>')

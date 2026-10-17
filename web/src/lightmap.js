@@ -594,7 +594,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     loadFoliage(asset(`${dir}/${slot}/foliage.bin.gz`)),
     lighting.outputPass && new URLSearchParams(location.search).get('agx') !== 'three' ? loadAgXLuts() : Promise.resolve(null),
   ];
-  const groupTask = groups ? Promise.all([groups.setResolution(resolution), groupMeta.probes ? loadGroupProbes(asset(`${dir}/lampgroups/probes.bin`), groupMeta.groups.length, groupMeta.probes.count) : null])
+  const groupTask = groups ? Promise.all([groups.setResolution(resolution), groupMeta.probes ? loadGroupProbes(asset(`${dir}/lampgroups/probes.bin`), groupMeta.groups.length, groupMeta.probes.count) : null,
+    groupMeta.refl && lampReflSet(tier) ? loadLampReflections(dir, asset, groupMeta, lampReflSet(tier)).catch(err => { console.warn('lamp reflections failed: daylight reflections only', err); return null; }) : null])
     .catch(err => { console.warn('lamp groups failed, using the shared lamps layer', err); return false; }) : Promise.resolve(null);
   const staged = await Promise.allSettled(tasks.map(p => p.then(value => { progress(); return value; })));
   const release = (i, fn) => { if (staged[i].status === 'fulfilled' && staged[i].value) fn(staged[i].value); };
@@ -609,7 +610,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     // fall back to the shared lamps layer: the pair was loaded without it
     groups.dispose(); groups = null; groupMeta = null; layers.forEach(disposeAtlas);
     try { layers = await loadAtlases(resolution); } catch (err) { releaseStage(); throw err; }
-  } else if (groups) groups.probeSH = groupData[1];
+  } else if (groups) { groups.probeSH = groupData[1]; if (groupData[2]) attachLampReflections(refl, groupData[2], groups, multi); }
   // main.js loads this plan for Layout/hq.js; bundle its pieces here and reuse the boxes across slots.
   const walls = probeWalls(housePlan.pieces), volume = buildProbeVolume(probes, groups, walls);
   volume.wet = SLOTS[slot].wet ?? 0; volume.refl = refl; volume.multi = multi; refl.slots = multi;
@@ -723,7 +724,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         if (drop.has('slot crossfade')) s.fragmentShader = s.fragmentShader.replace(next[0], 'lmSample( lightMap, vLightMapUv, uLmK.x )').replace(next[1], 'lmSample( uLmLamps, vLightMapUv, uLmK.y )');
         if (CONTACT) checkedContact(s, true, !drop.has('contact sun'));
       });
-      c.customProgramCacheKey = () => prevKey + '|baked-v3:' + [v2, !!enc, puddles, refl?.count ?? 0, CONTACT, LM_FILTER, multi, mirror, groups ? 'lg' + groupMeta.textures : '', c.userData.samplerCut ?? 0].join(':');
+      c.customProgramCacheKey = () => prevKey + '|baked-v3:' + [v2, !!enc, puddles, refl?.key ?? refl?.count ?? 0, CONTACT, LM_FILTER, multi, mirror, groups ? 'lg' + groupMeta.textures : '', c.userData.samplerCut ?? 0].join(':');
       mats.set(key, c); return c;
     };
     o.material = Array.isArray(o.material) ? o.material.map(lm) : lm(o.material);
@@ -1005,21 +1006,7 @@ async function loadReflections(dir, asset, track = work => work()) {
     return response.json();
   })).sort((a, b) => a.i - b.i);
   if (!meta.length || meta.some(m => !['p', 'min', 'max'].every(k => m[k]?.length === 3 && m[k].every(Number.isFinite)))) throw new Error('Invalid reflection metadata');
-  const results = await Promise.allSettled(meta.map(m => track(() => new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(asset(`${dir}/probe_${String(m.i).padStart(2, '0')}.hdr`)))));
-  if (results.some(r => r.status === 'rejected')) { for (const r of results) if (r.status === 'fulfilled') r.value.dispose(); throw results.find(r => r.status === 'rejected').reason; }
-  const maps = results.map(r => r.value);
-  const w = maps[0].image.width, h = maps[0].image.height, n = maps.length;
-  if (maps.some(t => t.image.width !== w || t.image.height !== h || t.image.data.length !== w * h * 4)) { maps.forEach(t => t.dispose()); throw new Error('Invalid reflection image dimensions'); }
-  const data = new Uint16Array(w * h * 4 * n);
-  maps.forEach((t, k) => {
-    // rows bottom-up (v = 0 first), as an array texture is uploaded without flipY
-    const src = t.image.data, ch = src.length / (w * h);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const si = ((h - 1 - y) * w + x) * ch, di = ((k * h + y) * w + x) * 4;
-      data[di] = src[si]; data[di + 1] = src[si + 1]; data[di + 2] = src[si + 2]; data[di + 3] = 0x3c00;
-    }
-    t.dispose();
-  });
+  const { w, h, n, data } = await loadPanoramas(meta.map(m => asset(`${dir}/probe_${String(m.i).padStart(2, '0')}.hdr`)), track);
   const tex = new THREE.DataArrayTexture(data, w, h, n);
   Object.assign(tex, { format: THREE.RGBAFormat, type: THREE.HalfFloatType, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.ClampToEdgeWrapping });
   tex.needsUpdate = true;
@@ -1027,22 +1014,93 @@ async function loadReflections(dir, asset, track = work => work()) {
   // array of vectors is first copied element by element into a scratch buffer each time (3 x 26 vectors, ~650 switches
   // in the garden view: ~10 ms of its frame). A typed array goes to WebGL as it is.
   const v3 = k => Float32Array.from(meta.flatMap(m => m[k]));
-  return { count: n, uniforms: { uReflTex: { value: tex }, uReflPos: { value: v3('p') }, uReflMin: { value: v3('min') }, uReflMax: { value: v3('max') }, uReflMips: { value: Math.floor(Math.log2(Math.max(w, h))) } } };
+  return { count: n, key: String(n), uniforms: { uReflTex: { value: tex }, uReflPos: { value: v3('p') }, uReflMin: { value: v3('min') }, uReflMax: { value: v3('max') }, uReflMips: { value: Math.floor(Math.log2(Math.max(w, h))) } } };
+}
+// Equirect HDR panoramas -> one half-float RGBA buffer of layers, rows bottom-up (v = 0 first), as an array texture is
+// uploaded without flipY.
+async function loadPanoramas(urls, track) {
+  const results = await Promise.allSettled(urls.map(url => track(() => new HDRLoader().setDataType(THREE.HalfFloatType).loadAsync(url))));
+  if (results.some(r => r.status === 'rejected')) { for (const r of results) if (r.status === 'fulfilled') r.value.dispose(); throw results.find(r => r.status === 'rejected').reason; }
+  const maps = results.map(r => r.value);
+  const w = maps[0].image.width, h = maps[0].image.height, n = maps.length;
+  if (maps.some(t => t.image.width !== w || t.image.height !== h || t.image.data.length !== w * h * 4)) { maps.forEach(t => t.dispose()); throw new Error('Invalid reflection image dimensions'); }
+  const data = new Uint16Array(w * h * 4 * n);
+  maps.forEach((t, k) => {
+    const src = t.image.data, ch = src.length / (w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const si = ((h - 1 - y) * w + x) * ch, di = ((k * h + y) * w + x) * 4;
+      data[di] = src[si]; data[di + 1] = src[si + 1]; data[di + 2] = src[si + 2]; data[di + 3] = 0x3c00;
+    }
+    t.dispose();
+  });
+  return { w, h, n, data };
+}
+// Lamp reflections (reflprobe.py --lamps, lamp_groups_pack.py refl): per reflection probe, panoramas of its brightest
+// lamp groups alone and one of its other visible groups, at the bake's physical level (no sky, no sun). The daylight
+// probes hold no lamp light; each lamp layer adds its light weighed by its groups' live levels (switches, slot defaults,
+// fades), so a mirror shows only the lamps that are on. Layers are matched to groups by name: the group count may change.
+// Which set: every layer (hq), or one panorama per probe with all its lamps (laptop, mobile: a third of the memory, its
+// weight the light-weighted level of its groups); ?refllamps=all|merged|0 overrides.
+const lampReflSet = tier => {
+  const q = new URLSearchParams(location.search).get('refllamps');
+  if (['0', 'off'].includes(q)) return null;
+  return q === 'all' || q === 'merged' ? q : tier === 'hq' ? 'all' : 'merged';
+};
+async function loadLampReflections(dir, asset, groupMeta, set = 'all', track = work => work()) {
+  const full = await track(async () => {
+    const r = await fetch(asset(`${dir}/lampgroups/${groupMeta.refl.meta}`)); if (!r.ok) throw new Error(`lamp reflections ${r.status}`);
+    return r.json();
+  });
+  const meta = set === 'merged' && Array.isArray(full?.merged) ? { ...full, layers: full.merged } : full;
+  const index = new Map(groupMeta.groups.map(g => [g.name, g.index]));
+  if (meta?.version !== 1 || !Number.isInteger(meta.probes) || !Array.isArray(meta.layers) || !meta.layers.length ||
+      meta.layers.some((l, i) => !Number.isInteger(l.probe) || l.probe < 0 || l.probe >= meta.probes || (i && l.probe < meta.layers[i - 1].probe) || typeof l.file !== 'string' || !l.groups || !Object.keys(l.groups).length))
+    throw new Error('Invalid lamp reflection metadata');
+  const range = new Float32Array(2 * meta.probes); let max = 0;
+  meta.layers.forEach((l, i) => { if (!range[2 * l.probe + 1]) range[2 * l.probe] = i; max = Math.max(max, ++range[2 * l.probe + 1]); });
+  const mix = meta.layers.map(l => Object.entries(l.groups).filter(([name, f]) => index.has(name) && f > 0).map(([name, f]) => [index.get(name), f]));
+  const unknown = new Set(meta.layers.flatMap(l => Object.keys(l.groups)).filter(n => !index.has(n)));
+  if (unknown.size) console.warn('lamp reflections: unknown lamp groups', [...unknown]);
+  const { w, h, n, data } = await loadPanoramas(meta.layers.map(l => asset(`${dir}/lampgroups/refl/${l.file}`)), track);
+  return { count: n, max, probes: meta.probes, w, h, data, range, mix };
+}
+// The lamp layers join the probes' array texture after the daylight layers (one sampler for both); in a multi-slot
+// site after both slot halves (lightmap_slots.js reflArray). Weights per layer follow the lamp groups' levels.
+function attachLampReflections(refl, lamps, groups, multi) {
+  const day = refl.uniforms.uReflTex.value;
+  if (lamps.probes !== refl.count || lamps.w !== day.image.width || lamps.h !== day.image.height) { console.warn('lamp reflections do not match the reflection probes: daylight reflections only'); return; }
+  const weights = new Float32Array(4 * Math.ceil(lamps.count / 4));
+  const update = () => { lamps.mix.forEach((m, l) => { let w = 0; for (const [g, f] of m) w += groups.levels[g] * f; weights[l] = w; }); };
+  Object.assign(refl.uniforms, { uReflLamp: { value: lamps.range }, uReflLampW: { value: weights }, uReflLampBase: { value: (multi ? 2 : 1) * refl.count } });
+  refl.lamps = { count: lamps.count, max: lamps.max, data: lamps.data };
+  refl.key = `${refl.count}:${lamps.count}:${lamps.max}`;
+  update(); groups.volumes.add(update);
+  if (!multi) {
+    const layer = day.image.width * day.image.height * 4, data = new Uint16Array(layer * (refl.count + lamps.count));
+    data.set(day.image.data); data.set(lamps.data, layer * refl.count);
+    const t = new THREE.DataArrayTexture(data, day.image.width, day.image.height, refl.count + lamps.count);
+    for (const k of ['format', 'type', 'generateMipmaps', 'minFilter', 'magFilter', 'wrapS', 'wrapT']) t[k] = day[k];
+    t.needsUpdate = true; day.dispose(); refl.uniforms.uReflTex.value = t;
+  }
 }
 // With slots, the current and the next slot are two halves of one array (lightmap_slots.js): one sampler, the layer
 // offsets uReflBase / uReflNext pick the halves, and the second read happens only during a fade.
 // Mirrors need a small edge allowance without reaching through a bedroom partition.
-const reflGLSL = (n, slots = false, mirror = false) => `
+const reflGLSL = (n, slots = false, mirror = false, lamps = null) => `
 #define REFL_COUNT ${n}
 ${slots ? 'uniform float uReflBlend; uniform float uReflBase; uniform float uReflNext;' : ''}
+${lamps ? `uniform vec2 uReflLamp[ REFL_COUNT ]; uniform vec4 uReflLampW[ ${Math.ceil(lamps.count / 4)} ]; uniform float uReflLampBase;` : ''}
 uniform highp sampler2DArray uReflTex; uniform vec3 uReflPos[ REFL_COUNT ]; uniform vec3 uReflMin[ REFL_COUNT ]; uniform vec3 uReflMax[ REFL_COUNT ]; uniform float uReflMips;
 vec3 reflProbe( vec3 P, vec3 R, float rough ) {
+  // the probe whose box holds the point (a small allowance for surfaces on its faces), then one whose box holds it with
+  // a wider margin, then the nearest: a margin alone let a probe reach through a partition into the next room
   int best = 0; float bestScore = 1e9;
   for ( int i = 0; i < REFL_COUNT; i ++ ) {
     vec3 size = uReflMax[ i ] - uReflMin[ i ];
     if ( min( size.x, size.z ) < 0.3 ) continue;   // wall slivers contain mostly black reflections
-    bool inBox = all( greaterThanEqual( P, uReflMin[ i ] - ${mirror ? '0.03' : '0.25'} ) ) && all( lessThanEqual( P, uReflMax[ i ] + ${mirror ? '0.03' : '0.25'} ) );
-    float score = distance( P, uReflPos[ i ] ) + ( inBox ? 0.0 : 1000.0 );
+    bool inBox = all( greaterThanEqual( P, uReflMin[ i ] - 0.03 ) ) && all( lessThanEqual( P, uReflMax[ i ] + 0.03 ) );
+    bool nearBox = all( greaterThanEqual( P, uReflMin[ i ] - ${mirror ? '0.03' : '0.25'} ) ) && all( lessThanEqual( P, uReflMax[ i ] + ${mirror ? '0.03' : '0.25'} ) );
+    float score = distance( P, uReflPos[ i ] ) + ( inBox ? 0.0 : nearBox ? 100.0 : 1000.0 );
     if ( score < bestScore ) { bestScore = score; best = i; }
   }
   vec3 dir = R;
@@ -1064,8 +1122,16 @@ vec3 reflProbe( vec3 P, vec3 R, float rough ) {
   }
   vec2 uv = vec2( atan( dir.z, dir.x ) * 0.15915494 + 0.5, asin( clamp( dir.y, -1.0, 1.0 ) ) * 0.31830989 + 0.5 );
   float reflLod = clamp( rough, 0.0, 1.0 ) * uReflMips;
-  ${slots ? `vec3 reflCur = textureLod( uReflTex, vec3( uv, float( best ) + uReflBase ), reflLod ).rgb;
-  return uReflBlend > 0.0 ? mix( reflCur, textureLod( uReflTex, vec3( uv, float( best ) + uReflNext ), reflLod ).rgb, uReflBlend ) : reflCur;` : 'return textureLod( uReflTex, vec3( uv, float( best ) ), reflLod ).rgb;'}
+  ${slots ? `vec3 refl = textureLod( uReflTex, vec3( uv, float( best ) + uReflBase ), reflLod ).rgb;
+  if ( uReflBlend > 0.0 ) refl = mix( refl, textureLod( uReflTex, vec3( uv, float( best ) + uReflNext ), reflLod ).rgb, uReflBlend );` : 'vec3 refl = textureLod( uReflTex, vec3( uv, float( best ) ), reflLod ).rgb;'}
+  ${lamps ? `// the probe's lamp layers, each at its groups' switch levels (skipped while they are off)
+  vec2 lampRange = uReflLamp[ best ];
+  for ( int k = 0; k < ${lamps.max}; k ++ ) {
+    if ( float( k ) >= lampRange.y ) break;
+    int l = int( lampRange.x ) + k; float w = uReflLampW[ l >> 2 ][ l & 3 ];
+    if ( w > 0.0 ) refl += w * textureLod( uReflTex, vec3( uv, uReflLampBase + float( l ) ), reflLod ).rgb;
+  }` : ''}
+  return refl;
 }
 `;
 // the reflection term for a patched material: world position varying + the lookup in place of three's sky map
@@ -1086,7 +1152,7 @@ function reflPatch(sh, refl, occlusion, mirror = false) {
       reflPosition = instanceMatrix * reflPosition;
     #endif
     vReflWorld = ( modelMatrix * reflPosition ).xyz;`, 'reflection vertex');
-  sh.fragmentShader = 'varying vec3 vReflWorld;\n' + reflGLSL(refl.count, !!refl.slots, mirror) + rep(sh.fragmentShader, /radiance \+= getIBLRadiance\( geometryViewDir, geometryNormal, material\.roughness \)[^;]*;/,
+  sh.fragmentShader = 'varying vec3 vReflWorld;\n' + reflGLSL(refl.count, !!refl.slots, mirror, refl.lamps) + rep(sh.fragmentShader, /radiance \+= getIBLRadiance\( geometryViewDir, geometryNormal, material\.roughness \)[^;]*;/,
     `{ vec3 nW = inverseTransformDirection( geometryNormal, viewMatrix ), rW = inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix );
        rW = normalize( mix( rW, nW, material.roughness * material.roughness ) );
        radiance += reflProbe( vReflWorld, rW, material.roughness ) * ${occlusion}; }`, 'reflection radiance');
@@ -1253,7 +1319,7 @@ function probeLit(material, volume, pcss, sided = false) {
     fol?.patch(s, !!refl);
     if (volume.slots) { if (fol) volume.slots.patchFoliage(s); if (!drop.has('slot crossfade')) volume.slots.patchProbe(s); }
   }); };
-  material.customProgramCacheKey = function () { return prevKey + '|probe-v3:' + [leafSide, occl, wet, refl?.count ?? 0, CONTACT, sheer, !!fol, !!volume.multi, mirror, side, (this ?? material).userData.samplerCut ?? 0].join(':'); };
+  material.customProgramCacheKey = function () { return prevKey + '|probe-v3:' + [leafSide, occl, wet, refl?.key ?? refl?.count ?? 0, CONTACT, sheer, !!fol, !!volume.multi, mirror, side, (this ?? material).userData.samplerCut ?? 0].join(':'); };
   material.needsUpdate = true;
 }
 
@@ -1267,7 +1333,7 @@ function addWindowReflections(scene, sky, refl) {
     vertexShader: `varying vec3 vWorld; varying vec3 vNormalW;
       void main() { vec4 w = modelMatrix * vec4( position, 1.0 ); vWorld = w.xyz; vNormalW = normalize( mat3( modelMatrix ) * normal ); gl_Position = projectionMatrix * viewMatrix * w; }`,
     fragmentShader: `#include <common>
-      ${refl ? reflGLSL(refl.count, !!refl.slots) : ''}
+      ${refl ? reflGLSL(refl.count, !!refl.slots, false, refl.lamps) : ''}
       uniform sampler2D tSky; uniform vec3 uGround; varying vec3 vWorld; varying vec3 vNormalW;
       void main() {
         vec3 v = normalize( vWorld - cameraPosition ), n = normalize( vNormalW ) * ( gl_FrontFacing ? 1.0 : -1.0 );

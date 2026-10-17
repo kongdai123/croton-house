@@ -103,6 +103,8 @@ export function createMirror(geometry) {
         for (const { source, material } of reflection.materials) {
           const previous = material.envMap;
           material.envMap = source.envMap; material.envMapIntensity = source.envMapIntensity; material.envMapRotation.copy(source.envMapRotation);
+          // a time-of-day or resolution switch hands the baked materials a new lightmap: the mirror's clones follow
+          material.lightMap = source.lightMap; material.lightMapIntensity = source.lightMapIntensity;
           if (previous?.mapping !== source.envMap?.mapping) material.needsUpdate = true;
         }
         renderer.render(flat, virtual);

@@ -1,7 +1,7 @@
 // Hover + click interaction: sit on seats, grab & drag movable pieces, open/close doors. Raycast from the screen centre
 // (pointer-locked) or from the pointer (touch / unlocked).
 import { THREE } from './kit.js';
-import { getDoors, setFrench, setHinged, setBifold, getColliders, poseFrench, doorEase } from './house.js';
+import { getDoors, setFrench, setHinged, setBifold, setSlider, getColliders, poseFrench, doorEase } from './house.js';
 import { t, getLang } from './ui.js';
 import { scenicView, viewDepth, SEAT_LOOK_RANGE } from './view.js';
 import { doorName } from './rooms.js';
@@ -156,7 +156,7 @@ export class Interact {
   toggleDoor(d) {
     if (d.kind === 'french') setFrench(d, d.target > 0.5 ? 0 : 1);
     else if (d.kind === 'bifold') setBifold(d, d.target > 0.5 ? 0 : 1);
-    else if (d.kind === 'slider') { d.open = d.open > 0.3 ? 0.02 : 0.6; }
+    else if (d.kind === 'slider') setSlider(d, !doorIsOpen(d));
     else if (d.pivot) setHinged(d, Math.abs(d.target) < 0.1);
     this.ui.toast((doorIsOpen(d) ? t('open') : t('close')) + ' · ' + this.doorLabel(d));
   }

@@ -385,9 +385,8 @@ function buildDoor(o, house) {
     g.add(box(leafW, 0.05, 0.08, fr, { y: H - 0.025 })); g.add(box(leafW, 0.03, 0.08, fr, { y: 0.015 }));
     const panel = (x, z, offset) => { const pg = new THREE.Group(); pg.position.set(x, 0, z); const f = 0.045; pg.add(box(pw, f, 0.035, fr, { y: H - 0.05 - f / 2 })); pg.add(box(pw, 0.09, 0.035, fr, { y: 0.03 + 0.045 })); pg.add(box(f, H - 0.06, 0.035, fr, { x: -pw / 2 + f / 2, y: H / 2 })); pg.add(box(f, H - 0.06, 0.035, fr, { x: pw / 2 - f / 2, y: H / 2 })); pg.add(plane(pw - f * 2, H - 0.2, M.glass(), { y: H / 2 + 0.02, double: true })); if (offset) pg.add(box(0.025, 0.25, 0.02, M.blackSteel(), { x: pw / 2 - 0.06, y: 1.0, z: 0.03, r: 0.006 })); return pg; };
     g.add(panel(-pw / 2, -0.02, false)); const sl = panel(pw / 2 - 0.6, 0.02, true); g.add(sl);
-    doors.push({ id: o.id, group: g, slide: sl, kind: 'slider', open: 0.6, w: pw, plan: { cx, cy, isH } });
-    const half = isH ? [w / 2, thick / 2] : [thick / 2, w / 2];
-    // collider only on the fixed half
+    doors.push({ id: o.id, group: g, slide: sl, kind: 'slider', open: 0.6, w: pw, thick, plan: { cx, cy, isH } });
+    // The fixed half stays solid; setSlider handles the moving half.
     if (isH) addAABB(cx - w / 2, cx, -(cy + thick / 2), -(cy - thick / 2), 'slider'); else addAABB(cx - thick / 2, cx + thick / 2, -(cy + 0), -(cy - w / 2), 'slider');
     g.userData.door = doors[doors.length - 1];
   } else if (type === 'french4' || type === 'french2') {
@@ -430,6 +429,11 @@ export function setBifold(d, t) {
   d.target = t;
   const i = getColliders().findIndex(c => c.tag === 'bifold-' + d.id); if (i >= 0) getColliders().splice(i, 1);
   if (t < 0.5) { const { cx, cy, isH } = d.plan; if (isH) addAABB(cx - d.w / 2, cx + d.w / 2, -(cy + d.thick / 2), -(cy - d.thick / 2), 'bifold-' + d.id); else addAABB(cx - d.thick / 2, cx + d.thick / 2, -(cy + d.w / 2), -(cy - d.w / 2), 'bifold-' + d.id); }
+}
+export function setSlider(d, open) {
+  d.open = open ? 0.6 : 0.02;
+  const i = getColliders().findIndex(c => c.tag === 'slider-' + d.id); if (i >= 0) getColliders().splice(i, 1);
+  if (!open) { const { cx, cy, isH } = d.plan; if (isH) addAABB(cx, cx + d.w, -(cy + d.thick / 2), -(cy - d.thick / 2), 'slider-' + d.id); else addAABB(cx - d.thick / 2, cx + d.thick / 2, -(cy + d.w), -cy, 'slider-' + d.id); }
 }
 export function setHinged(d, open) {
   d.target = open ? (d.openAngle ?? (d.kind === 'front' ? -1.5 : 1.35)) : 0;

@@ -37,10 +37,11 @@ export class Tour {
     // a language change mid-tour rewrites the caption on screen
     addEventListener('langchange', () => { if (this.active && this.phase === 'hold') this.showCaption(STOPS[this.i]); });
   }
-  // Baked lighting keeps the tour in the morning light throughout; legacy lighting still ends at dusk.
+  // Only sunrise has morning light; the other baked slots keep their own time of day.
   showCaption(s) {
-    const morning = window.__app?.state.baked && s.bakedEn;
-    this.ui.setCaption(`${getLang() === 'zh' ? (morning ? s.bakedZh : s.zh) : (morning ? s.bakedEn : s.en)}<small>${this.i + 1} / ${STOPS.length}</small>`);
+    const slot = window.__app?.baked?.slotName, lang = getLang() === 'zh' ? 'zh' : 'en';
+    const caption = s.bakedEn && slot && slot !== 'dusk' ? (slot === 'sunrise' ? s[lang === 'zh' ? 'bakedZh' : 'bakedEn'] : lang === 'zh' ? '后院 · 露台与花园' : 'The backyard · the patio and garden') : s[lang];
+    this.ui.setCaption(`${caption}<small>${this.i + 1} / ${STOPS.length}</small>`);
   }
   toggle() { if (this.active) this.stop(); else this.start(); }
   start() {
@@ -51,7 +52,11 @@ export class Tour {
     this.player.driven = true;
     this.ui.toast(t('tourOn'), 3000); document.getElementById('btn-tour').classList.add('on'); this.next();
   }
-  stop() { document.body.classList.remove('touring'); this.ui.setLabel(''); this.active = false; this.phase = 'idle'; this.viewpoints.autoOpened?.clear(); this.ui.setCaption(''); this.player.enabled = true; this.player.driven = false; document.getElementById('btn-tour').classList.remove('on'); this.ui.toast(t('tourOff'), 1500); }
+  stop() {
+    // A keepDriven flight must not land after walking has been released.
+    this.viewpoints.fly = null;
+    document.body.classList.remove('touring'); this.ui.setLabel(''); this.active = false; this.phase = 'idle'; this.viewpoints.autoOpened?.clear(); this.ui.setCaption(''); this.player.enabled = true; this.player.driven = false; document.getElementById('btn-tour').classList.remove('on'); this.ui.toast(t('tourOff'), 1500);
+  }
   next() {
     this.i++; if (this.i >= STOPS.length) { this.stop(); return; }
     const s = STOPS[this.i]; this.phase = 'fly';

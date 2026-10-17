@@ -2,7 +2,7 @@
 // switches with the same default state), each group alone at its physical level, and stores the group's luminance in
 // one channel of a tone-curved RGB atlas (three groups per WebP, K per group) plus its luminance SH at the light probes.
 // Here every light switch (light_switch.js) drives its group: a switch that is ON is at the bake's full physical level,
-// OFF is 0, with the switch's 0.25 s fade; a group's level is the energy share of its switches that are on. Lamp
+// OFF is 0, with the switch's 0.25 s fade; all switches in a group move together to match its single baked layer. Lamp
 // brightness never depends on the time of day: a slot only chooses which switches are on by default (DEFAULT_ON), and
 // the lamps' colour is each group's own warm white (its mean baked chromaticity).
 // Data: v2/lampgroups/encoding.json, lampgroups_<t>_0/1.webp (full, split), half|quarter/lampgroups_<t>.webp, probes.bin.
@@ -97,7 +97,7 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
       if (d < bestD) { best = { g, m }; bestD = d; }
     }
     if (best) matched++;
-    records.push({ toggle, group: best?.g ?? null, w: best?.m.w ?? 0, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
+    records.push({ toggle, group: best?.g ?? null, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
   }
   const levels = new Float32Array(G);   // per group, 0..gain
   let array = null, res = null, pending = null, disposed = false;
@@ -128,6 +128,14 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     update(dt, slotA, slotB = slotA, blend = 0) {
       if (disposed) return false;
       state.slotA = slotA; state.slotB = slotB; state.blend = blend;
+      // One baked pool per group: a press changes every member before their fades tick.
+      for (const r of records) if (r.group && !r.group.always && r.toggle.manual && (!r.manual || r.toggle.on !== r.on)) {
+        const on = r.toggle.on;
+        for (const member of records) if (member.group === r.group) {
+          if (member !== r) member.toggle.set(on);
+          member.from = member.level; member.t = 0; member.manual = true; member.on = on;
+        }
+      }
       for (const r of records) {
         const tg = r.toggle;
         if (tg.manual && (!r.manual || tg.on !== r.on)) { r.from = r.level; r.t = 0; }   // a switch was pressed
@@ -137,12 +145,13 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
         else level = r.group ? defaultLevel(r.group, slotA, slotB, blend) : +tg.on;
         if (Math.abs(level - r.level) > 1e-5) changed = true;
         r.level = level;
+        if (r.group && !r.group.always && tg.manual) { tg.value = level; tg.moving = r.t < 1; }
       }
       if (!changed) return false;
       changed = false;
       levels.fill(0);
       for (const g of groups) if (g.always) levels[g.index] = (g.gain ?? 1) * defaultLevel(g, slotA, slotB, blend);
-      for (const r of records) if (r.group && !r.group.always) levels[r.group.index] += (r.group.gain ?? 1) * r.w * r.level;
+      for (const r of records) if (r.group && !r.group.always) levels[r.group.index] = (r.group.gain ?? 1) * r.level;
       for (let t = 0; t < T; t++) uniforms[`uLampLv${t}`].value.set(levels[t * 3] ?? 0, levels[t * 3 + 1] ?? 0, levels[t * 3 + 2] ?? 0);
       for (let g = 0; g < G; g++) for (let c = 0; c < 3; c++) probeWeights[g * 3 + c] = levels[g] * groups[g].color[c];
       for (const refill of volumes) refill();

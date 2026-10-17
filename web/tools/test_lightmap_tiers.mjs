@@ -25,7 +25,7 @@ try {
   const { applyLightmaps, applyBakedSun, THREE } = await import(pathToFileURL(file));
   console.info = console.warn = () => {};
   const requests = [], closed = [], base = 'https://fixture.invalid/lightmaps';
-  let shipped = ['sunrise'];
+  let shipped = ['sunrise'], groupMeta = null;
   let fail = '', release = null, gate = null, probeData = null, toneK = 0.2;
   const ph = Buffer.from(JSON.stringify({ count: 4, points: [[0, 1, 0], [1, 1, 0], [0, 1, 1], [1, 1, 1]], layers: ['sky', 'sunind', 'lamps'] }));
   const po = (4 + ph.length + 4 + 3) & ~3;
@@ -39,6 +39,7 @@ try {
   [0, 1, 2, 0, 1, 2].forEach((v, i) => bin.writeUInt32LE(v, 4 + json.length + i * 4));
   globalThis.fetch = async (input, opts) => {
     const url = typeof input === 'string' ? input : input.url; requests.push(url);
+    if (url.endsWith('/lampgroups/encoding.json') && groupMeta) return { ok: true, json: async () => groupMeta };
     if (url.endsWith('/probes.bin') && probeData) return { ok: true, arrayBuffer: async () => probeData };
     if (url.endsWith('/refl/meta.json')) return { ok: true, json: async () => [{ i: 0, p: [0, 1, 0], min: [-1, 0, -1], max: [1, 2, 1] }] };
     if (url.endsWith('/foliage.bin.gz')) return { ok: true, arrayBuffer: async () => foliage.buffer.slice(foliage.byteOffset, foliage.byteOffset + foliage.length) };
@@ -125,15 +126,24 @@ try {
   globalThis.location.search = '?agx=three&foliagebake=0';
   const scene4 = new THREE.Scene(), sun4 = new THREE.DirectionalLight(); scene4.add(sun4, sun4.target);
   const mesh4 = new THREE.Mesh(g.clone(), new THREE.MeshStandardMaterial()); mesh4.userData.lmId = 'fixture'; scene4.add(mesh4);
+  const source4 = mesh4.material; source4.userData = { emits: 'lamp', timeEmission: true }; source4.emissiveIntensity = 0;
+  const toggle4 = { on: true, manual: false, glows: [], set(on) { this.on = on; this.manual = true; } };
+  mesh4.userData.id = 'fixture';
+  groupMeta = { version: 1, curve: 'sqrt(x/(x+K))', textures: 1, groups: [{ index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1, 1, 1], members: [{ id: 'fixture', root: [0, 0, 0], w: 1 }] }] };
+  renderer.initTexture = () => {}; renderer.copyTextureToTexture = () => {};
   const lighting4 = { sun: sun4, windowLights: [], fixtures: new THREE.Group(), tune: {}, grade,
+    lightSwitches: [{ root: mesh4, toggle: toggle4 }],
     update() { renderer.toneMappingExposure = this.tune.dayOutdoor; } };
   const baked4 = await applyLightmaps({ scene: scene4, renderer, lighting: lighting4, base, tier: 'mobile' });
   baked4.afterTime();
+  assert.equal(baked4.lampGroups.matched, 1); assert.equal(toggle4.on, false);
+  toggle4.set(true); source4.emissiveIntensity = 2.5; baked4.updateMovables(0.25);
+  assert.equal(mesh4.material.emissiveIntensity, 2.5); assert.equal(baked4.lampGroups.levels[0], 1);
   assert.deepEqual(baked4.availableSlots, shipped);
   const multiShader = compile(mesh4.material);
   assert.ok(multiShader.fragmentShader.includes('mix( lmSample( lightMap'));
   assert.ok(multiShader.fragmentShader.includes('uniform float uReflNext;') && !multiShader.fragmentShader.includes('uReflNextTex'));
-  assert.equal((multiShader.fragmentShader.match(/sampler2DArray/g) ?? []).length, 1);   // current + next slot: one array
+  assert.equal((multiShader.fragmentShader.match(/sampler2DArray/g) ?? []).length, 2);   // reflection slots + lamp groups
   const late4 = new THREE.Mesh(g, new THREE.MeshStandardMaterial()); scene4.add(late4); baked4.register(late4);
   const probeShader = compile(late4.material);
   assert.ok(probeShader.fragmentShader.includes('probeTex( uProbeNextSH, uvw, ch )'));
@@ -155,16 +165,23 @@ try {
   const slotProgress = [];
   fail = ''; await pump(baked4.setSlot('dusk', (fraction, detail) => slotProgress.push({ fraction, ...detail })));
   const stagedSlot = slotProgress.find(p => p.phase === 'staged');
-  assert.equal(stagedSlot.loaded, 8); assert.equal(stagedSlot.total, 8); assert.equal(stagedSlot.fraction, 1);
+  assert.equal(stagedSlot.loaded, 7); assert.equal(stagedSlot.total, 7); assert.equal(stagedSlot.fraction, 1);
   assert.equal(slotProgress.at(-1).phase, 'transition'); assert.equal(slotProgress.at(-1).name, 'dusk');
   assert.equal(baked4.slotName, 'dusk'); assert.equal(sun4.intensity, 0); assert.equal(renderer.toneMappingExposure, 1);
+  assert.equal(toggle4.manual, false); assert.equal(toggle4.on, true);
   assert.equal(multiShader.uniforms.uSlotBlend.value, 0); assert.equal(multiShader.uniforms.uWet.value, 0);
   assert.equal(mesh4.material.lightMap, baked4.target.texture);
   const previousProgressCount = slotProgress.length, cachedProgress = [];
   await pump(baked4.setSlot('sunrise', (_, d) => cachedProgress.push(d.phase))); assert.equal(baked4.target.texture, dawnAtlas);
+  assert.equal(toggle4.manual, false); assert.equal(toggle4.on, false);
   assert.deepEqual(cachedProgress, ['transition']); assert.equal(slotProgress.length, previousProgressCount);
+  toggle4.set(true); baked4.updateMovables(0.25);
   await pump(baked4.setQuality('laptop')); assert.equal(baked4.stats.resolution, 'half');
+  assert.equal(toggle4.manual, true); assert.equal(toggle4.on, true); assert.equal(baked4.lampGroups.levels[0], 1);
+  renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });
+  assert.equal(toggle4.manual, true); assert.equal(toggle4.on, true);
   await pump(baked4.setSlot('golden')); assert.equal(baked4.slotName, 'golden');
+  assert.equal(toggle4.manual, false); assert.equal(toggle4.on, false);
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });
   baked4.dispose();
   log('multi-slot integration: shared blend uniforms, atomic failed load, dusk sun/exposure/dryness, cached return, quality, context restore, disposal OK');

@@ -28,6 +28,7 @@ import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch, emitsLight } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
+import housePlan from '../data/house.json';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
@@ -605,7 +606,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     groups.dispose(); groups = null; groupMeta = null; layers.forEach(disposeAtlas);
     try { layers = await loadAtlases(resolution); } catch (err) { releaseStage(); throw err; }
   } else if (groups) groups.probeSH = groupData[1];
-  const volume = buildProbeVolume(probes, groups);
+  // main.js loads this plan for Layout/hq.js; bundle its pieces here and reuse the boxes across slots.
+  const walls = probeWalls(housePlan.pieces), volume = buildProbeVolume(probes, groups, walls);
   volume.wet = SLOTS[slot].wet ?? 0; volume.refl = refl; volume.multi = multi; refl.slots = multi;
   // Every fetch/decode/validation has completed. Nothing above changes scene objects or legacy lighting.
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -627,7 +629,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const byId = new Map(), byCount = new Map();
   for (const u of header.units) { if (u.id) byId.set(u.id, u); if (!byCount.has(u.vc)) byCount.set(u.vc, []); byCount.get(u.vc).push(u); }
   const weather = new Map(), emissionCopies = new Map();
-  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level; };
+  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow || e.source.userData.timeEmission ? e.source.emissiveIntensity : e.base * level; };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
   pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them
@@ -709,7 +711,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ' * clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );', 'lightmap clearcoat');
         s.fragmentShader = rep(s.fragmentShader, '#include <lights_fragment_maps>', maps, 'lightmap maps');
         if (puddles) { wetPatch(s, SLOTS[slot].wet); if (slots) s.uniforms.uWet = slots.wet; }
-        if (refl) reflPatch(s, refl, mirror ? '1.0' : 'clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )');
+        if (refl) reflPatch(s, refl, mirror ? '1.0' : 'clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )', mirror);
         pcss.patch(s);
         // last resort, the next slot's atlases (its fade then jumps at the end): the samplers that dropping them frees
         const next = ['lmSample( uSlotNext, vLightMapUv, uSlotNextK.x )', 'lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y )'];
@@ -920,7 +922,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       sky.mapping = THREE.EquirectangularReflectionMapping;
       let nextVolume, env;
       try {
-        nextVolume = buildProbeVolume(P, groups); nextVolume.fill(SLOTS[name].lamps);
+        nextVolume = buildProbeVolume(P, groups, walls); nextVolume.fill(SLOTS[name].lamps);
         const pmrem = new THREE.PMREMGenerator(renderer); try { env = pmrem.fromEquirectangular(sky); } finally { pmrem.dispose(); }
         progress.finish();
         return { name, enc: meta, layers: pair, volume: nextVolume, sky, refl: reflections, foliage: fol, env, resolution: pair.res,
@@ -943,6 +945,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         setFixtureGlow(mood.lamps);
       },
       commit(data) {
+        const changedSlot = slot !== data.name;   // quality reloads and context restores keep manual switches
         slot = data.name; enc = data.enc; skyBg = data.sky; resolution = data.resolution;
         layers.splice(0, 2, ...data.layers); target.texture = data.layers[0];
         lmUniforms.uLmK.value.set(enc.K.slot, enc.K.lamps); lmUniforms.uLmLamps.value = data.layers[1];
@@ -950,7 +953,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         envTarget = data.env ?? envTarget;
         scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m?.isMeshStandardMaterial && (m.lightMap || m.userData.probeLit)) setEnv(m); });
         api.slot = SLOTS[slot]; api.slotName = slot; atlasStats();
-        if (groups) { groups.reset(slot); updateGroups(0); }   // the new slot's default switch states
+        if (groups) { if (changedSlot) groups.reset(slot); updateGroups(0); }   // only a new slot restores defaults
       },
     });
     volume.slots = slots; Object.assign(lmUniforms, slots.uniforms);
@@ -1012,14 +1015,17 @@ async function loadReflections(dir, asset, track = work => work()) {
 }
 // With slots, the current and the next slot are two halves of one array (lightmap_slots.js): one sampler, the layer
 // offsets uReflBase / uReflNext pick the halves, and the second read happens only during a fade.
-const reflGLSL = (n, slots = false) => `
+// Mirrors need a small edge allowance without reaching through a bedroom partition.
+const reflGLSL = (n, slots = false, mirror = false) => `
 #define REFL_COUNT ${n}
 ${slots ? 'uniform float uReflBlend; uniform float uReflBase; uniform float uReflNext;' : ''}
 uniform highp sampler2DArray uReflTex; uniform vec3 uReflPos[ REFL_COUNT ]; uniform vec3 uReflMin[ REFL_COUNT ]; uniform vec3 uReflMax[ REFL_COUNT ]; uniform float uReflMips;
 vec3 reflProbe( vec3 P, vec3 R, float rough ) {
   int best = 0; float bestScore = 1e9;
   for ( int i = 0; i < REFL_COUNT; i ++ ) {
-    bool inBox = all( greaterThanEqual( P, uReflMin[ i ] - 0.25 ) ) && all( lessThanEqual( P, uReflMax[ i ] + 0.25 ) );
+    vec3 size = uReflMax[ i ] - uReflMin[ i ];
+    if ( min( size.x, size.z ) < 0.3 ) continue;   // wall slivers contain mostly black reflections
+    bool inBox = all( greaterThanEqual( P, uReflMin[ i ] - ${mirror ? '0.03' : '0.25'} ) ) && all( lessThanEqual( P, uReflMax[ i ] + ${mirror ? '0.03' : '0.25'} ) );
     float score = distance( P, uReflPos[ i ] ) + ( inBox ? 0.0 : 1000.0 );
     if ( score < bestScore ) { bestScore = score; best = i; }
   }
@@ -1053,7 +1059,7 @@ const CLEARCOAT_IBL = 'clearcoatRadiance += getIBLRadiance( geometryViewDir, geo
 // A mirror shows the room's probe at full strength: the probe already holds the room's light and occlusion, and the
 // specular-occlusion guess (baked irradiance at the glass) would darken it to near black in a dim bathroom.
 const isMirror = m => m?.name === 'mirror';
-function reflPatch(sh, refl, occlusion) {
+function reflPatch(sh, refl, occlusion, mirror = false) {
   Object.assign(sh.uniforms, refl.uniforms);
   if (!sh.vertexShader.includes('varying vec3 vReflWorld')) sh.vertexShader = 'varying vec3 vReflWorld;\n' + rep(sh.vertexShader, '#include <project_vertex>', `#include <project_vertex>
     vec4 reflPosition = vec4( transformed, 1.0 );
@@ -1064,7 +1070,7 @@ function reflPatch(sh, refl, occlusion) {
       reflPosition = instanceMatrix * reflPosition;
     #endif
     vReflWorld = ( modelMatrix * reflPosition ).xyz;`, 'reflection vertex');
-  sh.fragmentShader = 'varying vec3 vReflWorld;\n' + reflGLSL(refl.count, !!refl.slots) + rep(sh.fragmentShader, /radiance \+= getIBLRadiance\( geometryViewDir, geometryNormal, material\.roughness \)[^;]*;/,
+  sh.fragmentShader = 'varying vec3 vReflWorld;\n' + reflGLSL(refl.count, !!refl.slots, mirror) + rep(sh.fragmentShader, /radiance \+= getIBLRadiance\( geometryViewDir, geometryNormal, material\.roughness \)[^;]*;/,
     `{ vec3 nW = inverseTransformDirection( geometryNormal, viewMatrix ), rW = inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix );
        rW = normalize( mix( rW, nW, material.roughness * material.roughness ) );
        radiance += reflProbe( vReflWorld, rW, material.roughness ) * ${occlusion}; }`, 'reflection radiance');
@@ -1080,19 +1086,58 @@ function reflPatch(sh, refl, occlusion) {
 // furniture, pets) samples it per pixel by world position, so a carried chair or a cat takes the baked light of
 // wherever it is, and foliage is lit by the same sunrise sky as the bake instead of the walkthrough's midday sky map.
 const VOL = { x0: -12.5, x1: 12.5, y0: -11.5, y1: 15.5, step: 0.5, heights: [0.35, 0.95, 1.55] };
-function buildProbeVolume(P, groups = null) {
+// Plan pieces already exclude openings (solid sides, sills and lintels). Inset 1 cm to allow face contact.
+const probeWalls = pieces => pieces.map(p => [p.x0 + 0.01, p.x1 - 0.01, p.z0 + 0.01, p.z1 - 0.01, -p.y1 + 0.01, -p.y0 - 0.01]).filter(b => b[0] < b[1] && b[2] < b[3] && b[4] < b[5]);
+function probeBlocked(px, py, pz, qx, qy, qz, walls) {
+  const x0 = Math.min(px, qx), x1 = Math.max(px, qx), y0 = Math.min(py, qy), y1 = Math.max(py, qy), z0 = Math.min(pz, qz), z1 = Math.max(pz, qz);
+  const dx = qx - px, dy = qy - py, dz = qz - pz;
+  for (const b of walls) {
+    if (x1 < b[0] || x0 > b[1] || y1 < b[2] || y0 > b[3] || z1 < b[4] || z0 > b[5]) continue;
+    let lo = 0, hi = 1;
+    for (let a = 0; a < 3; a++) {
+      const p = a === 0 ? px : a === 1 ? py : pz, d = a === 0 ? dx : a === 1 ? dy : dz;
+      if (d === 0) { if (p < b[a * 2] || p > b[a * 2 + 1]) { hi = -1; break; } }
+      else { const t0 = (b[a * 2] - p) / d, t1 = (b[a * 2 + 1] - p) / d; lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1)); }
+      if (lo > hi) break;
+    }
+    if (lo <= hi) return true;
+  }
+  return false;
+}
+function buildProbeVolume(P, groups = null, walls = []) {
   const NX = Math.round((VOL.x1 - VOL.x0) / VOL.step) + 1, NZ = Math.round((VOL.y1 - VOL.y0) / VOL.step) + 1, NY = VOL.heights.length;
   const valid = []; for (let i = 0; i < P.N; i++) if (P.valid[i]) valid.push(i);
-  // per cell, the 4 nearest valid probes and their weights (fixed); the lamp level only changes the sum
+  // Walk outwards in x: once dx alone exceeds the 16th distance, all remaining probes are farther away.
+  valid.sort((a, b) => P.points[a * 3] - P.points[b * 3] || a - b);
+  const starts = new Int32Array(NX); let start = 0;
+  for (let x = 0; x < NX; x++) { while (start < valid.length && P.points[valid[start] * 3] < VOL.x0 + x * VOL.step) start++; starts[x] = start; }
+  // Test only the nearest 16, stopping at 4 visible probes; reuse scratch storage across cells.
+  const K = Math.min(16, valid.length), ids = new Int32Array(K), ds = new Float64Array(K), picks = new Int32Array(4);
+  // per cell, the 4 nearest visible probes and their weights (fixed); the lamp level only changes the sum
   const near = new Int32Array(NX * NZ * NY * 4), wts = new Float32Array(NX * NZ * NY * 4);
   for (let y = 0; y < NY; y++) for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) {
-    const px = VOL.x0 + x * VOL.step, py = VOL.heights[y], pz = -(VOL.y0 + z * VOL.step), best = [];
-    for (const i of valid) {
+    const px = VOL.x0 + x * VOL.step, py = VOL.heights[y], pz = -(VOL.y0 + z * VOL.step);
+    ds.fill(Infinity);
+    let left = starts[x] - 1, right = starts[x];
+    while (left >= 0 || right < valid.length) {
+      const dl = left >= 0 ? px - P.points[valid[left] * 3] : Infinity, dr = right < valid.length ? P.points[valid[right] * 3] - px : Infinity;
+      if (Math.min(dl * dl, dr * dr) > ds[K - 1]) break;
+      const i = dl <= dr ? valid[left--] : valid[right++];
       const dx = P.points[i * 3] - px, dy = (P.points[i * 3 + 1] - py) * 2, dz = P.points[i * 3 + 2] - pz, d = dx * dx + dy * dy + dz * dz;
-      if (best.length < 4) { best.push([d, i]); best.sort((a, b) => a[0] - b[0]); } else if (d < best[3][0]) { best[3] = [d, i]; best.sort((a, b) => a[0] - b[0]); }
+      if (d > ds[K - 1] || (d === ds[K - 1] && i >= ids[K - 1])) continue;
+      let k = K - 1;
+      while (k > 0 && (d < ds[k - 1] || (d === ds[k - 1] && i < ids[k - 1]))) { ds[k] = ds[k - 1]; ids[k] = ids[k - 1]; k--; }
+      ds[k] = d; ids[k] = i;
     }
+    let count = 0;
+    for (let k = 0; k < K && count < 4; k++) {
+      const i = ids[k] * 3;
+      if (!probeBlocked(px, py, pz, P.points[i], P.points[i + 1], P.points[i + 2], walls)) picks[count++] = k;
+    }
+    // Inside walls (or outside the probe coverage), retain distance-only light if every candidate is blocked.
+    if (!count) { count = 4; for (let k = 0; k < 4; k++) picks[k] = k; }
     const c = ((y * NZ + z) * NX + x) * 4; let sum = 0;
-    best.forEach(([d, i], k) => { near[c + k] = i; wts[c + k] = 1 / (d + 0.02); sum += wts[c + k]; });
+    for (let k = 0; k < 4; k++) { const j = picks[k % count]; near[c + k] = ids[j]; wts[c + k] = k < count ? 1 / (ds[j] + 0.02) : 0; sum += wts[c + k]; }
     for (let k = 0; k < 4; k++) wts[c + k] /= sum;
   }
   // One texture for the three colours: R, G and B stacked along its depth (3 x NY slices), one sampler per slot instead
@@ -1146,10 +1191,13 @@ vec3 probeIrradiance( vec3 p, vec3 n ) {
   return max( vec3( dot( r, basis ), dot( gg, basis ), dot( b, basis ) ), 0.0 );
 }
 // The volume's cells are 0.5 m: one at a door, blind or curtain mixes the rooms (closet, garden) on both sides of it.
-// A face that moves there is lit from a little way out along its normal (side, m): from the side it looks at.
-vec3 probeIrradiance( vec3 p, vec3 n, float side ) { return probeIrradiance( p + n * side, n ); }
+// A face that moves there is lit from a little way out (side, m) on the side it looks at, half way towards the viewer:
+// a panel's bevels and a leaf's edges face along the doorway, and only the viewer says which room they are seen from.
+vec3 probeIrradiance( vec3 p, vec3 n, float side ) { return probeIrradiance( p + normalize( n + normalize( cameraPosition - p ) + 1e-4 ) * side, n ); }
 `;
-const PROBE_SIDE = ', 0.3';   // the side argument of the lookup above, for probeLit's sided materials
+// the side argument of the lookup above, for probeLit's sided materials: a full cell (0.5 m) out, so both cells the
+// lookup blends lie on the face's side of the doorway (at 0.3 m a bath door took 14% from the sunlit bedroom behind it)
+const PROBE_SIDE = ', 0.5';
 function probeLit(material, volume, pcss, sided = false) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
@@ -1180,7 +1228,7 @@ function probeLit(material, volume, pcss, sided = false) {
     maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ` * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryClearcoatNormal, viewMatrix )${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );`, 'probe clearcoat');
     s.fragmentShader = PROBE_GLSL + rep(s.fragmentShader, '#include <lights_fragment_maps>', maps, 'probe maps');
     if (wet) { wetPatch(s, volume.wet); if (volume.slots) s.uniforms.uWet = volume.slots.wet; }
-    if (refl) reflPatch(s, refl, mirror ? '1.0' : `clamp( dot( probeIrradiance( vProbeWorld, nW${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )`);
+    if (refl) reflPatch(s, refl, mirror ? '1.0' : `clamp( dot( probeIrradiance( vProbeWorld, nW${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )`, mirror);
     pcss.patch(s);
     if (sheer) sheerProbePatch(s, material);
     // last resort, the next slot's probe volume (its fade then jumps at the end)

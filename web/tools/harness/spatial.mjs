@@ -58,7 +58,6 @@ export function jsClassifiers(w) {
     // [name, source, quoted?, fn(x, y)]
     ['js:roam.areaOf', 'web/src/pets/roam.js:44 (scene z = -y)', false, (x, y) => w.areaOf(x, -y)],
     ['js:roam.isIndoor', 'web/src/pets/roam.js:52', false, (x, y) => w.isIndoor(x, -y)],
-    ['js:roam.ROOMS', 'web/src/pets/roam.js:38 first rectangle (table appended to the bundle)', false, (x, y) => { for (const [n, x0, x1, y0, y1] of w.petRooms) if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return n; return ''; }],
     ['js:lighting.indoorWeight@1m', 'web/src/lighting.js:263 (returned by createLighting), position.y = 1.0', false, (x, y) => Math.round(w.lighting.indoorWeight({ x, y: 1.0, z: -y }) * 1000)],
     ['js:lightmap.insidePlan', 'web/src/lightmap.js:39', false, (x, y) => w.lightmapInsidePlan(x, y)],
     ['js:puddles.insidePlan', 'web/src/puddles.js:66', false, (x, y) => w.puddlesInsidePlan(x, y)],

@@ -38,7 +38,7 @@ export const QUOTED = [
 ];
 // Called from the real source (see scene.mjs INTERNALS): lightmap.js insidePlan / weatherClass / isMirror, photo.js presentation /
 // weatherClass / insideHouse, foliage_bake.js isPlant, puddles.js insidePlan / wetMaterial / indoors, light_switch.js glowing,
-// materials.js emitsLight, pets/roam.js areaOf / ROOMS, plan.js roomName, lighting.indoorWeight.
+// materials.js emitsLight, pets/roam.js areaOf / isIndoor, plan.js roomName, lighting.indoorWeight.
 export const CALLED = ['emitsLight', 'lightmapIsMirror', 'lightmapWeatherClass', 'lightmapInsidePlan', 'photoPresentation', 'photoWeatherClass', 'photoInsideHouse', 'foliageIsPlant',
   'puddlesWetMaterial', 'puddlesIndoors', 'puddlesInsidePlan', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
 

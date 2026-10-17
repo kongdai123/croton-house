@@ -20,7 +20,6 @@ const INTERNALS = {
   'src/photo.js': 'presentation as __presentation, weatherClass as __weatherClass, insideHouse as __insideHouse',
   'src/foliage_bake.js': 'isPlant as __isPlant',
   'src/puddles.js': 'insidePlan as __insidePlan, wetMaterial as __wetMaterial, indoors as __indoors',
-  'src/pets/roam.js': 'ROOMS',
   'src/furniture/light_switch.js': 'glowing as __glowing',
 };
 const internals = { name: 'harness-internals', setup(b) {
@@ -67,7 +66,7 @@ export async function buildRealScene() {
       export { emitsLight } from './src/materials.js';
       export { createLighting } from './src/lighting.js';
       export { buildGarden } from './src/grass.js';
-      export { areaOf, isIndoor, ROOMS as petRooms } from './src/pets/roam.js';
+      export { areaOf, isIndoor } from './src/pets/roam.js';
       export * as plan from './src/plan.js';
       export { __insidePlan as lightmapInsidePlan, __weatherClass as lightmapWeatherClass, __isMirror as lightmapIsMirror } from './src/lightmap.js';
       export { __presentation as photoPresentation, __weatherClass as photoWeatherClass, __insideHouse as photoInsideHouse } from './src/photo.js';

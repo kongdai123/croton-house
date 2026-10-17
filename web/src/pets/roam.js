@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { buildGrid, navPath, freeSpot, freeRun, NAV_R } from '../nav.js';
 import * as HOUSE from '../house.js';
+import { spaceAt, isInside } from '../plan.js';
 import { t as tr } from '../ui.js';
 import { createPet as createCat } from './cat.js';
 import { createPet as createDog } from './dog.js';
@@ -34,22 +35,10 @@ export function groundY(x, z) {
   for (const s of (SURF ??= surfaces())) if (s.r ? inRect(s.r, x, y) : inPoly(x, y, s.p)) return s.y;
   return -0.03;
 }
-// Coarse area labels (plan rects from layout.js) for tests and target bias.
-const ROOMS = [
-  ['kitchen', -3.507, -0.8, -4.72, 1.6], ['living', -0.8, 3.97, -4.72, 1.7], ['dining', 0.42, 3.97, 1.7, 5.47], ['family', -2.28, 0.42, 1.6, 5.47],
-  ['primary', -5.9, -2.28, 1.6, 5.47], ['primaryBath', -7.9, -5.9, 1.6, 5.47], ['bedroomB', 4.08, 7.9, 1.95, 5.47], ['bathB', 5.1, 7.9, 0.2, 1.95],
-  ['hallBath', 5.1, 7.9, -1.27, 0.2], ['bedroom3', 3.97, 7.9, -5.74, -2.14], ['hall', 3.97, 5.1, -2.14, 1.95], ['garage', -7.9, -3.507, -5.74, 0.16],
-  ['closets', -7.9, -3.507, 0.16, 1.6],
-];
-export function areaOf(x, z) {
-  const y = -z, H = HOUSE;
-  if (inPoly(x, y, H.EXT_FP)) { for (const [n, x0, x1, y0, y1] of ROOMS) if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return n; return 'house'; }
-  if (inRect(H.PATIO, x, y)) return 'patio';
-  if (inRect(H.COURT_A, x, y) || inRect(H.COURT_B, x, y)) return 'courtyard';
-  if (inPoly(x, y, H.GARDEN)) return 'garden';
-  return y < 0 ? 'front' : 'garden';
-}
-export const isIndoor = (x, z) => inPoly(x, -z, HOUSE.EXT_FP);
+// Area label (a plan space id: kitchen, hall, garage, patio, backGarden, ...) for the roaming stats tools; walls and
+// doorways take the room they face, anything else under the roof is 'house'.
+export function areaOf(x, z) { return spaceAt(x, -z, 0.3)?.id ?? 'house'; }
+export const isIndoor = (x, z) => isInside(x, -z, 0);
 // Hard edges of the pets' world: the lot sides, a strip back from the street curb, beyond the back fence.
 const LOT_EDGE = { x0: -14.25, x1: 14.25, yStreet: -13.3, yBack: 19.25 };
 const BOUNDS = [

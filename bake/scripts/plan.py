@@ -135,13 +135,14 @@ class Plan:
 
     def space_at(self, x, y, near=0):
         """The space containing (x, y) (boundary inclusive), or None in a wall, doorway or seam; near > 0: else the
-        closest room / zone within that distance."""
+        closest space within that distance on the same side of the outline (a point in a wall gets the room it faces)."""
         for e in self._ordered:
             if self._hit(e, x, y): return e[0]
         if not near > 0: return None
+        outdoors = not self.is_inside(x, y, 0)
         best = None; bd = near
         for s, b, yard in self._all:
-            if yard or x < b['x0'] - bd or x > b['x1'] + bd or y < b['y0'] - bd or y > b['y1'] + bd: continue
+            if yard or (s['zone'] == 'exterior') != outdoors or x < b['x0'] - bd or x > b['x1'] + bd or y < b['y0'] - bd or y > b['y1'] + bd: continue
             d = dist(x, y, s['polygon'])
             if d <= bd and (best is None or d < bd): best = s; bd = d
         return best

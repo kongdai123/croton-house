@@ -20,13 +20,15 @@ export const spaces = data.spaces;
 export const space = id => BY_ID.get(id) ?? null;
 const hit = (e, x, y) => x >= e.b.x0 && x <= e.b.x1 && y >= e.b.y0 && y <= e.b.y1 && inPoly(x, y, e.s.polygon);
 // The space containing (x, y) (boundary inclusive), or null in a wall, a doorway or a seam. near > 0: else the closest
-// room / zone within that distance (walls are 0.114 thick, so 0.3 gives a point in a wall the room it faces).
+// space within that distance on the same side of the outline (walls are 0.114 thick, so 0.3 gives a point in a wall
+// the room it faces, never the courtyard behind it).
 export function spaceAt(x, y, near = 0) {
   for (const e of ORDERED) if (hit(e, x, y)) return e.s;
   if (!(near > 0)) return null;
+  const outdoors = !isInside(x, y, 0);
   let best = null, bd = near;
   for (const e of SPACES) {
-    if (e.yard || x < e.b.x0 - bd || x > e.b.x1 + bd || y < e.b.y0 - bd || y > e.b.y1 + bd) continue;
+    if (e.yard || (e.s.zone === 'exterior') !== outdoors || x < e.b.x0 - bd || x > e.b.x1 + bd || y < e.b.y0 - bd || y > e.b.y1 + bd) continue;
     const d = dist(x, y, e.s.polygon); if (d <= bd && (!best || d < bd)) { best = e.s; bd = d; }
   }
   return best;

@@ -159,8 +159,6 @@ export function buildHouse(house, mods, opts = {}) {
   const lens = new THREE.MeshStandardMaterial({ color: 0xffeed1, emissive: 0xffd49a, emissiveIntensity: 2.2, roughness: 0.5, userData: { emits: 'lamp' } });
   can.add(cyl(0.071, 0.071, 0.009, baffle, { x: 3.65, y: CEIL - 0.009, z: -1.254, seg: 32 }));
   const canLens = cyl(0.057, 0.057, 0.003, lens, { x: 3.65, y: CEIL - 0.015, z: -1.254, seg: 32 });
-  // This can is on in the daytime reference too; preserve its glow across time toggles.
-  canLens.onBeforeRender = () => { canLens.material.emissiveIntensity = 2.2; };
   can.add(canLens);
   const wash = new THREE.SpotLight(0xffd7aa, 3.5, 2.8, 0.85, 0.85, 2);
   wash.name = 'niche-warm-wash'; wash.position.set(3.65, CEIL - 0.03, -1.254);
@@ -276,7 +274,6 @@ function buildAnnex(g, house) {
   const cx0 = WALKIN.x0, cx1 = -5.5, cd = 0.32, cz = -(WALKIN.y1 - cd / 2);
   for (const x of [cx0 + 0.009, (cx0 + cx1) / 2, cx1 - 0.009]) g.add(box(0.018, 2.1, cd, pine, { x, y: 1.05, z: cz }));
   for (let i = 0; i < 7; i++) g.add(box(cx1 - cx0, 0.018, cd, pine, { x: (cx0 + cx1) / 2, y: 0.06 + i * 0.34, z: cz }));
-  g.add(cyl(0.11, 0.11, 0.03, M.ceiling(), { x: (WALKIN.x0 + WALKIN.x1) / 2, y: CEIL - 0.015, z: -(WALKIN.y0 + WALKIN.y1) / 2, seg: 24 }));
 
   // laundry nook: bulkhead across its mouth (g48), chocolate paint on the bath wall above the machines
   W(LAUNDRY.x0, LAUNDRY.x1, GARAGE.y1 - 0.12, WALKIN.y0, 2.08, CEIL, GM.drywall(), false);

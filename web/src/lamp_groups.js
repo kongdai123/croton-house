@@ -16,7 +16,7 @@ export const DEFAULT_ON = {
   sunrise: ['kitchenPendant'],                     // first light: someone is up, the island pendant is on (all off
                                                    // read as a dark house: -0.8 stops in the living view)
   noon: [],
-  golden: ['living', 'kitchenPendant', 'dining'],  // evening: the living room, island and dining table
+  golden: ['living', 'livingNiche', 'kitchenPendant', 'dining'],  // evening: the living room, island and dining table
   dusk: '*',                                       // blue hour: every interior lamp and the porch
 };
 // The garage has almost no daylight (dark walls, one small window): its lights start on at every time of day.
@@ -27,7 +27,7 @@ export const defaultOn = (slot, group) => {
   if (set === '*') return true;
   return !!set?.includes(group.name);
 };
-// The group array stays at half resolution or below unless ?lmgroups=full (five layers at full size are ~0.9 GB).
+// Cap the array at half resolution unless ?lmgroups=full: each full-size RGBA8 layer with mips is ~177 MiB.
 const capRes = res => res === 'full' && new URLSearchParams(location.search).get('lmgroups') !== 'full' ? 'half' : res;
 export const lampGroupsWanted = (search = location.search) => !['0', 'off'].includes(new URLSearchParams(search).get('lmgroups'));
 

@@ -35,9 +35,8 @@ const L = {
   shade: once(() => {
     const [c, g] = canvas(256, 256), r = rng(41); g.fillStyle = '#f7f6f2'; g.fillRect(0, 0, 256, 256);
     g.globalAlpha = 0.18; for (let i = 0; i < 1400; i++) { g.fillStyle = r() > 0.5 ? '#ffffff' : '#d9d6cf'; g.fillRect(r() * 256, r() * 256, 1, 2 + r() * 6); }
-    // the emissive is the raster walkthrough's stand-in for daylight through the cloth, not a light source (no
-    // userData.emits: photo mode, the Blender export and the baked view drop it, materials.js emitsLight)
-    return new THREE.MeshPhysicalMaterial({ map: ctex(c, { repeat: [6, 1] }), color: 0xffffff, roughness: 0.92, sheen: 0.6, sheenColor: new THREE.Color(0xffffff), emissive: 0xfffaf0, emissiveIntensity: 0.12 });
+    // Diffuse transmission, denser than voile; the same extras drive the probe shader and Cycles cloth.
+    return new THREE.MeshPhysicalMaterial({ map: ctex(c, { repeat: [6, 1] }), color: 0xffffff, roughness: 0.92, sheen: 0.6, sheenColor: new THREE.Color(0xffffff), userData: { sheer: { reflect: 0.65, transmit: 0.35 } } });
   }),
   lcd: once(() => {
     const [c, g] = canvas(128, 80); g.fillStyle = '#3e4440'; g.fillRect(0, 0, 128, 80);

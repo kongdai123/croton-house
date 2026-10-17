@@ -92,6 +92,8 @@ export const PLACEMENTS = [
   { m: 'bath', i: 'toilet', x: 7.52, y: 0.62, ry: W }, { m: 'bath', i: 'showerWindowB', x: 7.28, y: 1.34, ry: W },
   { m: 'bath', i: 'vanitySmall', x: 6.0, y: -0.12, ry: S }, { m: 'bath', i: 'mirrorCabinetSmall', x: 6.0, y: 0.12, h: 0.15, ry: S },
   { m: 'bath', i: 'toilet', x: 7.52, y: -0.04, ry: W }, { m: 'bath', i: 'showerWindowHall', x: 7.28, y: -0.77, ry: W },
+  { m: 'decor', i: 'recessedLight', x: 6.15, y: 1.12, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: 6.15, y: -0.72, light: false, bake: true },
   // Bedroom 3 (x 4.08..7.9, y -5.74..-2.14): pine spindle bed on the east wall, nightstands, dark dresser on the front wall
   { m: 'bedrooms', i: 'bedPine', x: 6.72, y: -3.95, ry: W, zh: '松木床', n: 'Pine bed' },
   { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -2.84, ry: W }, { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -5.06, ry: W, light: false },
@@ -106,6 +108,7 @@ export const PLACEMENTS = [
   { m: 'closet', i: 'shoes', x: 6.62, y: -1.79 },
   { m: 'closet', i: 'travel', x: 7.65, y: -1.63, ry: W },
   { m: 'closet', i: 'yoga', x: 5.74, y: -1.53 },
+  { m: 'decor', i: 'recessedLight', x: -5.59, y: 0.8755, light: false, bake: true },
   // Hallway + closets
   // windowless, between shut bath and closet doors: lamps in the baked lighting only (see the primary bath's cans)
   { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true },
@@ -133,7 +136,7 @@ export const PLACEMENTS = [
   { m: 'outdoor', i: 'frontPallet', x: -2.45, y: -9.45, h: .22, ry: S, zh: '前院木平台', n: 'Front garden pallet platform' },
   { m: 'outdoor', i: 'frontRoundPot', x: -3.05, y: -9.45, h: .447 },
   { m: 'flowers', i: 'frontGeranium', x: -3.05, y: -9.45, h: .85, seed: 13 },
-  { m: 'outdoor', i: 'frontLamp', x: -3.25, y: -10.1, h: .22, n: 'Front garden lantern' },
+  { m: 'outdoor', i: 'frontLamp', x: -3.25, y: -10.1, h: .22, light: false, bake: true, n: 'Front garden lantern' },
   { m: 'outdoor', i: 'frontFence', x: 11.25, y: -1.0 },
   { m: 'outdoor', i: 'frontCondenser', x: 8.92, y: -3.85 },
   { m: 'outdoor', i: 'frontCurb', x: -4.05, y: -9.32, ry: E, sx: 2.95 },

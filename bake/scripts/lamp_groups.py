@@ -37,12 +37,15 @@ def where(s):
 def group_of(s):
     r = room(where(s)); i = s['id']
     if s['exterior']: return 'porch'
+    if i == 'niche-recessed-can': return 'livingNiche'
     if r == 'living': return 'livingCenter' if i == 'decor-track-light' and abs(s['root'][0] - 0.2) < 0.3 else 'living'
-    if r == 'kitchen': return 'kitchenPendant' if i == 'kitchen-pendant' else 'kitchen'
-    if r in ('primary', 'closets'): return 'primaryLamps' if 'props-rooms' in i else 'primary'
-    return {'hallBath': 'hall', 'bathB': 'bedroomB'}.get(r, r)
-ORDER = ['living', 'livingCenter', 'kitchenPendant', 'kitchen', 'dining', 'family', 'primary', 'primaryLamps', 'primaryBath',
-         'bedroomB', 'bedroom3', 'hall', 'garage', 'porch', 'always']
+    if r == 'kitchen': return 'kitchenPendant' if i == 'kitchen-pendant' else 'kitchenCabinet' if 'kitchen-west-run' in i else 'kitchen'
+    if r == 'closets': return 'closet' if -6.25 <= where(s)[0] <= -4.93 else 'primary'
+    if r == 'primary': return 'primaryLamps' if 'props-rooms' in i else 'primary'
+    if r in ('bedroomB', 'bedroom3') and (i == 'nightstandPine' or 'props-rooms' in i): return r + 'Lamps'
+    return r
+ORDER = ['living', 'livingCenter', 'livingNiche', 'kitchenPendant', 'kitchen', 'kitchenCabinet', 'dining', 'family', 'primary', 'primaryLamps', 'primaryBath',
+         'closet', 'bedroomB', 'bedroomBLamps', 'bathB', 'hallBath', 'bedroom3', 'bedroom3Lamps', 'hall', 'garage', 'porch', 'always']
 
 # ---- the existing lamps (setup.py: lamp{i} = lights.json[i]) by position
 old = {o.name: o for o in scene.objects if o.type == 'LIGHT' and o.name.startswith('lamp')}

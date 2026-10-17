@@ -48,6 +48,7 @@ export function merge(meshes, mat) {
 }
 
 // ---------- Soft goods
+const puffEdge = (x, z, w, d) => [x * (1 + 0.06 * (1 - (2 * z / d) ** 2)), z * (1 + 0.06 * (1 - (2 * x / w) ** 2))];
 // Puffy pillow lying in the XZ plane (w along x, d along z, t thick); thin pinched edges, full centre.
 export function puffGeo(w, d, t, { wob = 0.004, seed = 3 } = {}) {
   const g = new THREE.BoxGeometry(w, t, d, 16, 2, 12); const p = g.attributes.position, R = rng(seed); const a = R() * 6, b = R() * 6;
@@ -57,21 +58,21 @@ export function puffGeo(w, d, t, { wob = 0.004, seed = 3 } = {}) {
     const f = Math.max(0, (1 - Math.pow(nx, 2.2)) * (1 - Math.pow(nz, 2.2)));
     const k = 0.08 + 0.92 * Math.pow(f, 0.4);
     // edges bow outward mid-span, corners stay put -> soft pillow outline with "ears"
-    const bx = 1 + 0.06 * (1 - nz * nz), bz = 1 + 0.06 * (1 - nx * nx);
-    p.setXYZ(i, x * bx, y * k + (y > 0 ? 1 : -1) * wob * Math.sin(x * 9 + a) * Math.sin(z * 11 + b) * f, z * bz);
+    const [ex, ez] = puffEdge(x, z, w, d);
+    p.setXYZ(i, ex, y * k + (y > 0 ? 1 : -1) * wob * Math.sin(x * 9 + a) * Math.sin(z * 11 + b) * f, ez);
   }
   g.deleteAttribute('normal'); g.deleteAttribute('uv');
   const m = mergeVertices(g, 1e-5); m.computeVertexNormals(); return m;
 }
 export function pillowMesh(w, d, t, mat, o = {}) { return shadow(new THREE.Mesh(puffGeo(w, d, t, o), mat)); }
-// Ruffled piped edge (the black-trimmed shams in g26): a wavy tube just outside the pillow outline, in pillow space.
+// Piping shares the body's bowed seam; ruffling stays within the pinched edge thickness.
 export function ruffle(w, d, mat, { amp = 0.012, waves = 46, r = 0.0035 } = {}) {
   const pts = [], N = 220, per = 2 * (w + d);
   for (let i = 0; i < N; i++) {
-    const s = (i / N) * per; let x, z, ox = 0, oz = 0;
-    if (s < w) { x = -w / 2 + s; z = d / 2; oz = 1; } else if (s < w + d) { x = w / 2; z = d / 2 - (s - w); ox = 1; } else if (s < 2 * w + d) { x = w / 2 - (s - w - d); z = -d / 2; oz = -1; } else { x = -w / 2; z = -d / 2 + (s - 2 * w - d); ox = -1; }
-    const o = 0.012 + amp * (0.5 + 0.5 * Math.sin((s / per) * waves * Math.PI * 2));
-    pts.push([x + ox * o, 0.004 * Math.sin((s / per) * waves * Math.PI * 4), z + oz * o]);
+    const s = (i / N) * per; let x, z;
+    if (s < w) { x = -w / 2 + s; z = d / 2; } else if (s < w + d) { x = w / 2; z = d / 2 - (s - w); } else if (s < 2 * w + d) { x = w / 2 - (s - w - d); z = -d / 2; } else { x = -w / 2; z = -d / 2 + (s - 2 * w - d); }
+    const [ex, ez] = puffEdge(x, z, w, d);
+    pts.push([ex, amp / 3 * Math.sin((s / per) * waves * Math.PI * 2), ez]);
   }
   return tube(pts, r, mat, { seg: 300, radial: 4, closed: true });
 }

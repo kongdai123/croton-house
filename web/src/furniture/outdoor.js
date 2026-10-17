@@ -401,7 +401,7 @@ function frontCurb() {
 function frontLamp() {
   const g = root(), white = renderWhite();
   g.add(latheM([[0, 0], [.11, 0], [.11, .04], [.075, .12], [.055, .19], [.048, 1.43], [.075, 1.45], [.075, 1.49], [.105, 1.52]], white, { seg: 24 }));
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: 0, transparent: true, opacity: .19, roughness: .12, depthWrite: false, userData: { emits: 'lamp', timeEmission: true } });
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: .18, transparent: true, opacity: .19, roughness: .12, depthWrite: false, userData: { emits: 'lamp' } });
   const globe = new THREE.Mesh(new THREE.SphereGeometry(.14, 24, 16), glass); globe.position.y = 1.70; globe.scale.y = 1.35; g.add(globe);
   for (let k = 0; k < 6; k++) {
     const a = k * PI / 3;
@@ -409,10 +409,9 @@ function frontLamp() {
   }
   g.add(latheM([[0, 1.87], [.08, 1.87], [.1, 1.90], [.04, 1.94], [.025, 1.98], [0, 2.03]], white, { seg: 24 }));
   g.add(cyl(.017, .017, .2, white, { y: 1.65 }), cyl(.025, .025, .16, white, { x: .1, y: 1.0, rz: PI / 2 }));
-  // The baked copies follow onTime, including sources whose startup emission is zero.
-  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 0, roughness: .3, userData: { emits: 'lamp', timeEmission: true } });
+  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 2.5, roughness: .3, userData: { emits: 'lamp' } });
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(.036, 16, 12), bulbMat); bulb.position.y = 1.72; g.add(bulb);
-  g.userData.onTime = (dusk, instant) => { bulbMat.emissiveIntensity = dusk ? 2.5 : 0; glass.emissiveIntensity = dusk ? .18 : 0; };
+  g.userData.light = { type: 'point', y: 1.72, intensity: 0.6, color: 0xffdf9f, distance: 4 };
   setCollider(g, { w: .16, d: .16, h: 2.03 });
   describe(g, { id: 'outdoor-front-lamp', name: 'White glass carriage lantern', zh: '白色花园灯柱' }); return g;
 }

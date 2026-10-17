@@ -130,7 +130,7 @@ for m in glass:
     nt.links.new(mx.outputs[0], mix.inputs[0]); nt.links.new(b.outputs[0], mix.inputs[1]); nt.links.new(tr.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], outp.inputs['Surface'])
 
-# ---- sheer voile (web: decor.js sheerMat, userData.sheer -> glTF extras): translucent cloth, not a glowing one.
+# ---- translucent cloth (web: decor.js sheers and cellular shades, userData.sheer -> glTF extras).
 # Coverage (the alpha map: gaps between threads) mixes in a Transparent BSDF; the fibres reflect diffusely and scatter
 # `transmit` of the light from behind through a Translucent BSDF, so daylight passes softly into the room. Older exports
 # (no extras) are recognised by sheen + alpha; their walkthrough emission (a raster daytime glow) is dropped.
@@ -158,7 +158,7 @@ for m in bpy.data.materials:
     else: gaps.inputs[0].default_value = cover_value
     nt.links.new(tp.outputs[0], gaps.inputs[1]); nt.links.new(fibre.outputs[0], gaps.inputs[2])
     nt.links.new(gaps.outputs[0], outp.inputs['Surface'])
-    print('sheer voile:', m.name, 'transmit', transmit)
+    print('translucent cloth:', m.name, 'transmit', transmit)
 
 # ---- soft warm lamps inside, from the walkthrough's own fixtures (dusk state: everything that can be on)
 data = json.load(open(LIGHTS))

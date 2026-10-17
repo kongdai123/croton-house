@@ -629,7 +629,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const byId = new Map(), byCount = new Map();
   for (const u of header.units) { if (u.id) byId.set(u.id, u); if (!byCount.has(u.vc)) byCount.set(u.vc, []); byCount.get(u.vc).push(u); }
   const weather = new Map(), emissionCopies = new Map();
-  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow || e.source.userData.timeEmission ? e.source.emissiveIntensity : e.base * level; };
+  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level; };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
   pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them

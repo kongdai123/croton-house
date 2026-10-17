@@ -222,7 +222,8 @@ function creased(m, seed) {
   const p = m.geometry.attributes.position; m.geometry.computeBoundingBox(); const b = m.geometry.boundingBox, A = b.max.x, C = b.max.z;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i) / A, z = p.getZ(i) / C, y = p.getY(i), edge = Math.max(0, 1 - x * x) * Math.max(0, 1 - z * z);
-    p.setY(i, y + Math.sign(y) * 0.012 * edge * (Math.sin(z * 17 + x * 7 + seed) + 0.4 * Math.sin(x * 24 - z * 5)));
+    // Sphere equators carry tiny float residue; keep the pinched seam in its plane.
+    p.setY(i, y + (Math.abs(y) < 1e-8 ? 0 : Math.sign(y)) * 0.012 * edge * (Math.sin(z * 17 + x * 7 + seed) + 0.4 * Math.sin(x * 24 - z * 5)));
   }
   m.geometry.computeVertexNormals(); return m;
 }
@@ -230,10 +231,10 @@ function pillowBody(size, thick, ruffle) {
   const g = new THREE.Group(), A = size / 2;
   g.add(creased(blob(A, thick / 2 / 1.15, A, pillowWhite(), { e1: 0.8, e2: 0.38, puff: 0.15, thin: 0.35, ws: 64, hs: 32, uvTile: 1 }), size * 31));
   if (ruffle) {
-    const R = rng(Math.round(size * 1000)), n = 160, pts = [];
-    for (let i = 0; i < n; i++) { const om = (i / n) * Math.PI * 2, wave = Math.sin(om * 38 + R() * 0.3) * 0.006; pts.push([(A + 0.03) * Math.sign(Math.cos(om)) * Math.pow(Math.abs(Math.cos(om)), 0.22), wave, (A + 0.03) * Math.sign(Math.sin(om)) * Math.pow(Math.abs(Math.sin(om)), 0.22)]); }
-    const flangeShape = rrect(size + 0.06, size + 0.06, 0.05).map(([x, z]) => [x, z]);
-    const hole = rrect(size - 0.06, size - 0.06, 0.05).map(([x, z]) => [x, z]).reverse();
+    // The flange and its welt share the body's superellipse exponent and the same sampled outline.
+    const edge = blobEquator(A, A, { e2: 0.38, n: 64 }), pts = edge.map(([x, y, z]) => [x * 1.06, y, z * 1.06]);
+    const flangeShape = pts.map(([x, y, z]) => [x, z]);
+    const hole = edge.map(([x, y, z]) => [x * 0.96, z * 0.96]).reverse();
     const fl = extrude(flangeShape, 0.003, pillowWhite(), { holes: [hole] }); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.0015; g.add(fl);
     g.add(pipe(pts, 0.0026, ruffleBlack(), { seg: 240, radial: 4 }));
   }

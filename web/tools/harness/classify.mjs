@@ -36,11 +36,11 @@ export const QUOTED = [
   ['placed.exterior', 'web/src/furniture/light_switch.js:138 (duplicated bake/export/switch_groups.mjs:40)', '/porch|wall-light-black|outdoor-front-lamp/.test(fixture.userData.id)'],
   ['placed.isPlantRoot', 'web/src/lightmap.js:193', "/^(plants|garden|flowers)-/ on the id of the root or an ancestor"],
 ];
-// Called from the real source (see scene.mjs INTERNALS): lightmap.js insidePlan / weatherClass / isMirror, photo.js presentation /
-// weatherClass / insideHouse, foliage_bake.js isPlant, puddles.js insidePlan / wetMaterial / indoors, light_switch.js glowing,
+// Called from the real source (see scene.mjs INTERNALS): lightmap.js weatherClass / isMirror, plan.js isInside, photo.js presentation /
+// weatherClass, foliage_bake.js isPlant, puddles.js wetMaterial / indoors, light_switch.js glowing,
 // materials.js emitsLight, pets/roam.js areaOf / isIndoor, plan.js roomName, lighting.indoorWeight.
-export const CALLED = ['emitsLight', 'lightmapIsMirror', 'lightmapWeatherClass', 'lightmapInsidePlan', 'photoPresentation', 'photoWeatherClass', 'photoInsideHouse', 'foliageIsPlant',
-  'puddlesWetMaterial', 'puddlesIndoors', 'puddlesInsidePlan', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
+export const CALLED = ['emitsLight', 'lightmapIsMirror', 'lightmapWeatherClass', 'plan.isInside', 'photoPresentation', 'photoWeatherClass', 'foliageIsPlant',
+  'puddlesWetMaterial', 'puddlesIndoors', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
 
 const FOLIAGE = m => m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '');
 const LEAF = m => /^garden-/.test(m.name || '');
@@ -87,7 +87,7 @@ export function captureClassify(w, ix) {
       // photo.js weatherClass reads the mesh's geometry box through its world matrix
       o2.weatherPhoto = w.photoWeatherClass(o, first);
       box.getCenter(c);
-      o2.insidePlan = w.lightmapInsidePlan(c.x, -c.z);
+      o2.insidePlan = w.plan.isInside(c.x, -c.z);
       // lighting.js:285 uses the GEOMETRY box transformed by matrixWorld; for the unrotated common case this equals the tight box
       o.geometry.computeBoundingBox(); const gb = new T.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld), gc = gb.getCenter(new T.Vector3());
       const inside = (x, y) => w.plan.isInside(x, y);   // lighting.js collectMaterials

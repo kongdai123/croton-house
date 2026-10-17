@@ -1,6 +1,7 @@
 // ?lightmap=sunrise&puddlerefl: one clipped, half-resolution ground reflection, independent of the HQ SSR pass.
 import * as THREE from 'three';
 import { fragmentSamplers, samplerLimit, warnDropped } from './sampler_budget.js';
+import { isInside } from './plan.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -63,18 +64,17 @@ function noise(x, z) {
   const h = (a, b) => fract(Math.sin(a * 127.1 + b * 311.7) * 43758.5453);
   return mix(mix(h(ix, iz), h(ix + 1, iz), u), mix(h(ix, iz + 1), h(ix + 1, iz + 1), u), v);
 }
-function insidePlan(x, y) { const f = x < -3.5 || x > 3.97 ? -5.94 : -4.82; return x >= -8.1 && x <= 8.1 && y >= f && y <= 5.62; }   // lightmap.js
-const indoors = b => insidePlan(b.min.x + 0.25, -b.min.z - 0.25) && insidePlan(b.max.x - 0.25, -b.max.z + 0.25) && insidePlan(b.min.x + 0.25, -b.max.z + 0.25) && insidePlan(b.max.x - 0.25, -b.min.z - 0.25);
+const indoors = b => isInside(b.min.x + 0.25, -b.min.z - 0.25) && isInside(b.max.x - 0.25, -b.max.z + 0.25) && isInside(b.min.x + 0.25, -b.max.z + 0.25) && isInside(b.max.x - 0.25, -b.min.z - 0.25);
 function isPuddle(x, z) {
-  if (insidePlan(x, -z)) return false;
+  if (isInside(x, -z)) return false;
   x *= 0.35; z *= 0.35;
   return 0.55 * noise(x, z) + 0.3 * noise(x * 2.1 + 5.2, z * 2.1 + 5.2) + 0.15 * noise(x * 4.3 + 9.1, z * 4.3 + 9.1) > 0.565;
 }
 const wetMaterial = m => m?.isMeshStandardMaterial && !/^garden-/.test(m.name || '') && !(m.alphaTest > 0) && !m.isFogVolumeMaterial;
-const outsideBox = b => !(insidePlan(b.min.x, -b.min.z) && insidePlan(b.max.x, -b.max.z) && insidePlan(b.min.x, -b.max.z) && insidePlan(b.max.x, -b.min.z));
+const outsideBox = b => !(isInside(b.min.x, -b.min.z) && isInside(b.max.x, -b.max.z) && isInside(b.min.x, -b.max.z) && isInside(b.max.x, -b.min.z));
 // A ground triangle that reaches clearly outside the house: its centroid, or a point 15 cm in from a corner, with a
 // 10 cm margin all round outside the plan. Floors and walls meeting the plan's outline (vertices on it) do not count.
-const clearlyOutside = (x, z) => !insidePlan(x - 0.1, -z) && !insidePlan(x + 0.1, -z) && !insidePlan(x, -z - 0.1) && !insidePlan(x, -z + 0.1);
+const clearlyOutside = (x, z) => !isInside(x - 0.1, -z) && !isInside(x + 0.1, -z) && !isInside(x, -z - 0.1) && !isInside(x, -z + 0.1);
 function outsideTriangle(a, b, c) {
   const gx = (a.x + b.x + c.x) / 3, gz = (a.z + b.z + c.z) / 3;
   if (clearlyOutside(gx, gz)) return true;
@@ -216,7 +216,7 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   function visiblePlane(cam, now) {
     if (now - lastVisibility < 1000 / P.visibilityHz) return plane;
     lastVisibility = now; const t0 = performance.now();
-    if (insidePlan(eye.x, -eye.z)) { stats.visibilityMs = performance.now() - t0; return null; }
+    if (isInside(eye.x, -eye.z)) { stats.visibilityMs = performance.now() - t0; return null; }
     projection.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); frustum.setFromProjectionMatrix(projection);
     let ground = 0, terrace = 0;
     for (const s of samples) {

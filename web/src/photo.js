@@ -12,6 +12,7 @@ import { makeSky, photoSupport, photoExposurePolicy, parseMood, kelvin, DEFAULT_
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
 import { emitsLight } from './materials.js';
+import { isInside } from './plan.js';
 
 const visible = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
 const presentation = o => {
@@ -163,18 +164,14 @@ function traceMaterial(material, cache, own) {
   return out;
 }
 
-// The house's footprint in plan coordinates (as lighting.js has it): outside it, surfaces get the weather.
-function insideHouse(x, y) {
-  const front = x < -3.5 || x > 3.97 ? -5.94 : -4.82;
-  return x >= -8.1 && x <= 8.1 && y >= front && y <= 5.62;
-}
+// Inside the house (plan.isInside, as lighting.js has it): outside it, surfaces get the weather.
 
 // Where a mesh sits decides how wet it gets: 'ground' (paving, gravel, soil: darker, glossy, puddles), 'plant'
 // (leaves: a little sheen), 'outdoor' (furniture, planters: slightly darker and smoother), or null (indoors, walls).
 function weatherClass(mesh, material) {
   const g = mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
   const b = g.boundingBox.clone().applyMatrix4(mesh.matrixWorld), c = b.getCenter(new THREE.Vector3());
-  if (insideHouse(c.x, -c.z) || b.max.x - b.min.x > 40 || b.max.z - b.min.z > 40) return null;
+  if (isInside(c.x, -c.z) || b.max.x - b.min.x > 40 || b.max.z - b.min.z > 40) return null;
   if (/^garden-/.test(material.name || '') || material.alphaTest > 0) return 'plant';
   if (b.max.y < 0.35) return 'ground';
   return 'outdoor';
@@ -215,7 +212,7 @@ async function makePuddles(grounds, blockers, amount, own, pause) {
       if (j % 4 === 0) await pause();
       for (let i = 0; i < nx; i++) {
         const x = x0 + i * cell, y = y0 + j * cell;
-        if (insideHouse(x, y)) continue;
+        if (isInside(x, y)) continue;
         const f = fbm2(x * 0.55, y * 0.55) - threshold; if (f < -0.05) continue;
         o.set(x, 3, -y); ray.set(o, down);
         const hit = ray.intersectObjects(targets, false)[0];

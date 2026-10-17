@@ -2,6 +2,7 @@
 // readable PCSS depth is reused (one jittered lookup per step, not the surface shader's 40-tap PCSS filter).
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
+import { insideGLSL } from './plan.js';
 
 // Distances in metres, extinction in m^-1; indoor is a fraction of outdoor density, skyColor is linear radiance.
 // Nominal 1440p: 640x360x24 = 5.53 M shadow reads + a four-tap full-res resolve, about 1.2-1.6 ms on M3 (unmeasured).
@@ -18,7 +19,7 @@ uniform vec3 uEye, uToSun, uSun, uSky;
 uniform vec4 uDensity; // extinction at ground, height falloff, indoor fraction, scattering albedo
 uniform float uNear, uFar, uMaxDistance, uG, uFrame, uSunTexel, uBias, uTemporal, uDepthSigma;
 uniform int uSteps;
-float outsideHouse(vec2 p) { float f = (p.x < -3.5 || p.x > 3.97) ? -5.94 : -4.82; return (p.x >= -8.1 && p.x <= 8.1 && p.y >= f && p.y <= 5.62) ? 0.0 : 1.0; }
+${insideGLSL('outsideHouse')}
 float sunLit(vec3 p, vec2 offset) {
   vec4 sc = uShadow * vec4(p, 1.0); vec3 c = sc.xyz / sc.w;
   if (any(lessThan(c, vec3(0.0))) || any(greaterThan(c, vec3(1.0)))) return 1.0;

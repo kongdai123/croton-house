@@ -1,10 +1,11 @@
 import { Box3, Vector3 } from 'three/webgpu';
 import { M } from '../materials.js';
 import { collectLightSwitches } from '../furniture/light_switch.js';
+import { isInside } from '../plan.js';
 
 // collectMaterials() in lighting.js changes the batch partitions before the bake
 // IDs are assigned. Reproduce just that CPU preparation, without its WebGL passes,
-// PMREM or daylight ray tests. Keep this region rule in sync until it is extracted.
+// PMREM or daylight ray tests. The region rule is plan.isInside, as in lighting.js.
 export function prepareBatchMaterials(scene, fixtures, house) {
   const switches = collectLightSwitches(scene, fixtures);
   const exteriorFinishes = new Set([M.stucco(), M.soffit(), M.roof()]);
@@ -14,8 +15,7 @@ export function prepareBatchMaterials(scene, fixtures, house) {
     if (!mesh.isMesh || mesh.isReflector) return;
     mesh.geometry.computeBoundingBox();
     box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld); box.getCenter(center);
-    const x = center.x, y = -center.z, front = x < -3.5 || x > 3.97 ? -5.94 : -4.82;
-    const inside = x >= -8.1 && x <= 8.1 && y >= front && y <= 5.62 && center.y < house.ceiling + 0.05 &&
+    const inside = isInside(center.x, -center.z) && center.y < house.ceiling + 0.05 &&
       box.max.x - box.min.x < 17 && box.max.z - box.min.z < 13;
     function split(material) {
       if (!material?.isMeshStandardMaterial) return material;

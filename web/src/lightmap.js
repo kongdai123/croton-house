@@ -30,16 +30,16 @@ import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch, emitsLight } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
 import housePlan from '../data/house.json';
+import { isInside, insideGLSL } from './plan.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
 
 // After rain, outdoors (the same rules as the Blender scene, scripts setup.py): ground darker and glossy with puddles
 // where a world-space noise dips, plants with a little sheen, outdoor furniture slightly darker and smoother.
-function insidePlan(x, y) { const f = x < -3.5 || x > 3.97 ? -5.94 : -4.82; return x >= -8.1 && x <= 8.1 && y >= f && y <= 5.62; }
 function weatherClass(box, m) {
   const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
-  if (insidePlan(cx, -cz) || box.max.x - box.min.x > 40 || box.max.z - box.min.z > 40) return null;
+  if (isInside(cx, -cz) || box.max.x - box.min.x > 40 || box.max.z - box.min.z > 40) return null;
   if (/^garden-/.test(m.name || '') || m.alphaTest > 0) return 'plant';
   return box.max.y < 0.35 ? 'ground' : 'outdoor';
 }
@@ -91,7 +91,7 @@ function wetten(c, cls, wet) {
 const PUDDLE_GLSL = `
 varying vec3 vWetWorld;
 uniform float uWet;
-float outsideHouse( vec2 p ) { float f = ( p.x < -3.5 || p.x > 3.97 ) ? -5.94 : -4.82; return ( p.x >= -8.1 && p.x <= 8.1 && p.y >= f && p.y <= 5.62 ) ? 0.0 : 1.0; }
+${insideGLSL('outsideHouse')}
 float wetGround( vec3 nWorld ) { return uWet * outsideHouse( vec2( vWetWorld.x, -vWetWorld.z ) ) * smoothstep( 0.8, 0.95, nWorld.y ) * ( 1.0 - smoothstep( 0.3, 0.6, vWetWorld.y ) ); }
 float wetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
 float wetNoise( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );

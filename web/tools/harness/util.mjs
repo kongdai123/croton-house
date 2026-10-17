@@ -2,7 +2,9 @@
 import { createHash } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 export const r3 = v => { const x = Math.round(v * 1000) / 1000; return x === 0 ? 0 : x; };    // millimetres, no -0
 export const r4 = v => { const x = Math.round(v * 10000) / 10000; return x === 0 ? 0 : x; };
@@ -66,4 +68,12 @@ export function diffDocs(a, b) {
     } else lines.push(`${section}: ${short(x)} -> ${short(y)}`);
   }
   return lines;
+}
+
+// Import a browser module of web/src under node: bundled by esbuild (src/*.js are ES modules in a CommonJS package and
+// may import JSON), loaded from a data: URL.
+const WEB = fileURLToPath(new URL('../../', import.meta.url));
+export async function importSrc(rel) {
+  const r = await build({ entryPoints: [join(WEB, rel)], bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'silent' });
+  return import('data:text/javascript;base64,' + Buffer.from(r.outputFiles[0].text).toString('base64'));
 }

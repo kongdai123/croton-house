@@ -56,7 +56,7 @@ export function jsClassifiers(w) {
     // [name, source, quoted?, fn(x, y)]
     ['js:roam.areaOf', 'web/src/pets/roam.js:44 (scene z = -y)', false, (x, y) => w.areaOf(x, -y)],
     ['js:roam.isIndoor', 'web/src/pets/roam.js:52', false, (x, y) => w.isIndoor(x, -y)],
-    ['js:daylight.volume', 'web/src/daylight.js:10 MIN/SIZE (scene z -5.62..5.94 = plan y -5.94..5.62)', true, (x, y) => x >= -8.1 && x <= 8.1 && y >= -5.94 && y <= 5.62],
+    ['js:daylight.volume', 'web/src/daylight.js MIN/SIZE = plan.volumes.daylight (plan y -5.94..5.62)', false, (x, y) => { const V = w.plan.plan.volumes.daylight; return x >= V.x0 && x <= V.x1 && y >= V.y0 && y <= V.y1; }],
     ['js:grass.outdoor', 'web/src/grass.js:389 (the house test is !outdoor)', true, (x, y) => !(Math.abs(x) < 8.4 && y > -6.2 && y < 5.8)],
     ['js:house.EXT_FP', 'web/src/house.js:31 pointInPoly (minimap, pets, house.js:188)', false, (x, y) => w.pointInPoly([x, y], w.EXT_FP)],
     ['js:house.garagePts', 'web/src/house.js:109', true, (x, y) => inPoly(x, y, garagePts)],

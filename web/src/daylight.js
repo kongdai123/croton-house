@@ -2,12 +2,17 @@
 // World-space sampling keeps the fill stable while walking, in mirrors and in fast mode.
 import * as THREE from 'three';
 import { M } from './materials.js';
+import { plan } from './plan.js';
+import { glslNum } from './plan_geom.js';
 
 const NX = 57, NZ = 41, NY = 9;
 // Bump when the bake's maths changes (sample offsets, ray lengths, the bounce curve): the fingerprint only covers its inputs.
 const FORMAT = 1, MAGIC = 0x4c444843 /* 'CHDL' */, HEADER = 20;
 const UNIT = { value: 1 };
-const MIN = new THREE.Vector3(-8.1, 0, -5.62), SIZE = new THREE.Vector3(16.2, 2.44, 11.56);
+// The volume's box (plan.volumes.daylight, plan frame) in the scene frame: data/daylight.bin is baked at this size.
+const V = plan.volumes.daylight, q4 = v => Math.round(v * 1e4) / 1e4;
+const MIN = new THREE.Vector3(V.x0, V.z0, -V.y1), SIZE = new THREE.Vector3(q4(V.x1 - V.x0), q4(V.z1 - V.z0), q4(V.y1 - V.y0));
+const vec3 = v => `vec3(${glslNum(v.x)}, ${glslNum(v.y)}, ${glslNum(v.z)})`;
 function texture(data, depth) {
   const t = new THREE.Data3DTexture(data, NX, NZ, depth);
   t.format = THREE.RedFormat; t.type = THREE.UnsignedByteType;
@@ -40,7 +45,7 @@ export function bakeDaylight(root, lights) {
     if (m !== M.wallPaint() && m !== M.stucco() && !(m.roughness === 0.94 && !m.map)) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     bounds.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
-    if (bounds.min.y > 2.44 || bounds.max.y < 0) return;
+    if (bounds.min.y > V.z1 || bounds.max.y < V.z0) return;
     walls.push([...bounds.min.toArray(), ...bounds.max.toArray()]);
   });
   root.traverse(o => {
@@ -128,7 +133,7 @@ export function bakeDaylight(root, lights) {
     vec3 daylightWorldDirection(vec3 v) { return vec3(dot(viewMatrix[0].xyz, v), dot(viewMatrix[1].xyz, v), dot(viewMatrix[2].xyz, v)); }
     vec3 daylightUv(vec3 normal) {
       vec3 p = vDaylightPosition + daylightWorldDirection(normal) * 0.18;
-      return clamp((p - vec3(-8.1, 0.0, -5.62)) / vec3(16.2, 2.44, 11.56), 0.0, 1.0).xzy;
+      return clamp((p - ${vec3(MIN)}) / ${vec3(SIZE)}, 0.0, 1.0).xzy;
     }
     float daylightWindow(vec3 lightPosition, vec3 uv) {
       if (uInteriorDay < 0.5) return 1.0;

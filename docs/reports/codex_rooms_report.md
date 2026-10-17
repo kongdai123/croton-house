@@ -11,7 +11,7 @@ Comparison sheets:
 - [Bathrooms](../evidence/decor_rooms_baths.jpg)
 - [Before / after](../evidence/decor_rooms_before_after.jpg)
 
-One existing issue remains outside my files. At [layout.js:121](/Users/masenov/Documents/GitHub/croton-house/web/src/layout.js:121), move this shrub south to approximately `y: -6.9`; its foliage currently penetrates bedroom 3 beneath the window:
+One existing issue remains outside my files. At [layout.js:121](../../web/src/layout.js:121), move this shrub south to approximately `y: -6.9`; its foliage currently penetrates bedroom 3 beneath the window:
 
 ```js
 { m: 'plants', i: 'shrubGreen', x: 6.8, y: -6.0, seed: 1 },

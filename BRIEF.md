@@ -6,7 +6,7 @@ match the reference photos in `refs/<area>/` (Zillow listing photos `gNN_*.jpg`,
 build photos `rednote_*.jpg`). Photorealism is the priority; nothing may look like a plain untextured box.
 
 ## Where things live
-- Project: `web/` in the croton-house repo (`/Users/masenov/Documents/GitHub/croton-house/web`). Run every command from there.
+- Project: `web/` in the croton-house repo (`web/` at the repo root). Run every command from there.
 - You own exactly one file: `src/furniture/<area>.js` (you may add `src/furniture/<area>_parts.js` if it gets long).
   Do NOT edit `src/kit.js`, `src/materials.js`, `src/proc.js`, `src/showcase.js`, other modules, or anything else.
 - Helpers: read `src/kit.js` (box/cyl/lathe/extrude/tube/plane/legs/repeat/cushion/pillow, addSeat, setMovable,

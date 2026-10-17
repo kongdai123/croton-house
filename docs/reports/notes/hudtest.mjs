@@ -1,4 +1,4 @@
-import { chromium } from '/Users/masenov/Documents/GitHub/croton-house/web/node_modules/playwright/index.mjs';
+import { chromium } from '../../../web/node_modules/playwright/index.mjs';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 const browser = await chromium.launch({channel:'chrome',args:['--use-angle=metal','--ignore-gpu-blocklist']});

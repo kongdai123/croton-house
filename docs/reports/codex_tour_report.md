@@ -1,4 +1,4 @@
-Updated only [src/tour.js](/Users/masenov/Documents/GitHub/croton-house/web/src/tour.js). Checked 34 HQ renders at 1.58 m eye height; minimum hold clearance is 0.28 m. Order and dusk stop preserved.
+Updated only [src/tour.js](../../web/src/tour.js). Checked 34 HQ renders at 1.58 m eye height; minimum hold clearance is 0.28 m. Order and dusk stop preserved.
 
 Poses: `(x, y, heading°, pitch)`. New poses include `freeSpot` adjustment. Caption revisions apply to both languages.
 

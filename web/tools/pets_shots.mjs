@@ -6,7 +6,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
 const pet = process.argv[2] ?? 'cat', outDir = process.argv[3] ?? '../compare/pets', prefix = process.argv[4] ?? pet;
-const REF = '/Users/masenov/.cursor/projects/Users-masenov-Documents-GitHub-croton-house/assets/image-59ec75fb-d56e-489b-a47f-e436f9c6a45d.png';
+const REF = process.env.REF_IMAGE;   // the reference photo to compare against (local file)
+if (!REF) throw new Error('set REF_IMAGE to the reference photo');
 fs.mkdirSync(outDir, { recursive: true });
 const IN = { x: 0.9, z: 2.9 }, OUT = { x: 0.2, z: 9.3 };   // living room; sunlit front terrace (the sun is to the south)
 const shots = [

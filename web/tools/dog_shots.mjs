@@ -3,7 +3,8 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 const OUT = new URL('../../compare/pets/', import.meta.url).pathname; fs.mkdirSync(OUT, { recursive: true });
-const REF = '/Users/masenov/.cursor/projects/Users-masenov-Documents-GitHub-croton-house/assets/image-356cedb9-32e0-421c-9d78-900d5108908c.png';
+const REF = process.env.REF_IMAGE;   // the reference photo to compare against (local file)
+if (!REF) throw new Error('set REF_IMAGE to the reference photo');
 const filter = process.argv[2] ?? '', filters = filter.split(',').filter(Boolean), want = (n) => !filters.length || filters.some((f) => n.includes(f));
 const walk = (dur, speed = 0.35) => [{ mode: 'idle', dur: 0.4 }, { mode: 'walk', dur, speed }];
 const SHOTS = {

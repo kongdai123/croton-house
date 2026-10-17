@@ -1,5 +1,5 @@
 ## Environment for agents working on the walkthrough
-- Project: `/Users/masenov/Documents/GitHub/croton-house/web` (Three.js r183 ES modules bundled by esbuild). Read `HANDOFF.md` at the
+- Project: `web/` in the croton-house repo (Three.js r183 ES modules bundled by esbuild). Read `HANDOFF.md` at the
   repo root first. Commit only when asked; a push to `master` deploys the public site. The user is building an interactive photoreal walkthrough of a Zillow listing (2513 Croton Ave,
   Sarasota). They are picky and test in desktop Chrome with HQ mode on.
 - Static server at http://127.0.0.1:8780 (start it from `web/` with `python3 tools/serve.py` if it is down; it disables caching).

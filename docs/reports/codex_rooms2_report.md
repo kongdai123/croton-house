@@ -4,6 +4,6 @@ Build and runtime checks pass. Both passes total **106,376 triangles**; no styli
 
 Sheets: [Before/after](../evidence/decor_rooms2_before_after.jpg), [photo comparisons](../evidence/decor_rooms2_bedrooms.jpg), [bathrooms](../evidence/decor_rooms2_bathrooms.jpg), [seated](../evidence/decor_rooms2_seated.jpg), [doorways](../evidence/decor_rooms2_doorways.jpg).
 
-Existing issue: the generated banana at `(9.72, 0.52)`, seed `212`, reaches into Bath B. Generation is at [layout.js:231](/Users/masenov/Documents/GitHub/croton-house/web/src/layout.js:231); move it farther east or increase canopy clearance.
+Existing issue: the generated banana at `(9.72, 0.52)`, seed `212`, reaches into Bath B. Generation is at [layout.js:231](../../web/src/layout.js:231); move it farther east or increase canopy clearance.
 
 No commits or pushes.

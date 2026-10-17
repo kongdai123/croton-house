@@ -1,4 +1,4 @@
-Saved all 50 poses in [photo_spots.json](/Users/masenov/Documents/GitHub/croton-house/web/data/photo_spots.json): **0 tight, 29 approx, 21 poor**. Skipped g07/g50. Saved positions were collision-checked.
+Saved all 50 poses in [photo_spots.json](../../web/data/photo_spots.json): **0 tight, 29 approx, 21 poor**. Skipped g07/g50. Saved positions were collision-checked.
 
 - [Overview](../evidence/zvet_all.jpg)
 - [Per-photo report and model defects](notes/zvet_report.md)

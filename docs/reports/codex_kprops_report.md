@@ -6,7 +6,7 @@ Added photo-matched counter décor:
 
 **24,938 new triangles.** Build passes; browser console is clean. All props rest on the measured 0.92 m stone surface. Verified after `kwindow` finished.
 
-Changed [props_kitchen.js](/Users/masenov/Documents/GitHub/croton-house/web/src/furniture/props_kitchen.js), [styling_kitchen.js](/Users/masenov/Documents/GitHub/croton-house/web/src/styling_kitchen.js), [index.js](/Users/masenov/Documents/GitHub/croton-house/web/src/furniture/index.js), and only the two requested lines in [layout.js](/Users/masenov/Documents/GitHub/croton-house/web/src/layout.js).
+Changed [props_kitchen.js](../../web/src/furniture/props_kitchen.js), [styling_kitchen.js](../../web/src/styling_kitchen.js), [index.js](../../web/src/furniture/index.js), and only the two requested lines in [layout.js](../../web/src/layout.js).
 
 Sheets: [g18](../evidence/kprops_g18.jpg) · [g12](../evidence/kprops_g12.jpg) · [g14](../evidence/kprops_g14.jpg) · [Close-ups](../evidence/kprops_close.jpg)
 

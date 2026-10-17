@@ -1,4 +1,4 @@
-import {chromium} from '/Users/masenov/Documents/GitHub/croton-house/web/node_modules/playwright/index.mjs';
+import {chromium} from '../../../web/node_modules/playwright/index.mjs';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({channel:'chrome',args:['--use-angle=metal','--ignore-gpu-blocklist']});
 const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));

@@ -1,7 +1,7 @@
 # Copy the 2513-house RedNote posts (images resized, videos re-encoded to 720p) into assets/rednote and write data/rednote_posts.json
 import json, os, subprocess
 from PIL import Image
-SRC = '/Users/masenov/agent/codex/downloads/rednote/Studio_Hu_Dwelling'
+SRC = os.environ['REDNOTE_SRC']   # local folder of the downloaded posts
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'assets', 'rednote'); os.makedirs(OUT, exist_ok=True)
 posts = []

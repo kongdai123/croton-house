@@ -19,10 +19,14 @@ def load(path):
 def save_exr(rgb, path):
     h, w, _ = rgb.shape; im = bpy.data.images.new('out', w, h, alpha=True, float_buffer=True); im.colorspace_settings.name = 'Non-Color'
     im.pixels.foreach_set(np.concatenate([rgb, np.ones((h, w, 1), np.float32)], -1).ravel()); im.filepath_raw = path; im.file_format = 'OPEN_EXR'; im.save(); bpy.data.images.remove(im)
+# Coverage: Cycles writes a baked texel's alpha as the surface's opacity (alpha-blended materials: glass jars 0.19, frosted
+# panels 0.32, the lantern 0.19; alpha-mapped decals per texel), its light unscaled. Any alpha > 0 is a baked texel; a
+# 0.5 threshold dropped every unit with an alpha-blended material (88 of the 2026-10-15 bake's units had no light).
+COVERED = 0.0
 def raw(layer):
     acc = cov = None
     for p in sorted(glob.glob(os.path.join(folder, f'{layer}_g*.exr'))):
-        a = load(p); m = a[..., 3] > 0.5
+        a = load(p); m = a[..., 3] > COVERED
         if acc is None: acc = np.zeros_like(a[..., :3]); cov = np.zeros(m.shape, bool)
         acc[m] = a[m, :3]; cov |= m
     return acc, cov
@@ -59,7 +63,10 @@ if G is not None:
     dark = hole & ~filled; valid = valid | filled
     print(f'holes {hole.sum()} texels ({hole.sum() / max(cov.sum(), 1):.3f} of the covered), {dark.sum()} of them buried', flush=True)
     np.save(os.path.join(dst, 'holes.npy'), hole[::-1])   # top-first, for lamp_groups_pack.py merge
-np.save(os.path.join(dst, 'coverage.npy'), valid[::-1])   # top-first, for downscale_atlas.py --mask and the lamp group pack
+# every chart texel, buried holes included (black, but part of their chart: left out, the tiers and the site's mips
+# filled them from the neighbouring charts of the atlas)
+charts = valid | dark
+np.save(os.path.join(dst, 'coverage.npy'), charts[::-1])   # top-first, for downscale_atlas.py --mask and the lamp group pack
 def rgbm(rgb):
     c = np.sqrt(np.clip(rgb / RANGE, 0, 1)); m = np.clip(c.max(-1, keepdims=True), 1 / 255, 1); m = np.ceil(m * 255) / 255
     enc = np.concatenate([np.clip(c / m, 0, 1), m], -1)
@@ -73,9 +80,13 @@ np.save(os.path.join(dst, 'slot_rgbm.npy'), rgbm(slot)); np.save(os.path.join(ds
 # steps are still fine (encode_webp.py writes lossless WebP; under 2% error at the 99th percentile)
 import json
 meta = {'curve': 'sqrt(x/(x+K))', 'K': {}}
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); from downscale_atlas import padded_charts
+padded = padded_charts(charts, 16)
 for name, rgb in (('slot', slot), ('lamps', lamps)):
     lit = rgb.max(-1); lit = lit[lit > 1e-4]; K = float(np.clip(max(np.median(lit), np.percentile(lit, 99.9) / 15.5) if lit.size else 0.15, 0.01, 2.0)); meta['K'][name] = round(K, 5)
-    q = np.round(np.sqrt(rgb / (rgb + K)) * 255).astype(np.uint8); np.save(os.path.join(dst, f'{name}_tone.npy'), q[::-1])
+    q = np.round(np.sqrt(rgb / (rgb + K)) * 255).astype(np.uint8)
+    q[padded] = np.maximum(q[padded], 1)   # chart texels and padding >= 1/255: the site reads coverage from the values (downscale_atlas.encode)
+    np.save(os.path.join(dst, f'{name}_tone.npy'), q[::-1])
     y = q.astype(np.float32) / 255; back = K * y * y / np.maximum(1 - y * y, 1 / 255); m = rgb.max(-1) > 1e-4
     rel = np.abs(back[m] - rgb[m]) / (rgb[m] + 0.003)
     print(f'{name}: K {K:.4f}, max {lit.max():.2f}, p99.9 {np.percentile(lit, 99.9):.2f}, rel err p50 {np.percentile(rel, 50):.4f} p99 {np.percentile(rel, 99):.4f} max {rel.max():.3f}')

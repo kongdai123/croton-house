@@ -11,8 +11,9 @@
 // moves must be a door, an anchor, an animated root or a toggle (or be added to the scene after batching).
 // Lightmap identity (baked mode, lightmap.js): every mesh that holds still gets userData.lmId, a hash of its vertex count
 // and world-space vertices, so the bake's export and a later session name a mesh the same way whatever the scene order; a
-// merged mesh hashes its parts' ids. Meshes of pieces the visitor carries get userData.lmSkip = 'movable'; animated and
-// toggled subtrees get neither (probe-lit).
+// merged mesh hashes its parts' ids. Meshes of pieces the visitor carries get userData.lmSkip = 'movable'. In animated and
+// toggled subtrees only the parts that never move get an id (stillParts: a plant's pot, the fire pit's bowl, the
+// umbrella's base, a shade's head rail, the garage door's tracks); what moves gets none and takes the probe volume.
 import { THREE } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -47,6 +48,23 @@ export function meshId(o) {
 const strId = s => { let a = 0x811c9dc5, b = 0x9e3779b9; for (let i = 0; i < s.length; i++) { a = fnv(a, s.charCodeAt(i)); b = mur(b, s.charCodeAt(i)); } return hex(a, b); };
 const lmMesh = o => o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && o.geometry?.attributes.position;
 
+const versionOf = g => { let v = 0; for (const a of Object.values(g.attributes)) v += a.version; return g.uuid + ':' + v; };
+const shownIn = (o, root) => { for (let p = o; p && p !== root.parent; p = p.parent) if (!p.visible) return false; return true; };
+// The meshes of an animated or toggled root that hold still: pose it (the toggle flipped and back, the animation at a few
+// times) and keep the meshes whose world matrix, visibility and vertex data never change. The toggle ends as it was.
+export function stillParts(root) {
+  const meshes = []; root.traverse(o => { if (lmMesh(o)) meshes.push(o); });
+  if (!meshes.length) return [];
+  const snap = () => { root.updateMatrixWorld(true); return meshes.map(o => [o.matrixWorld.clone(), shownIn(o, root), versionOf(o.geometry)]); };
+  const base = snap(), moved = new Set();
+  const compare = () => snap().forEach(([m, v, g], i) => { const b = base[i]; if (!m.equals(b[0]) || v !== b[1] || g !== b[2]) moved.add(meshes[i]); });
+  const t = root.userData.toggle, animate = root.userData.animate;
+  if (t?.set) { const on = t.on; t.set(!on, true); animate?.(0.5); compare(); t.set(on, true); animate?.(1); compare(); }
+  if (animate) { for (const time of [0.7, 2.3, 5.9, 11.3]) { animate(time); compare(); } animate(0); }
+  root.updateMatrixWorld(true);
+  return meshes.filter(o => !moved.has(o));
+}
+
 const mergeable = (o) => o.constructor === THREE.Mesh && !o.children.length && o.visible && o.material && !Array.isArray(o.material)
   && !o.material.transparent && o.matrixWorld.determinant() > 0 && signature(o.geometry);
 
@@ -79,7 +97,8 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
   // world-static, interactive roots and doors; returns whether the whole subtree is static
   const groups = new Map(), rooms = new Map();
   const visit = (o, anchor, door, room, movable) => {
-    if (animSet.has(o) || o.userData.toggle || !o.visible) return false;
+    if (!o.visible) return false;
+    if (animSet.has(o) || o.userData.toggle) { if (!o.userData.movable) for (const m of stillParts(o)) label(m, false); return false; }
     if (o.userData.noBatch) { o.traverse(x => label(x, movable)); return false; }
     if (o.userData.viewRoom) {
       const bounds = o.userData.viewRoom;
@@ -128,7 +147,7 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
     if (root.userData.noBatch || root.userData.toggle) continue;
     root.userData.animate(0); root.updateMatrixWorld(true);
     const by = new Map(), parts = [];
-    root.traverse(o => { if (o !== root && mergeable(o)) { const k = keyOf(o, cbIds); if (!by.has(k)) by.set(k, []); by.get(k).push(o); parts.push(o); } });
+    root.traverse(o => { if (o !== root && mergeable(o) && !o.userData.lmId) { const k = keyOf(o, cbIds); if (!by.has(k)) by.set(k, []); by.get(k).push(o); parts.push(o); } });
     if (parts.length < 2) continue;
     const frozen = new THREE.Group(); frozen.name = 'frozen'; frozen.visible = false; frozen.userData.batch = true;
     for (const list of by.values()) { const m = merge(list, root); if (m) frozen.add(m); }

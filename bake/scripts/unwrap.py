@@ -147,17 +147,27 @@ def reuse(path):
     print(f'reusing the layout of {path}: {len(out)} units identical, atlas {old["atlas"]}')
     return out, old['atlas']
 SCALE = {'furniture': 2.5, 'architecture': 1.25, 'outdoor': 0.75}
-counts = {}
-if REUSE: layout, ATLAS = reuse(REUSE)
-atlas = xatlas.Atlas()
+TPU = float(sys.argv[5]) if len(sys.argv) > 5 else 64.0   # texels per metre
+# Units too small to hold a few texels (switch-plate and outlet labels, 1 cm decals: 15 texel centres or fewer) bake no
+# usable light: Cycles' rasteriser misses most of their centres and the fill finds no surface facing the same way. They
+# take the probe volume at run time ("tiny" in the sidecar's skipped list), as plants and glass do.
+MIN_TEXELS = 16
+counts = {}; tiny = []
 for u in keep:
     W = u['W']; size = W.max(0) - W.min(0); c = W.mean(0)
     k = 'outdoor' if not inside_plan(c[0], -c[2]) else ('architecture' if size.max() > 3.0 or u['area'] > 12 else 'furniture')
-    u['class'] = k; counts[k] = counts.get(k, 0) + 1
-    if not REUSE: atlas.add_mesh((W * SCALE[k]).astype(np.float32), u['idx'].reshape(-1, 3))
+    u['class'] = k
+    if u['area'] * (TPU * SCALE[k]) ** 2 < MIN_TEXELS: tiny.append(u)
+    else: counts[k] = counts.get(k, 0) + 1
+for u in tiny: skip_ids[u['key'][2]] = 'tiny'
+keep = [u for u in keep if u not in tiny]
+print(f'{len(tiny)} units under {MIN_TEXELS} texels left to the probes')
+if REUSE: layout, ATLAS = reuse(REUSE)
+atlas = xatlas.Atlas()
+for u in keep:
+    if not REUSE: atlas.add_mesh((u['W'] * SCALE[u['class']]).astype(np.float32), u['idx'].reshape(-1, 3))
 print('classes', counts, 'scales', SCALE)
 co = xatlas.ChartOptions(); po = xatlas.PackOptions()
-TPU = float(sys.argv[5]) if len(sys.argv) > 5 else 64.0   # texels per metre
 po.resolution = RES; po.padding = 4; po.bilinear = True; po.texels_per_unit = TPU; po.bruteForce = False
 if not REUSE:
     atlas.generate(co, po, verbose=False)

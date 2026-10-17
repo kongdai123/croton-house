@@ -1,4 +1,5 @@
 import { THREE, box } from '../kit.js';
+import { meshId } from '../batch.js';
 
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
 const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
@@ -45,6 +46,9 @@ function wallSwitches(scene, entries) {
     const rocker = box(0.032, 0.064, 0.008, white, { z: 0.007, r: 0.002 }); plate.add(rocker);
     rocker.onBeforeRender = () => { rocker.rotation.x = (entry.toggle.value - 0.5) * 0.22; };
     plate.traverse(o => { o.userData.noBatch = o.userData.noHighlight = true; }); scene.add(plate);
+    // the face plate never moves: a lightmap id like every static mesh (batch.js), so the bake lights it; the rocker
+    // tilts with the switch and keeps the probe volume
+    plate.updateMatrixWorld(true); plate.children[0].userData.lmId = meshId(plate.children[0]);
   }
 }
 

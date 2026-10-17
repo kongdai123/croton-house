@@ -6,9 +6,14 @@ const copyUniforms = uniforms => Object.fromEntries(Object.entries(uniforms).map
 // Reflection probes of the current and the next slot share ONE array texture (one sampler instead of two: Apple GPUs
 // allow 16 per fragment shader): two halves of `count` layers, picked by uReflBase / uReflNext. A slot's own probe
 // texture is CPU-side staging only; it is copied into the half the current slot does not use when its fade begins.
-function reflArray(src, count) {
+// The lamp groups' reflection layers (lightmap.js attachLampReflections; the same for every slot) follow both halves.
+function reflArray(src, count, lamps = null) {
   const { width = 1, height = 1, data = null } = src.image ?? {};
-  const t = new THREE.DataArrayTexture(data ? new data.constructor(data.length * 2) : null, width, height, count * 2);
+  const extra = lamps?.count ?? 0;
+  const t = new THREE.DataArrayTexture(data ? new data.constructor(data.length * 2 + (extra ? lamps.data.length : 0)) : null, width, height, count * 2 + extra);
+  // three uploads only the listed layers once any are listed (place() lists a half's): list the lamp layers for the
+  // first upload too, or they stay black on the GPU
+  if (data && extra) { t.image.data.set(lamps.data, data.length * 2); for (let l = 0; l < extra; l++) t.addLayerUpdate(count * 2 + l); }
   for (const k of ['format', 'type', 'generateMipmaps', 'minFilter', 'magFilter', 'wrapS', 'wrapT']) t[k] = src[k];
   t.name = 'reflection probes (current + next slot)';
   t.needsUpdate = true;
@@ -29,7 +34,7 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
   Object.assign(primary.volume, { uProbeBlend: blend, uProbeNextSH: { value: current.volume.uniforms.uProbeSH.value } });
   // Own stable reflection pointers, independent of the shared uniforms rewired during a transition.
   current.reflTex = current.refl.uniforms.uReflTex.value;
-  const reflCount = initial.refl.count, refl = reflArray(current.reflTex, reflCount), halves = [null, null];
+  const reflCount = initial.refl.count, refl = reflArray(current.reflTex, reflCount, initial.refl.lamps), halves = [null, null];
   // the half holding this slot's probes (copied in, into the half `keep` does not use, when it holds none)
   const place = (tex, keep) => {
     let i = halves.indexOf(tex);

@@ -87,6 +87,22 @@ class LightmapPackage(unittest.TestCase):
                 self.assertIn(f"v2/{slot}/encoding.json", manifest)
                 self.assertIn(f"{slot}/probes.bin", manifest)
 
+    def test_lamp_group_reflections(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); src, files = self.fixture(root, True)
+            refl = {"version": 1, "probes": 2, "layers": [{"probe": 0, "file": "lamp_000.hdr", "groups": {"living": 1}}],
+                    "merged": [{"probe": 0, "file": "lamp_m00.hdr", "groups": {"living": 1}}]}
+            add = {"v2/lampgroups/encoding.json": json.dumps({"textures": 0, "refl": {"meta": "refl/meta.json", "layers": 1}}).encode(),
+                   "v2/lampgroups/refl/meta.json": json.dumps(refl).encode(), "v2/lampgroups/refl/lamp_000.hdr": b"lamp layer",
+                   "v2/lampgroups/refl/lamp_m00.hdr": b"merged layer"}
+            for name, data in add.items():
+                path = src / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(data)
+            package.copy_lightmaps(src, root / "out")
+            manifest = json.loads((root / "out/manifest.json").read_text())
+            self.assertEqual(set(manifest), set(files) | set(add))
+            (src / "v2/lampgroups/refl/lamp_m00.hdr").unlink()   # every listed layer is required
+            with self.assertRaises(FileNotFoundError): package.copy_lightmaps(src, root / "out2")
+
     def test_reject_unsplit_oversize(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); src, _ = self.fixture(root, False)

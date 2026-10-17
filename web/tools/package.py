@@ -147,6 +147,11 @@ def copy_lightmaps(src, dst):
         for t in range(int(meta["textures"])):
             for name in [f"v2/lampgroups/lampgroups_{t}_{i}.webp" for i in range(2)] + [f"v2/lampgroups/{r}/lampgroups_{t}.webp" for r in ("half", "quarter")]:
                 if (src / name).exists(): files.append(name)
+        # the lamp groups' reflection panoramas (lamp_groups_pack.py refl): every listed layer is required
+        if meta.get("refl"):
+            refl = json.loads((src / "v2/lampgroups" / meta["refl"]["meta"]).read_text())
+            files.append(f"v2/lampgroups/{meta['refl']['meta']}")
+            files += [f"v2/lampgroups/refl/{layer['file']}" for layer in refl["layers"] + refl.get("merged", [])]
     manifest = {}
     for name in sorted(set(files)):
         path = src / name

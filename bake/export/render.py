@@ -55,6 +55,12 @@ for o in scene.objects:
         o.data.energy *= cfg.get('lamps', 1.0)
         bb = next((n for n in o.data.node_tree.nodes if n.type == 'BLACKBODY'), None) if o.data.node_tree else None
         if bb: bb.inputs[0].default_value = cfg.get('lampK', cfg.get('lamp_k', 2700))
+# every glowing surface (lamp shades and lenses, screens) dims with the lamps: the lamps bake holds all emission at unit
+# level and the site scales that layer and the emissive materials by the lamp level (lightmap.js syncEmissionCopies), so
+# a reference with full-strength shades at sunrise's 0.25 was brighter than the site could be (living view +6%)
+for m in bpy.data.materials:
+    b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
+    if b and b.inputs['Emission Strength'].default_value > 0: b.inputs['Emission Strength'].default_value *= cfg.get('lamps', 1.0)
 
 w, h = cfg.get('res', [2560, 1440])
 scene.render.resolution_x, scene.render.resolution_y = w, h

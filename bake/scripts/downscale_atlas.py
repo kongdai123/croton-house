@@ -22,7 +22,7 @@ def coverage(folder, shape):
     for p in paths:
         a = load(p)
         if a.shape[:2] != shape: raise ValueError(f'{p}: atlas dimensions differ')
-        m = a[..., 3] > 0.5
+        m = a[..., 3] > 0   # alpha is the surface's opacity (composite_v2.py COVERED)
         if not m.any() or m.all():
             m = np.any(a[..., :3] > 0, axis=-1)
             print(f'{p}: no usable alpha mask, rebuilding from positive texels', flush=True)
@@ -69,8 +69,21 @@ def dilate(rgb, cov, steps):
 # (black) neighbour pulls chart edges dark from mip 2 at half and mip 1 at quarter if only the 4-texel gutter is filled.
 PAD = 16
 
-def encode(rgb, K):
-    return np.round(np.sqrt(rgb / (rgb + K)) * 255).astype(np.uint8)
+def encode(rgb, K, charts=None):
+    q = np.round(np.sqrt(rgb / (rgb + K)) * 255).astype(np.uint8)
+    # every chart texel and its padding stores at least 1/255 (decoded ~K * 1.5e-5): the site's linear mips
+    # (lightmap.js MIP_FS) take coverage from the texel values, and a black chart texel (a buried hole) read as empty
+    # was filled from the neighbouring charts of the atlas (the walnut shelf glowing with another chart's orange)
+    if charts is not None: q[charts] = np.maximum(q[charts], 1)
+    return q
+
+def padded_charts(mask, steps):
+    m = mask.copy(); h, w = m.shape
+    for _ in range(steps):
+        src = m.copy()
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            m[max(0, dy):h + min(0, dy), max(0, dx):w + min(0, dx)] |= src[max(0, -dy):h + min(0, -dy), max(0, -dx):w + min(0, -dx)]
+    return m
 
 def memory(w, h):
     count = 0
@@ -97,6 +110,8 @@ def self_test():
     assert not grown[0, 3].any() and not grown[1, 3].any()
     out, covered = downscale(a, c, 2); assert covered[0, 1] and not out[0, 1].any()
     np.testing.assert_array_equal(encode(np.array([0, 0.2, 0.6], np.float32), 0.2), [0, 180, 221])
+    np.testing.assert_array_equal(encode(np.zeros((1, 3, 3), np.float32), 0.2, np.array([[True, False, True]]))[0, :, 0], [1, 0, 1])
+    assert padded_charts(np.eye(3, dtype=bool)[:1], 1).sum() == 2
     print('self-test passed: covered area, odd dimensions, black charts, padding, tone curve')
 
 def main():
@@ -124,7 +139,7 @@ def main():
         if not cov.any(): raise ValueError('empty coverage')
         sizes['full'] = list(rgb.shape[1::-1])
         for tier, factor in (('half', 2), ('quarter', 4)):
-            out, covered = downscale(rgb, cov, factor); out = dilate(out, covered, PAD); q = encode(out, K)
+            out, covered = downscale(rgb, cov, factor); out = dilate(out, covered, PAD); q = encode(out, K, padded_charts(covered, PAD))
             dst = os.path.join(folder, tier); os.makedirs(dst, exist_ok=True)
             np.save(os.path.join(dst, f'{name}_tone.npy'), q)
             Image.fromarray(q, 'RGB').save(os.path.join(dst, f'{name}.webp'), format='WEBP', lossless=True, quality=100, method=6)

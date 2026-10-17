@@ -38,9 +38,9 @@ export const QUOTED = [
 ];
 // Called from the real source (see scene.mjs INTERNALS): lightmap.js insidePlan / weatherClass / isMirror, photo.js presentation /
 // weatherClass / insideHouse, foliage_bake.js isPlant, puddles.js insidePlan / wetMaterial / indoors, light_switch.js glowing,
-// materials.js emitsLight, pets/roam.js areaOf / ROOMS, rooms.js roomAt, lighting.indoorWeight.
+// materials.js emitsLight, pets/roam.js areaOf / ROOMS, plan.js roomName, lighting.indoorWeight.
 export const CALLED = ['emitsLight', 'lightmapIsMirror', 'lightmapWeatherClass', 'lightmapInsidePlan', 'photoPresentation', 'photoWeatherClass', 'photoInsideHouse', 'foliageIsPlant',
-  'puddlesWetMaterial', 'puddlesIndoors', 'puddlesInsidePlan', 'switchGlowing', 'areaOf', 'isIndoor', 'roomAt', 'lighting.indoorWeight'];
+  'puddlesWetMaterial', 'puddlesIndoors', 'puddlesInsidePlan', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
 
 const FOLIAGE = m => m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '');
 const LEAF = m => /^garden-/.test(m.name || '');
@@ -132,7 +132,7 @@ export function captureClassify(w, ix) {
   const wp = new T.Vector3();
   for (const { key, node: o } of ix.placed) {
     o.getWorldPosition(wp);
-    placed[key] = prune({ area: w.areaOf(wp.x, wp.z), room: w.roomAt(wp.x, -wp.z).en, roomOutside: w.roomAt(wp.x, -wp.z).outside, isIndoor: w.isIndoor(wp.x, wp.z),
+    placed[key] = prune({ area: w.areaOf(wp.x, wp.z), room: w.plan.roomName(wp.x, -wp.z).en, roomOutside: w.plan.roomName(wp.x, -wp.z).outside, isIndoor: w.isIndoor(wp.x, wp.z),
       indoorWeight: r3(w.lighting.indoorWeight(wp.clone().setY(1.0))), exterior: o.userData.light || o.userData.lightFixture ? fixtureExterior(o.userData.id) : false, plantRoot: isPlantRoot(o),
       mirror: o.children.some(ch => ch.isReflector) });
   }

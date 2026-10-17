@@ -56,7 +56,6 @@ export function jsClassifiers(w) {
   const garagePts = [[hx.GARAGE.x0, hx.GARAGE.y0], [hx.GARAGE.x1, hx.GARAGE.y0], [hx.GARAGE.x1, hx.LINEN.y0 - 0.114], [-4.93, hx.LINEN.y0 - 0.114], [-4.93, hx.GARAGE.y1], [hx.LAUNDRY.x1, hx.GARAGE.y1], [hx.LAUNDRY.x1, hx.LAUNDRY.y1], [hx.LAUNDRY.x0, hx.LAUNDRY.y1]];   // house.js:109 (a local of buildHouse: quoted)
   const C = [
     // [name, source, quoted?, fn(x, y)]
-    ['js:rooms.roomAt', 'web/src/rooms.js:30', false, (x, y) => { const r = w.roomAt(x, y); return r.outside ? 'outside:' + r.en : r.en; }],
     ['js:roam.areaOf', 'web/src/pets/roam.js:44 (scene z = -y)', false, (x, y) => w.areaOf(x, -y)],
     ['js:roam.isIndoor', 'web/src/pets/roam.js:52', false, (x, y) => w.isIndoor(x, -y)],
     ['js:roam.ROOMS', 'web/src/pets/roam.js:38 first rectangle (table appended to the bundle)', false, (x, y) => { for (const [n, x0, x1, y0, y1] of w.petRooms) if (x >= x0 && x <= x1 && y >= y0 && y <= y1) return n; return ''; }],

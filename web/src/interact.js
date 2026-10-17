@@ -4,9 +4,17 @@ import { THREE } from './kit.js';
 import { getDoors, setFrench, setHinged, setBifold, setSlider, getColliders, poseFrench, doorEase } from './house.js';
 import { t, getLang } from './ui.js';
 import { scenicView, viewDepth, SEAT_LOOK_RANGE } from './view.js';
-import { doorName } from './rooms.js';
+import { otherSide, roomName } from './plan.js';
 
 const WALL_BOX = new THREE.Box3(), WALL_HIT = new THREE.Vector3();
+
+// Name of a door as seen from plan point (px, py): the space on its far side from plan.json's openings ("Door to the
+// front bedroom"), or "Front door" when the front door leads outside.
+export function doorName(d, px, py, lang) {
+  const s = otherSide(d.id, px, py), r = s ? { en: s.label.en, zh: s.label.zh, outside: s.zone === 'exterior' } : roomName(d.plan.cx, d.plan.cy);
+  if (d.kind === 'front' && r.outside) return lang === 'zh' ? '入户门' : 'Front door';
+  return lang === 'zh' ? `通往${r.zh}的门` : `Door to the ${r.en.toLowerCase()}`;
+}
 
 // Timed ease from wherever the leaf is now to its goal; a new goal mid-swing restarts from the current pose.
 function easeDoor(d, dt, get, set, goal, span) {

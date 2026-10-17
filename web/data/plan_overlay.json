@@ -84,23 +84,23 @@
   ],
   "spec": {
    "why": "door type, hinge jamb and swing side (plan compass) and resting state (house.js DOOR_TYPES / DOOR_SPEC); unlisted doors keep the scan default",
-   "ca2bb42b5a": { "type": "front", "hinge": "W", "swing": "S", "open": true },
+   "ca2bb42b5a": { "type": "front", "hinge": "W", "swing": "S", "open": true, "why": "front door, open onto the porch for the first view" },
    "161782cdfa": { "type": "french4" },
    "bf8cb9f37a": { "type": "french2" },
    "e5f2f69eea": { "type": "slider" },
    "9f018d7dea": { "type": "slider" },
    "0f9916c91a": { "type": "bifold" },
-   "d8425baf7a": { "type": "bifold", "white": true, "swing": "S", "open": false },
+   "d8425baf7a": { "type": "bifold", "white": true, "swing": "S", "open": false, "why": "front bedroom: white louvers fold into the room" },
    "3809b9067a": { "type": "opening" },
    "c1bf892aaa": { "type": "pineOpening" },
-   "2e2d4a125a": { "type": "door", "hinge": "S", "swing": "W", "open": false },
-   "40c340903a": { "type": "door", "hinge": "N", "swing": "E", "open": true },
-   "143ab6b9ba": { "hinge": "S", "swing": "E", "open": false },
-   "60bf34160a": { "hinge": "W", "swing": "S", "open": true },
-   "498f1f300a": { "hinge": "E", "swing": "N", "open": true },
-   "57fafde9ea": { "hinge": "E", "swing": "S", "open": false },
-   "054ac1818a": { "hinge": "S", "swing": "E", "open": false },
-   "029f0013aa": { "hinge": "E", "swing": "N", "open": false }
+   "2e2d4a125a": { "type": "door", "hinge": "S", "swing": "W", "open": false, "why": "kitchen -> garage, into the garage (closed in g12)" },
+   "40c340903a": { "type": "door", "hinge": "N", "swing": "E", "open": true, "why": "vestibule -> kitchen, back against the kitchen wall so the vestibule stays clear" },
+   "143ab6b9ba": { "hinge": "S", "swing": "E", "open": false, "why": "primary bath, into the bedroom" },
+   "60bf34160a": { "hinge": "W", "swing": "S", "open": true, "why": "bedroom 3, into the room and back against its west wall (not into the hall)" },
+   "498f1f300a": { "hinge": "E", "swing": "N", "open": true, "why": "bedroom B, back against the bath wall stub, clear of the wide opening" },
+   "57fafde9ea": { "hinge": "E", "swing": "S", "open": false, "why": "bath B, into the bath" },
+   "054ac1818a": { "hinge": "S", "swing": "E", "open": false, "why": "hall bath, into the bath" },
+   "029f0013aa": { "hinge": "E", "swing": "N", "open": false, "why": "bath linen closet (g31)" }
   }
  },
  "patches": {

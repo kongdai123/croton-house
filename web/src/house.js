@@ -2,38 +2,45 @@
 // World frame: X = plan x (east), Y up, Z = -plan y (north is -Z). Ceiling 2.44 m.
 import { THREE, M, box, cyl, plane, group, shadow, tube } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { plan, rectOf, opening } from './plan.js';
 
-export const CEIL = 2.44;
+export const CEIL = plan.levels.ceiling;
 export const P = (x, y) => new THREE.Vector3(x, 0, -y);              // plan -> world (on the floor)
 export const planToWorld = (x, y, h = 0) => new THREE.Vector3(x, h, -y);
 export const headingToYaw = (deg) => THREE.MathUtils.degToRad(-deg);  // plan heading (0 = north, clockwise) -> yaw about +Y where yaw 0 looks -Z (north)
 
-// Regions outside the Zillow interior scan, from the owner's full floor plan (g07, 1024 px: 41.4 px/m in x, 40.5 in y)
-// and the garage photos (g04, g48, g49). Interior faces unless noted.
-export const GARAGE = { x0: -7.903, x1: -3.507, y0: -5.735, y1: 0.156 };      // 15' × 19.5', dark-painted; front flush with bedroom 3
-export const LAUNDRY = { x0: -7.903, x1: -6.364, y0: 0.156, y1: 1.481 };       // open nook in the garage's NW corner: stacked W/D, heater, sink
-export const WALKIN = { x0: -6.25, x1: -4.93, y0: 0.27, y1: 1.481 };           // primary walk-in closet (pine shelves, g29), door c1bf892aaa
-export const LINEN = { x0: -4.816, x1: -3.507, y0: -0.6, y1: 0.656 };          // louvered bifold closet off the vestibule (g27/g28), door 0f9916c91a
-export const FRONT_CLOSET_VIEW = { key: 'front-closet', x0: 3.85, x1: 8.10, z0: 1.30, z1: 5.95 }; // bedroom, doorway and reach-in cavity
-export const GARAGE_DOOR = { x0: -7.75, x1: -5.29, h: 2.13 };                  // 8' × 7' sectional, open (g04)
-export const SIDE_DOOR = { y0: -2.82, y1: -1.9 };                              // west wall, to the parking pad
-export const LOT = { x0: -14.5, x1: 14.5, y0: -14.2, y1: 19.5 };               // 95' × 110' lot
-export const PATIO = { x0: -2.4, x1: 4.2, y0: 5.47, y1: 10.2 };
-export const COURT_A = { x0: -6.2, x1: -2.4, y0: 5.47, y1: 8.6 };
-export const COURT_B = { x0: 4.2, x1: 8.3, y0: 5.47, y1: 8.6 };
-export const PORCH = { x0: -3.507, x1: 3.97, y0: -5.85, y1: -4.72 };           // recessed between the garage and bedroom 3, under the main roof
-const GARAGE_XE = -3.393;                                                      // outer face of the garage's porch-side block wall
-export const WALK = { x0: -0.65, x1: 0.65, y0: -7.85, y1: -6.0 };
-export const DRIVE = { x0: -8.17, x1: -4.9, y0: -14.2, y1: -6.0 };
-export const PAD = { x0: -11.5, x1: -8.17, y0: -7.2, y1: 0.15 };              // parking pad along the garage's west wall (g07)
-export const WEST_FENCE_Y = 0.17;
+// Regions outside the Zillow interior scan (owner's full floor plan g07, garage photos g04, g48, g49) and the site
+// zones, as the plan model (data/plan.json, plan_overlay.json) has them: interior faces unless noted. Rects are the
+// spaces' bboxes; the garage itself notches out the closet bay (garagePts below).
+export const GARAGE = rectOf('garage');          // 15' × 19.5', dark-painted; front flush with bedroom 3
+export const LAUNDRY = rectOf('laundry');        // open nook in the garage's NW corner: stacked W/D, heater, sink
+export const WALKIN = rectOf('walkin');          // primary walk-in closet (pine shelves, g29), door c1bf892aaa
+export const LINEN = rectOf('linen');            // louvered bifold closet off the vestibule (g27/g28), door 0f9916c91a
+const V = plan.spaces.find(s => s.id === 'bedroom3').view;   // bedroom 3, its doorway and the reach-in cavity, in scene z
+export const FRONT_CLOSET_VIEW = { key: V.key, x0: V.x0, x1: V.x1, z0: -V.y1, z1: -V.y0 };
+const GD = opening('garageDoor'), SD = opening('gside');
+export const GARAGE_DOOR = { x0: GD.x0, x1: GD.x1, h: GD.head };   // 8' × 7' sectional, open (g04)
+export const SIDE_DOOR = { y0: SD.y0, y1: SD.y1 };                 // west wall, to the parking pad
+export const LOT = { x0: plan.lot.x0, x1: plan.lot.x1, y0: plan.lot.y0, y1: plan.lot.y1 };   // 95' × 110' lot
+export const PATIO = rectOf('patio');
+export const COURT_A = rectOf('westCourt');
+export const COURT_B = rectOf('eastCourt');
+export const PORCH = rectOf('porch');            // recessed between the garage and bedroom 3, under the main roof
+const GARAGE_XE = plan.site.garageXE;            // outer face of the garage's porch-side block wall
+export const WALK = rectOf('frontWalk');
+export const DRIVE = rectOf('drive');
+export const PAD = rectOf('parkingPad');         // parking pad along the garage's west wall (g07)
+export const WEST_FENCE_Y = plan.site.westFenceY;
 // Outer face of the whole building (Zillow footprint + the garage annex): pieces on this outline get a stucco skin.
-export const EXT_FP = [[-8.0176, 5.471], [8.0292, 5.471], [8.0292, -5.8503], [3.9699, -5.8503], [3.9699, -4.7203], [-3.507, -4.7203], [-3.507, -5.8503], [-8.0176, -5.8503]];
-// Openings the Zillow scan missed: the primary-bath window over the toilet (g31, west wall in g07).
-const EXTRA_WINDOWS = [{ id: 'pbathW', kind: 'window', dir: 'V', x0: -8.018, x1: -7.903, y0: 2.58, y1: 3.35, width: 0.77, sillOverride: 1.15, headOverride: 2.06 }];
-// g18: sink window spans ~7.2 six-inch tiles, with a tile column beside the fridge panel.
-export const KITCHEN_WINDOW = { x0: -2.804, x1: -1.704, sill: 1.10, head: 2.0 };
+export const EXT_FP = plan.outline.polygon;
+// Openings the Zillow scan missed (the primary-bath window over the toilet, g31): the plan's windows on no Zillow wall.
+const EXTRA_WINDOWS = plan.openings.filter(o => o.kind === 'window' && !o.wall).map(o => ({ ...o, sillOverride: o.sill, headOverride: o.head }));
+// g18: sink window spans ~7.2 six-inch tiles, with a tile column beside the fridge panel (plan.patches.windows).
+const KW = opening('26cd997f2a');
+export const KITCHEN_WINDOW = { x0: KW.x0, x1: KW.x1, sill: KW.sill, head: KW.head };
 const WINDOW_SIZE = { '26cd997f2a': KITCHEN_WINDOW };
+// Annex walls by id (plan.walls), for the literals buildAnnex shares with them.
+const wallOf = id => plan.walls.find(w => w.id === id);
 function resizeWindows(house) {
   for (const o of house.openings) {
     const s = WINDOW_SIZE[o.id]; if (!s) continue;
@@ -106,7 +113,10 @@ export function buildHouse(house, mods, opts = {}) {
   interior.add(slab(fp, CEIL, M.ceiling(), { up: false }));
   // annex: the two closets are part of the house (oak, white ceiling); garage + laundry nook get the dark slab and ceiling
   for (const r of [WALKIN, LINEN]) { interior.add(slab(rectPts(r), 0.0, floorMat)); interior.add(slab(rectPts(r), CEIL, M.ceiling(), { up: false })); }
-  const garagePts = [[GARAGE.x0, GARAGE.y0], [GARAGE.x1, GARAGE.y0], [GARAGE.x1, LINEN.y0 - 0.114], [-4.93, LINEN.y0 - 0.114], [-4.93, GARAGE.y1], [LAUNDRY.x1, GARAGE.y1], [LAUNDRY.x1, LAUNDRY.y1], [LAUNDRY.x0, LAUNDRY.y1]];
+  // garage + laundry nook floor: the garage space's polygon (closet bay notched out at the linen closet's walls) run on
+  // round the nook
+  const lw = wallOf('annex-linen-w'), ls = wallOf('annex-linen-s');
+  const garagePts = [[GARAGE.x0, GARAGE.y0], [GARAGE.x1, GARAGE.y0], [GARAGE.x1, ls.y0], [lw.x0, ls.y0], [lw.x0, GARAGE.y1], [LAUNDRY.x1, GARAGE.y1], [LAUNDRY.x1, LAUNDRY.y1], [LAUNDRY.x0, LAUNDRY.y1]];
   interior.add(slab(garagePts, -0.004, GM.floor()));
   interior.add(slab(garagePts, CEIL, GM.ceiling(), { up: false }));
 
@@ -116,12 +126,9 @@ export function buildHouse(house, mods, opts = {}) {
   // RedNote 6acbf22b00: west-facing cavity below Bedroom B's closet. Replace the
   // scanned narrow south return and back with a 0.908 m opening, 0.621 m deep.
   // These pieces drive both the visible walls/baseboards and the collision list.
-  const nicheWalls = new Set(['9ea2fa065a-4b22d8e16a', '9ea2fa065a-a909747e2a', '9ea2fa065a-5dcc2680fa']);
+  const nicheWalls = new Set(plan.patches.niche.remove);   // plan.patches.niche: the scanned walls out, the niche's pieces in
   const pieces = cutOpenings(house.pieces.filter(p => !nicheWalls.has(p.wall)), EXTRA_WINDOWS);
-  pieces.push(
-    { wall: 'niche-back', dir: 'V', kind: 'solid', x0: 3.9699, x1: 4.0842, y0: 0.69, y1: 1.7653, z0: 0, z1: CEIL },
-    { wall: 'niche-pier', dir: 'H', kind: 'solid', x0: 3.3489, x1: 4.0842, y0: 0.69, y1: 0.80, z0: 0, z1: CEIL },
-  );
+  pieces.push(...plan.pieces.filter(p => plan.patches.niche.add.includes(p.wall)));
   const outside = (p) => isExteriorPiece(p, EXT_FP);
   for (const p of pieces) {
     const mat = p.wall.startsWith('niche-') ? nichePaint : wallMat;
@@ -222,7 +229,7 @@ function cutOpenings(pieces, extra) {
 function buildAnnex(g, house) {
   const st = M.stucco(), dark = GM.wall(), white = M.wallPaint(), pine = M.pine(), SK = 0.15, HX = CEIL + 0.12;
   const W = (x0, x1, y0, y1, h0, h1, m, c = true) => g.add(wallBox(x0, x1, y0, y1, h0, h1, m, c));
-  const xo = -8.0176, yo = -5.8503, xe = GARAGE_XE;       // outer faces of the west, front and porch-side block walls
+  const xo = wallOf('annex-west').x0, yo = wallOf('annex-front').y0, xe = GARAGE_XE;   // outer faces of the west, front and porch-side block walls
   const { y0: sd0, y1: sd1 } = SIDE_DOOR, { x0: gd0, x1: gd1, h: gdh } = GARAGE_DOOR;
   // west wall + skin, side door to the parking pad
   for (const [a, b] of [[yo, sd0], [sd1, LAUNDRY.y1]]) { W(xo, GARAGE.x0, a, b, 0, CEIL, dark); W(xo - SK, xo, a, b, 0, HX, st); }
@@ -248,9 +255,9 @@ function buildAnnex(g, house) {
   W(GARAGE.x1 - 0.016, GARAGE.x1, -1.423, LINEN.y0 - 0.118, house.doorHeight + 0.07, CEIL, dark, false);
 
   // linen closet (louvered bifold off the vestibule): west + south walls, pine shelving at the back
-  const T = 0.114, ls0 = LINEN.y0 - T;
-  W(-4.93, LINEN.x0, ls0, LINEN.y1, 0, CEIL, white); W(-4.93, GARAGE.x1, ls0, LINEN.y0, 0, CEIL, white);
-  W(-4.934, -4.93, ls0, GARAGE.y1, 0, CEIL, dark, false); W(-4.93, GARAGE.x1, ls0 - 0.004, ls0, 0, CEIL, dark, false);
+  const lw = wallOf('annex-linen-w'), ls = wallOf('annex-linen-s'), lx = lw.x0, ls0 = ls.y0;
+  W(lx, lw.x1, ls0, lw.y1, 0, CEIL, white); W(ls.x0, ls.x1, ls0, ls.y1, 0, CEIL, white);
+  W(-4.934, lx, ls0, GARAGE.y1, 0, CEIL, dark, false); W(lx, GARAGE.x1, ls0 - 0.004, ls0, 0, CEIL, dark, false);
   for (let i = 0; i < 5; i++) {
     const y = 0.42 + i * 0.4;
     g.add(box(LINEN.x1 - LINEN.x0, 0.022, 0.4, pine, { x: (LINEN.x0 + LINEN.x1) / 2, y, z: -(LINEN.y0 + 0.2) }));
@@ -258,7 +265,8 @@ function buildAnnex(g, house) {
   }
 
   // walk-in closet: south wall to the garage, partition to the laundry nook; pine hanging bay + cubbies (g29)
-  W(LAUNDRY.x1, -4.93, GARAGE.y1, WALKIN.y0, 0, CEIL, white); W(LAUNDRY.x1, WALKIN.x0, WALKIN.y0, WALKIN.y1, 0, CEIL, white);
+  const ws = wallOf('annex-walkin-s'), ww = wallOf('annex-walkin-w');
+  W(ws.x0, ws.x1, ws.y0, ws.y1, 0, CEIL, white); W(ww.x0, ww.x1, ww.y0, ww.y1, 0, CEIL, white);
   W(LAUNDRY.x1 - 0.004, -4.934, GARAGE.y1 - 0.004, GARAGE.y1, 0, CEIL, dark, false);
   W(LAUNDRY.x1 - 0.004, LAUNDRY.x1, GARAGE.y1, LAUNDRY.y1 - 0.016, 0, CEIL, dark, false);
   const hx0 = WALKIN.x0, hx1 = -5.08, hd = 0.5, hz = -(WALKIN.y0 + hd / 2);
@@ -281,24 +289,11 @@ function buildAnnex(g, house) {
 }
 
 // ---- Doors ----
-const DOOR_TYPES = {
-  ca2bb42b5a: 'front', '161782cdfa': 'french4', bf8cb9f37a: 'french2', e5f2f69eea: 'slider', '9f018d7dea': 'slider',
-  '0f9916c91a': 'bifold', d8425baf7a: 'bifold', '3809b9067a': 'opening', c1bf892aaa: 'pineOpening', '2e2d4a125a': 'door', '40c340903a': 'door',
-};
-// Hinge jamb + swing side (plan compass) and resting state. Unlisted doors keep the scan default.
-const DOOR_SPEC = {
-  ca2bb42b5a: { hinge: 'W', swing: 'S', open: true },   // front door, open onto the porch for the first view
-  d8425baf7a: { white: true, swing: 'S', open: false },    // front bedroom: white louvers fold into the room
-  '2e2d4a125a': { hinge: 'S', swing: 'W', open: false },   // kitchen -> garage, into the garage (closed in g12)
-  '40c340903a': { hinge: 'N', swing: 'E', open: true },    // vestibule -> kitchen, back against the kitchen wall so the vestibule stays clear
-  '143ab6b9ba': { hinge: 'S', swing: 'E', open: false },   // primary bath, into the bedroom
-  '60bf34160a': { hinge: 'W', swing: 'S', open: true },    // bedroom 3, into the room and back against its west wall (not into the hall)
-  '498f1f300a': { hinge: 'E', swing: 'N', open: true },    // bedroom B, back against the bath wall stub, clear of the wide opening
-  '57fafde9ea': { hinge: 'E', swing: 'S', open: false },   // bath B, into the bath
-  '054ac1818a': { hinge: 'S', swing: 'E', open: false },   // hall bath, into the bath
-  '029f0013aa': { hinge: 'E', swing: 'N', open: false },   // bath linen closet (g31)
-  gside: { hinge: 'N', swing: 'E', open: false },          // garage side door to the parking pad
-};
+// Door type, hinge jamb + swing side (plan compass) and resting state from the plan's openings (plan_overlay.json
+// openings.spec says why each is set); doors without a spec keep the scan default.
+const DOOR_TYPES = Object.fromEntries(plan.openings.filter(o => o.kind === 'door').map(o => [o.id, o.type]));
+const DOOR_SPEC = Object.fromEntries(plan.openings.filter(o => o.kind === 'door' && ['hinge', 'swing', 'open', 'white'].some(k => k in o))
+  .map(o => [o.id, Object.fromEntries(['hinge', 'swing', 'open', 'white'].filter(k => k in o).map(k => [k, o[k]]))]));
 // Six-panel leaf (the interior doors in g26/g31): raised panels both faces, 0.11 stiles.
 function sixPanel(leafW, H, leafT, mat, x0) {
   const g = new THREE.Group();

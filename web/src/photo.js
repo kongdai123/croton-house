@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { WebGLPathTracer, PhysicalCamera, FogVolumeMaterial } from 'three-gpu-pathtracer';
 import { MeshBVH, SAH, acceleratedRaycast } from 'three-mesh-bvh';
 import { GenerateMeshBVHWorker } from 'three-mesh-bvh/src/workers/GenerateMeshBVHWorker.js';
+import { photoSize } from './photo_budget.js';
 import { makeSky, photoSupport, photoExposurePolicy, parseMood, kelvin, DEFAULT_MOOD } from './sky.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
@@ -255,8 +256,8 @@ async function makePuddles(grounds, blockers, amount, own, pause) {
 const FINITE = 'vec3 finite(vec3 c) { return all(greaterThanEqual(c, vec3(0.0))) && all(lessThan(c, vec3(1e30))) ? c : vec3(0.0); }';
 
 export class PhotoMode {
-  constructor({ renderer, scene, camera, lighting }) {
-    Object.assign(this, { renderer, scene, camera, lighting });
+  constructor({ renderer, scene, camera, lighting, getTier = () => 'mobile' }) {
+    Object.assign(this, { renderer, scene, camera, lighting, getTier });
     this.active = false; this.traceScene = null; this.tracer = null;
     this.resources = new Set(); this.ready = false; this.rendering = false;
     this.cam = new PhysicalCamera(camera.fov, camera.aspect, camera.near, camera.far);
@@ -468,9 +469,8 @@ export class PhotoMode {
 
   // Output size in pixels; null follows the canvas (at 3/4 of its drawing buffer, enough for a preview).
   outputSize() {
-    if (this.size) return this.size;
     const v = this.renderer.getDrawingBufferSize(new THREE.Vector2());
-    return [Math.round(v.x * 0.75), Math.round(v.y * 0.75)];
+    return photoSize(this.size ?? [Math.round(v.x * 0.75), Math.round(v.y * 0.75)], this.renderer.capabilities, this.getTier(), globalThis.navigator?.deviceMemory);
   }
 
   preparing(stage, progress = null) {
@@ -664,7 +664,7 @@ export class PhotoMode {
   // Average scene brightness (log-average luminance of the accumulated image), measured on a small copy.
   meter() {
     const r = this.renderer, T = this.tracer.target.texture;
-    this.meterTarget ??= new THREE.WebGLRenderTarget(64, 36, { type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
+    this.meterTarget ??= new THREE.WebGLRenderTarget(64, 36, { type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false });
     this.meterQuad ??= new FullScreenQuad(new THREE.ShaderMaterial({
       uniforms: { tMap: { value: null } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -673,8 +673,7 @@ export class PhotoMode {
     }));
     this.meterQuad.material.uniforms.tMap.value = T;
     r.setRenderTarget(this.meterTarget); this.meterQuad.render(r); r.setRenderTarget(null);
-    const raw = new Uint16Array(64 * 36 * 4); r.readRenderTargetPixels(this.meterTarget, 0, 0, 64, 36, raw);
-    const px = Float32Array.from(raw, THREE.DataUtils.fromHalfFloat);
+    const px = new Float32Array(64 * 36 * 4); r.readRenderTargetPixels(this.meterTarget, 0, 0, 64, 36, px);
     let sum = 0, n = 0;
     for (let i = 0; i < px.length; i += 4) { const l = 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]; if (Number.isFinite(l)) { sum += Math.log(1e-4 + l); n++; } }
     return Math.exp(sum / Math.max(1, n));
@@ -891,6 +890,7 @@ export class PhotoMode {
 
   // The developed still as a PNG blob, at the output size.
   async toBlob() {
+    if (!this.tracer) return this.stillBlob ?? null;
     const w = this.tracer.target.width, h = this.tracer.target.height;
     const t = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false });
     const px = new Uint8Array(w * h * 4);
@@ -900,6 +900,12 @@ export class PhotoMode {
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
     ctx.putImageData(img, 0, 0);
     return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  }
+
+  close() {
+    // Read the developed pixels before freeing GPU storage; encoding finishes on the CPU.
+    const still = this.hasStill ? this.toBlob().catch(err => { console.warn('photo still', err); return null; }) : this.stillBlob;
+    this.dispose(); this.stillBlob = still;
   }
 
   stop() { this.stopping = true; this.cancelPreparation?.(); }

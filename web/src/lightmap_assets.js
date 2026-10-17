@@ -1,6 +1,6 @@
 // Manifest only in packaged builds; plain bake names keep the dev server working.
-export async function lightmapAssets(base) {
-  const manifest = await fetch(`${base}/manifest.json`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null);
+export async function lightmapAssets(base, packaged = !!globalThis.document?.querySelector?.('meta[name="croton-packaged"]')) {
+  const manifest = packaged ? await fetch(`${base}/manifest.json`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   const asset = url => { const name = url.slice(base.length + 1); return manifest?.[name] ? `${base}/${manifest[name]}` : url; };
   asset.manifest = manifest; return asset;
 }
@@ -9,7 +9,7 @@ export async function lightmapAssets(base) {
 // rows flipped (bottom-up) like the HDR files were. A split layer (top half first in the file list, the odd row in the
 // bottom half) comes back as its flipped parts with the texture row each starts at: the bottom half first, so the
 // texture holds the same rows as one flipped atlas. The caller uploads each part with texSubImage2D into one texture
-// (no 2D canvas: it would colour-manage and hold a second full-size copy) and closes the parts.
+// (no colour-managed canvas or second full-size copy); parts stay alive for context restore until disposal.
 export async function lightmapBitmap(url, rows, track = work => work()) {
   const urls = Array.isArray(url) ? url : [url];
   const results = await Promise.allSettled(urls.map(u => track(async () => {

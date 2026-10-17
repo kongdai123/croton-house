@@ -127,7 +127,10 @@ class LightmapPackage(unittest.TestCase):
                 path = root / name; path.parent.mkdir(exist_ok=True)
                 bundles[name] = b"exact\r\n//# sourceMappingURL=fixture.js.map\r\n"
                 path.write_bytes(bundles[name])
+            bundles["index.html"] = b"<html><head></head><body></body></html>"
+            (root / "index.html").write_bytes(bundles["index.html"])
             with patch.object(package, "ROOT", root), contextlib.redirect_stdout(io.StringIO()): package.main()
+            bundles["index.html"] = bundles["index.html"].replace(b"</head>", b'<meta name="croton-packaged" content="1">\n</head>')
             for name, data in bundles.items(): self.assertEqual((root / "build" / name).read_bytes(), data)
             marker = root / "build/previous"; marker.write_bytes(b"keep")
             with (root / "dist/webgpu.js").open("wb") as f: f.truncate(package.FILE_LIMIT + 1)

@@ -89,7 +89,7 @@ export class PhotoUI {
     this.open = on; this.el.classList.toggle('hidden', !on);
     document.getElementById('btn-photo')?.classList.toggle('on', on);
     if (on) { this.player.unlock?.(); this.status(this.photo.supportError() ?? tr('ready')); this.lock(this.rendering); }
-    else { this.photo.active = false; document.body.classList.remove('photo-still'); }
+    else { this.photo.close(); document.body.classList.remove('photo-still'); }
     this.resize();
   }
 

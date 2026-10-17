@@ -9,6 +9,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { composerConfig } from './render_targets.js';
 import { M, emitsLight } from './materials.js';
 import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
@@ -93,11 +94,12 @@ export function createLighting(renderer, scene, camera, house, preset) {
   renderer.toneMapping = THREE.CustomToneMapping;   // Neutral, with the dusk hue preservation above
   renderer.toneMappingExposure = 1;
   RectAreaLightUniformsLib.init();
-  const pmrem = new THREE.PMREMGenerator(renderer);
+  let renderConfig = composerConfig(renderer, preset.msaa);
+  let pmrem = new THREE.PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
   // Day and blue-hour room bounce are convolved only when that time of day is first needed.
   const rooms = new Map();
-  const roomFor = isDusk => { if (!rooms.has(isDusk)) rooms.set(isDusk, bounceEnvironment(pmrem, isDusk)); return rooms.get(isDusk); };
+  const roomFor = isDusk => { if (!renderConfig.hdr) return null; if (!rooms.has(isDusk)) rooms.set(isDusk, bounceEnvironment(pmrem, isDusk)); return rooms.get(isDusk); };
   let blendTarget = null;
   const blendMaterial = new THREE.ShaderMaterial({
     depthTest: false, depthWrite: false,
@@ -159,7 +161,8 @@ export function createLighting(renderer, scene, camera, house, preset) {
     scene.add(light); windowLights.push(light);
   }
 
-  const composer = new EffectComposer(renderer);
+  const buffer = new THREE.WebGLRenderTarget(1, 1, { type: renderConfig.type, samples: renderConfig.samples });
+  const composer = new EffectComposer(renderer, buffer);
   // Reuse opaque colour-pass depth. GTAO reconstructs geometric normals from it,
   // avoiding a second draw of every leaf and preventing opaque-card AO artefacts.
   for (const target of [composer.renderTarget1, composer.renderTarget2]) {
@@ -203,14 +206,22 @@ export function createLighting(renderer, scene, camera, house, preset) {
         gl_FragColor = vec4(clamp(g, 0.0, 1.0), c.a);
       }`,
   });
-  const outputPass = new OutputPass(); outputPass.uniforms.uHuePreserve = { value: 0 };
+  const outputPass = new OutputPass();
+  outputPass.material.fragmentShader = outputPass.material.fragmentShader.replace('precision highp float;', 'precision highp float;\nprecision highp sampler2D;');
+  outputPass.uniforms.uHuePreserve = { value: 0 };
   composer.addPass(outputPass); composer.addPass(grade); composer.addPass(smaa);
   smaa.enabled = preset.smaa;
   // Multisampled composer buffers (GTAO still reads their resolved depth). Changing the count reallocates them.
   function setMsaa(samples = 0) {
-    for (const target of [composer.renderTarget1, composer.renderTarget2]) if (target.samples !== samples) { target.samples = samples; target.dispose(); }
+    renderConfig = composerConfig(renderer, samples);
+    for (const target of [composer.renderTarget1, composer.renderTarget2]) if (target.samples !== renderConfig.samples || target.texture.type !== renderConfig.type) {
+      target.samples = renderConfig.samples; target.texture.type = renderConfig.type; target.dispose();
+    }
+    if (!renderConfig.hdr) { gtao.enabled = false; reflections.enabled = false; }
   }
-  setMsaa(preset.msaa);
+  if (!renderConfig.hdr) { gtao.enabled = false; reflections.enabled = false; }
+  const renderPost = composer.render.bind(composer);
+  composer.render = dt => renderConfig.direct ? renderer.render(scene, camera) : renderPost(dt);
 
   // `gate` (optional) returns a promise for a quiet moment: the download starts at once, but the CPU tint and the PMREM
   // convolution (together a ~150 ms hitch) wait for it. A later ungated call shares the same pending sky.
@@ -235,7 +246,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
           if (luminance > brightest) { brightest = luminance; pixel = i / 4; }
         }
         const longitude = ((pixel % hdr.image.width) / hdr.image.width - 0.5) * Math.PI * 2;
-        const sky = { background: hdr, target: pmrem.fromEquirectangular(hdr), longitude };
+        const sky = { background: hdr, target: renderConfig.hdr ? pmrem.fromEquirectangular(hdr) : null, longitude };
         readySkies.set(name, sky);
         return sky;
       });
@@ -326,7 +337,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
       const previous = material.envMap;
       material.envMap = texture;
       material.envMapIntensity = intensity;
-      if (!previous || previous.mapping !== texture.mapping) material.needsUpdate = true;
+      if (!previous || previous.mapping !== texture?.mapping) material.needsUpdate = true;   // null: the LDR fallback has no PMREM
     }
   }
 
@@ -337,16 +348,16 @@ export function createLighting(renderer, scene, camera, house, preset) {
     if (isDusk !== dusk) return;
     if (daylight) daylight.day.value = dusk ? 0 : 1;
     for (const [material, opacity] of glass) material.opacity = dusk ? opacity : material.userData.daylightOpacity;
-    scene.background = sky.background; scene.backgroundBlurriness = 0;
+    scene.background = renderConfig.hdr ? sky.background : new THREE.Color(dusk ? 0x303b50 : 0xa9c9e4); scene.backgroundBlurriness = 0;
     scene.backgroundIntensity = dusk ? 0.6 : 0.9;
-    scene.environment = sky.target.texture;
+    scene.environment = sky.target?.texture ?? null;
     scene.environmentIntensity = dusk ? 0.3 : 0.8;
     const room = roomFor(dusk);
-    if (!blendTarget) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
-    blendMaterial.uniforms.room.value = room.texture;
-    blendMaterial.uniforms.sky.value = sky.target.texture; lastSkyMix = -1;
-    setLightingEnvironment(blendTarget.texture, dusk ? 0.5 : 0.68, interiorMaterials);
-    setLightingEnvironment(sky.target.texture, dusk ? 0.3 : 0.8, exteriorMaterials);
+    if (room && !blendTarget) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
+    blendMaterial.uniforms.room.value = room?.texture ?? null;
+    blendMaterial.uniforms.sky.value = sky.target?.texture ?? null; lastSkyMix = -1;
+    setLightingEnvironment(blendTarget?.texture ?? null, dusk ? 0.5 : 0.68, interiorMaterials);
+    setLightingEnvironment(sky.target?.texture ?? null, dusk ? 0.3 : 0.8, exteriorMaterials);
     sun.color.set(dusk ? 0xffbd8a : 0xfff7eb);
     sun.intensity = dusk ? 0.04 : 3.2;
     sun.position.set(dusk ? -30 : -11, dusk ? 5 : 30, -2.65 + (dusk ? 18 : 13));
@@ -423,7 +434,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
 
   function setQuality(next) {
-    hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa); reflections.enabled = !!next.ssr;
+    hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa); reflections.enabled = renderConfig.hdr && !!next.ssr;
     const size = shadowSize(next);
     if (sun.shadow.mapSize.x !== size) {
       sun.shadow.map?.dispose(); sun.shadow.map = null;
@@ -467,5 +478,20 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  return { camera, indoorWeight, reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
+  renderer.domElement.addEventListener('webglcontextrestored', () => {
+    pmrem.dispose(); pmrem = new THREE.PMREMGenerator(renderer);
+    for (const sky of readySkies.values()) { sky.target?.dispose(); sky.target = renderConfig.hdr ? pmrem.fromEquirectangular(sky.background) : null; }
+    for (const room of rooms.values()) room.dispose(); rooms.clear();
+    blendTarget?.dispose(); blendTarget = null; lastSkyMix = -1;
+    const sky = readySkies.get(dusk ? DUSK : DAY), room = roomFor(dusk);
+    if (sky) {
+      scene.environment = sky.target?.texture ?? null;
+      if (room) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
+      blendMaterial.uniforms.room.value = room?.texture ?? null; blendMaterial.uniforms.sky.value = sky.target?.texture ?? null;
+      setLightingEnvironment(blendTarget?.texture ?? null, dusk ? 0.5 : 0.68, interiorMaterials);
+      setLightingEnvironment(sky.target?.texture ?? null, dusk ? 0.3 : 0.8, exteriorMaterials);
+    }
+    sun.shadow.needsUpdate = true; update(0, true);
+  });
+  return { get renderConfig() { return renderConfig; }, camera, indoorWeight, reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

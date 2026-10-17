@@ -43,13 +43,13 @@ void main() {
     l += localLog(texture2D(tScene, vUv + (vec2(float(x), float(y)) - 1.5) * 0.25 / uLocalSize).rgb);
   l *= 0.0625;
   float d = texture2D(tLocalDepth, vUv + uLocalJitter).r;
-  // RGBA: adaptation log, surface view depth, unfiltered luminance guide, device depth for reprojection.
-  gl_FragColor = vec4(l, localDepth(d), l, d);
+  // RGBA: adaptation log, linear view depth, unfiltered luminance guide, unused.
+  gl_FragColor = vec4(l, localDepth(d), l, 1.0);
 }`;
 const blurShader = `
 uniform sampler2D tLocalInput, tLocalRaw, tLocalPrevious;
 uniform vec2 uLocalSize, uDirection, uLocalJitter;
-uniform mat4 uLocalInvVP, uLocalPrevVP, uLocalPrevView;
+uniform mat4 uLocalInvProjection, uLocalWorld, uLocalPrevVP, uLocalPrevView;
 uniform float uLocalDt, uLocalTau, uLocalValid, uTemporal;
 varying vec2 vUv;
 ${guideGLSL}
@@ -64,8 +64,8 @@ void main() {
   }
   float adapted = sum / max(weight, 0.00001);
   if (uTemporal > 0.5 && uLocalValid > 0.5) {
-    vec4 world = uLocalInvVP * vec4((vUv + uLocalJitter) * 2.0 - 1.0, center.a * 2.0 - 1.0, 1.0);
-    world /= world.w;
+    vec4 ray = uLocalInvProjection * vec4((vUv + uLocalJitter) * 2.0 - 1.0, 1.0, 1.0);
+    vec4 world = uLocalWorld * vec4(ray.xyz * (center.g / -ray.z), 1.0);
     vec4 clip = uLocalPrevVP * world;
     vec2 uv = clip.xy / max(clip.w, 0.000001) * 0.5 + 0.5;
     vec4 old = texture2D(tLocalPrevious, uv);
@@ -121,7 +121,7 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
     uLocalLumaSigma: { value: params.lumaSigma }, uLocalStrength: { value: 0 }, uLocalMaxEV: { value: params.maxEV }, uLocalMesopic: { value: params.mesopic },
   };
   let resources = null, depthCopy = null, valid = false, index = 0, disposed = false, gate = 0, sceneDepth = null;
-  const previousVP = new THREE.Matrix4(), previousView = new THREE.Matrix4(), invVP = new THREE.Matrix4(), zeroJitter = new THREE.Vector2();
+  const previousVP = new THREE.Matrix4(), previousView = new THREE.Matrix4(), inverseProjection = new THREE.Matrix4(), zeroJitter = new THREE.Vector2();
   // OutputPass's readBuffer depth can be a post-process attachment. Capture RenderPass's actual scene depth
   // before ping-pong swaps (also works when TAA moves that same pass into its internal composer).
   const scenePass = (lighting.taa?.internal ?? lighting.composer)?.passes.find(p => p.isRenderPass);
@@ -150,7 +150,7 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
     const sample = material(sampleShader, { ...shared, tScene: { value: null } });
     const blur = material(blurShader, {
       ...shared, tLocalInput: { value: null }, tLocalRaw: { value: raw.texture }, tLocalPrevious: { value: null },
-      uDirection: { value: new THREE.Vector2() }, uLocalInvVP: { value: invVP }, uLocalPrevVP: { value: previousVP }, uLocalPrevView: { value: previousView },
+      uDirection: { value: new THREE.Vector2() }, uLocalInvProjection: { value: inverseProjection }, uLocalWorld: { value: camera.matrixWorld }, uLocalPrevVP: { value: previousVP }, uLocalPrevView: { value: previousView },
       uLocalDt: { value: 0 }, uLocalTau: { value: params.temporal }, uLocalValid: { value: 0 }, uTemporal: { value: 0 },
     });
     return { raw, horizontal, history, sample, blur, quad: new FullScreenQuad(null) };
@@ -197,8 +197,8 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
       shared.uLocalLumaSigma.value = params.lumaSigma; shared.uLocalMaxEV.value = params.maxEV;
       shared.uLocalMesopic.value = params.mesopic;
       shared.uLocalJitter.value.copy(taa?.resolve.uniforms.uJitter.value ?? zeroJitter);
-      if (taa) invVP.copy(taa.resolve.uniforms.uInvVP.value);
-      else invVP.multiplyMatrices(camera.matrixWorld, camera.projectionMatrixInverse);
+      if (taa) inverseProjection.multiplyMatrices(camera.matrixWorldInverse, taa.resolve.uniforms.uInvVP.value);
+      else inverseProjection.copy(camera.projectionMatrixInverse);
       const draw = (into, mat) => { quad.material = mat; renderer.setRenderTarget(into); quad.render(renderer); };
       sample.uniforms.tScene.value = read.texture; draw(raw, sample);
       const u = blur.uniforms;

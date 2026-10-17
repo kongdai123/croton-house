@@ -100,7 +100,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
   const originalShader = outputPass.material.fragmentShader, originalRender = outputPass.render;
   const exposureUniform = { value: null };
   outputPass.uniforms.tAutoExposure = exposureUniform;
-  outputPass.material.fragmentShader = originalShader.replace('precision highp float;', 'precision highp float;\n\t\tprecision highp sampler2D;')   // RawShaderMaterial: samplers default to lowp on mobile GPUs, which would quantise HDR and depth
+  outputPass.material.fragmentShader = (originalShader.includes('precision highp sampler2D;') ? originalShader : originalShader.replace('precision highp float;', 'precision highp float;\n\t\tprecision highp sampler2D;'))   // RawShaderMaterial: samplers default to lowp on mobile GPUs, which would quantise HDR and depth
     .replace('void main() {', 'uniform sampler2D tAutoExposure;\nvoid main() {')
     .replace('// tone mapping', 'gl_FragColor.rgb *= texture2D(tAutoExposure, vec2(0.5)).r / max(toneMappingExposure, 0.00001);\n// tone mapping');
   outputPass.material.needsUpdate = true;

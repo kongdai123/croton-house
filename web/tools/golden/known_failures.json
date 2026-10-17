@@ -2,14 +2,14 @@
  "note": "Known invariant violations (docs/audit). The invariants test fails on any offender not listed here and lists entries that disappeared. Regenerate with UPDATE_KNOWN=1 only to shrink the list or when a violation is accepted.",
  "invariants": {
   "rooms-have-switched-light": {
-   "title": "every interior space has at least one emitting fixture with a wall switch",
+   "title": "every interior space of the plan has at least one emitting fixture with a wall switch",
    "count": 5,
    "offenders": [
-    "Closet (136880545a)",
-    "Closet (95963ae1ba)",
-    "Laundry nook",
-    "Linen closet (louvered, off the vestibule)",
-    "room b69b4e9bfa"
+    "bedroomBCloset (Closet)",
+    "hallCloset (Closet)",
+    "laundry (Laundry)",
+    "linen (Closet)",
+    "primaryBathCloset (Linen closet)"
    ]
   },
   "probe-lit-has-reason": {

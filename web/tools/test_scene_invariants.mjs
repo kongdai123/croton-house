@@ -13,7 +13,7 @@ import { indexScene, fixtureExterior } from './harness/objects.mjs';
 const WEB = fileURLToPath(new URL('../', import.meta.url)), REPO = join(WEB, '..'), KNOWN = join(WEB, 'tools/golden/known_failures.json');
 const t0 = performance.now();
 const w = await buildRealScene(), ix = indexScene(w);
-const { T, scene, house, switches, doors } = w;
+const { T, scene, switches, doors } = w;
 const plan = v => [v.x, -v.z, v.y];
 const visible = o => { for (let p = o; p; p = p.parent) if (p.visible === false) return false; return true; };
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
@@ -24,21 +24,13 @@ const results = [];   // { id, title, offenders: string[] }
 const invariant = (id, title, offenders) => results.push({ id, title, offenders: [...new Set(offenders)].sort() });
 
 // ---- 1. every interior space has an emitting fixture with a switch ---------------------------------------------------
+// The spaces are the plan model's (data/plan.json: rooms, baths, closets, the hall, the annex); a fixture belongs to the
+// space at its root (a root in a wall takes the room it faces).
 {
-  const H = w.houseConsts, inRect = (r, x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
-  const spaces = [];
-  const noteAreas = house.notes.filter(n => n.area);
-  for (const n of house.notes) {
-    const poly = n.area ?? house.rooms.find(r => r.id === n.room).pts;
-    spaces.push({ name: `${n.label} (${n.id})`, has: (x, y) => w.pointInPoly([x, y], poly) });
-  }
-  for (const r of house.rooms) if (!house.notes.some(n => n.room === r.id)) spaces.push({ name: `room ${r.id}`, has: (x, y) => w.pointInPoly([x, y], r.pts) });
-  // the hall has no note: it is the great-room polygon minus the four note areas
-  const great = house.rooms.reduce((a, r) => (r.pts.length > a.pts.length ? r : a));
-  spaces.push({ name: 'Hall (great room minus its note areas)', has: (x, y) => w.pointInPoly([x, y], great.pts) && !noteAreas.filter(n => n.room === great.id).some(n => w.pointInPoly([x, y], n.area)) });
-  for (const [name, r] of [['Garage', H.GARAGE], ['Laundry nook', H.LAUNDRY], ['Walk-in closet', H.WALKIN], ['Linen closet (louvered, off the vestibule)', H.LINEN]]) spaces.push({ name, has: (x, y) => inRect(r, x, y) });
-  const lit = switches.filter(s => s.toggle.glows.length && plates.some(p => p.userData.lightSwitch === s.toggle)).map(s => { const p = plan(s.root.getWorldPosition(new T.Vector3())); return { x: p[0], y: p[1] }; });
-  invariant('rooms-have-switched-light', 'every interior space has at least one emitting fixture with a wall switch', spaces.filter(sp => !lit.some(f => sp.has(f.x, f.y))).map(sp => sp.name));
+  const lit = new Set(switches.filter(s => s.toggle.glows.length && plates.some(p => p.userData.lightSwitch === s.toggle))
+    .map(s => { const p = plan(s.root.getWorldPosition(new T.Vector3())); return w.plan.spaceAt(p[0], p[1], 0.3)?.id; }));
+  invariant('rooms-have-switched-light', 'every interior space of the plan has at least one emitting fixture with a wall switch',
+    w.plan.spaces.filter(sp => sp.zone !== 'exterior' && !lit.has(sp.id)).map(sp => `${sp.id} (${sp.label.en})`));
 }
 
 // ---- 2. every switch plate maps to a fixture; every WALL_SWITCHES row got a plate ---------------------------------------------
@@ -94,9 +86,9 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   for (const { node: o, key } of ix.placed) {
     const spec = o.userData.light; if (!spec || fixtureExterior(o.userData.id)) continue;
     const p = new T.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(o.matrixWorld);
-    if (!w.pointInPoly([p.x, -p.z], w.EXT_FP)) off.push(`${key} light at plan (${p.x.toFixed(2)}, ${(-p.z).toFixed(2)})`);
+    if (!w.plan.isInside(p.x, -p.z, 0)) off.push(`${key} light at plan (${p.x.toFixed(2)}, ${(-p.z).toFixed(2)})`);
   }
-  invariant('interior-light-in-outline', 'light specs of interior fixtures lie inside the plan outline (EXT_FP)', off);
+  invariant('interior-light-in-outline', 'light specs of interior fixtures lie inside the plan outline', off);
 }
 
 // ---- 7. committed lamp-group encoding == lamp_groups.py ORDER ---------------------------------------------------------------------
@@ -127,6 +119,37 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
     });
   }
   invariant('reflection-probes-match-layout', 'committed refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points 1 cm, boxes 5 cm)', off);
+}
+
+// ---- 9. the plan model is the single source of room / inside / annex geometry --------------------------------------------
+// Grep the tracked sources for the shapes the old hand-typed copies had. Only the plan's builder and readers (and the
+// data, the docs, the goldens and the harness's quotes of the old classifiers) may hold them.
+{
+  const FORBIDDEN = [
+    ['inside-rectangle porch test', String.raw`<\s*-3\.5\s*(\|\||or)\s*[\w.]+\s*>\s*3\.97`],
+    ['inside-rectangle bounds', String.raw`-8\.1\s*<=|>=\s*-8\.1(?![0-9])`],
+    ['room rect row with a label', String.raw`(?<![\w$])\[-?\d+\.\d+, -?\d+\.\d+, -?\d+\.\d+, -?\d+\.\d+, '[A-Z]`],
+    ['room rect row named by id', String.raw`(?<![\w$])[\[(]'[a-z][A-Za-z]*', -?\d+\.\d+, -?\d+\.\d+, -?\d+\.\d+, -?\d+\.\d+[)\]]`],
+    ['typed garage / annex rect', String.raw`\{\s*x0:\s*-7\.903|ANNEX\s*=\s*\{|\{ x0: -4\.816|\{ x0: -6\.25, x1: -4\.93`],
+    ['hand-copied garage wall rects', String.raw`x0: -8\.018, x1: -7\.903|x1: -6\.92\b`],
+    ['typed outline', String.raw`\[\[-8\.0176, 5\.471\]`],
+    ['typed probe-volume grid', String.raw`x0: -12\.5, x1: 12\.5|-12\.5 \+ x \* 0\.5`],
+    ['typed daylight box', String.raw`Vector3\(-8\.1, 0, -5\.62\)|vec3\(-8\.1, 0\.0, -5\.62\)`],
+  ];
+  const ALLOW = ['web/src/plan.js', 'web/src/plan_geom.js', 'bake/scripts/plan.py', 'web/tools/build_plan.mjs', 'web/tools/test_scene_invariants.mjs'];
+  const ALLOW_DIRS = ['web/data/', 'docs/', 'web/tools/golden/', 'web/tools/harness/'];
+  const off = [];
+  for (const [name, re] of FORBIDDEN) {
+    let out = '';
+    try { out = execFileSync('git', ['grep', '-nIP', '--', re, '--', ':!*.min.js', ':!web/assets'], { cwd: REPO, encoding: 'utf8' }); }
+    catch (e) { if (e.status !== 1) throw e; }   // 1: no match
+    for (const line of out.split('\n').filter(Boolean)) {
+      const file = line.slice(0, line.indexOf(':'));
+      if (ALLOW.includes(file) || ALLOW_DIRS.some(d => file.startsWith(d))) continue;
+      off.push(`${file}: ${name}`);
+    }
+  }
+  invariant('plan-is-single-source', 'no hand-typed room tables, inside rectangles, annex rects or plan volumes outside the plan model (web/data/plan.json)', off);
 }
 
 // ---- report ---------------------------------------------------------------------------------------------------------------------------

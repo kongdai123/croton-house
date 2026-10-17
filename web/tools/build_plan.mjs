@@ -143,6 +143,7 @@ export function validate(plan) {
     if (!['interior', 'annex', 'exterior'].includes(s.zone)) err.push(`space ${s.id}: zone ${s.zone}`);
     if (s.zone !== 'exterior' && Math.abs(area(P) - overlapArea(P, fp)) > 1e-6) err.push(`space ${s.id}: not inside the outline (${(area(P) - overlapArea(P, fp)).toFixed(4)} m2 outside)`);
     if (s.kind === 'yard' && overlapArea(P, fp) > 1e-6) err.push(`yard ${s.id}: overlaps the outline`);
+    for (const r of s.reflProbe ?? []) if (!inPoly(r.at[0], r.at[1], P)) err.push(`space ${s.id}: reflection probe seed ${JSON.stringify(r.at)} lies outside it`);
   }
   // spaces may touch, not overlap; yards are the ground under the outdoor zones, so they only must not overlap each other
   const layer = s => s.kind === 'yard' ? 'yard' : 'zone';

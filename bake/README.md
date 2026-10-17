@@ -12,7 +12,7 @@ direct light and shadows stay live; everything else (sky light, every bounce, th
 | The whole rebake | `REBAKE.md` | cluster | every step, folders, toggle states, cost |
 | Bake | `scripts/bake.py` + `scripts/layer_lights.py` | Blender, one GPU per task | `<layer>_gNN.exr` |
 | Light probes | `scripts/probe.py` (tasks: `make_tasks.py ... <version> probes`), packed by `scripts/probe_pack.py` | Blender, Python | L2 SH per grid point, `probes.bin` |
-| Reflection probes | `scripts/reflprobe.py` (points and boxes: `scripts/reflprobe_layout.py`, from `web/data/house.json`), sky `scripts/skypano.py` | Blender | per slot daylight-only equirect HDRs; once, the lamp groups' layers (`--lamps`, packed by `lamp_groups_pack.py refl`) |
+| Reflection probes | `scripts/reflprobe.py` (points and boxes: `scripts/reflprobe_layout.py`, from the plan model `web/data/plan.json` via `scripts/plan.py`), sky `scripts/skypano.py` | Blender | per slot daylight-only equirect HDRs; once, the lamp groups' layers (`--lamps`, packed by `lamp_groups_pack.py refl`) |
 | Merge | `scripts/composite_v2.py` | Blender's Python | `slot.exr`, `lamps.exr`, tone-curved arrays, `encoding.json` |
 | Encode | `scripts/encode_webp.py`, `scripts/compact_uv.py` | Python | `slot.webp`, `lamps.webp`, `lightmap_uv2.bin.gz` |
 | Validate | `validate/shoot.mjs <out> '<query>'` | headless Chrome on a GPU | the site through the reference cameras |

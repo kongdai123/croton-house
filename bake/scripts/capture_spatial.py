@@ -64,15 +64,13 @@ def main():
         grid['step'] = int(args[args.index('--step-mm') + 1]); grid['nx'] = (32000 // grid['step']) + 1; grid['ny'] = (35000 // grid['step']) + 1
     if '--reflection-layout' in args:
         import reflprobe_layout as rl
-        plan = rl.load_plan(str(ROOT / 'web/data/house.json'))
+        plan = rl.load_plan(ROOT / 'web/data/plan.json')
         out = []
         for i, p in enumerate(rl.points(plan)):
             b = rl.plan_box(plan, p)
             out.append(dict(i=i, p=[p[0], p[2], -p[1]], min=b['min'] if b else None, max=b['max'] if b else None))
         json.dump(out, sys.stdout); return
     lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'PLAN', 'room', 'where', 'group_of', 'ORDER'})
-    import reflprobe_layout as rl
-    plan = rl.load_plan(str(ROOT / 'web/data/house.json'))
     import plan as planlib
     P = planlib.load(str(ROOT / 'web/data/plan.json'))
     unwrap = lift(ROOT / 'bake/scripts/unwrap.py', {'inside_plan'})
@@ -80,10 +78,6 @@ def main():
     tasks = lift(ROOT / 'bake/scripts/make_tasks.py', {'inside'})
     C = [
         ('py:lamp_groups.room', 'bake/scripts/lamp_groups.py room(): lampGroup (or id) of the plan space, near 0.3; outside outdoors', lambda x, y: lg['room']([x, y, 0])),
-        ('py:reflprobe_layout.inside_lot', 'bake/scripts/reflprobe_layout.py:24', lambda x, y: js_bool(rl.inside_lot(x, y))),
-        ('py:reflprobe_layout.in_plan', 'bake/scripts/reflprobe_layout.py:79 (footprint polygon)', lambda x, y: js_bool(rl.in_plan(plan, x, y))),
-        ('py:reflprobe_layout.annex_of', 'bake/scripts/reflprobe_layout.py:82 (ANNEX rect)', lambda x, y: rl.annex_of(x, y) or ''),
-        ('py:reflprobe_layout.room_of', 'bake/scripts/reflprobe_layout.py:86 (annex, note areas, room polygons, plan, outside)', lambda x, y: rl.room_of(plan, x, y)),
         ('py:unwrap.inside_plan', 'bake/scripts/unwrap.py:125', lambda x, y: js_bool(unwrap['inside_plan'](x, y))),
         ('py:setup.inside', 'bake/export/setup.py:16', lambda x, y: js_bool(setup['inside'](x, y))),
         ('py:make_tasks.inside', 'bake/scripts/make_tasks.py:24', lambda x, y: js_bool(tasks['inside'](x, y))),

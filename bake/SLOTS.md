@@ -56,7 +56,7 @@ SCENE=scene/v2/scene_lm_dry.blend
 CFG=$(python3 scripts/slots.py "$SLOT")
 mkdir -p "bakes/v2/$SLOT/refl" "bakes/v2/$SLOT/foliage"
 "$BLENDER" -b --python-exit-code 1 "$SCENE" -P scripts/skypano.py -- "$CFG" "bakes/v2/$SLOT/sky_bg.hdr"
-"$BLENDER" -b --python-exit-code 1 "$SCENE" -P scripts/reflprobe.py -- "$CFG" "bakes/v2/$SLOT/refl" 0 27 --plan scene/house.json --layout bakes/v2/refl_layout.json
+"$BLENDER" -b --python-exit-code 1 "$SCENE" -P scripts/reflprobe.py -- "$CFG" "bakes/v2/$SLOT/refl" 0 27 --plan scripts/plan.json --layout bakes/v2/refl_layout.json
 # Reflection ranges [i0,i1) may be distributed across workers; daylight only (the lamps are the lamp groups' layers, REBAKE.md).
 FOLCFG=$(python3 -c 'import json,sys; c=json.loads(sys.argv[1]); c.update(glb="scene/v2/croton_lm.glb",out="bakes/v2/"+sys.argv[2]+"/foliage/foliage.npz",samples=512); print(json.dumps(c))' "$CFG" "$SLOT")
 "$BLENDER" -b --python-exit-code 1 "$SCENE" -P scripts/foliage_bake.py -- "$FOLCFG"

@@ -2,14 +2,14 @@
 # (centre east, right south, top up), each with a box for parallax correction (reflprobe_layout.py: rooms from the plan,
 # the garage and grounds from scene raycasts through glass and cloth).
 #   day (default): one slot's daylight only (sky, sun, its bounces); no lamp, no lamp surface glows. Per slot.
-#     blender -b scene.blend -P scripts/reflprobe.py -- '<slot json>' out_dir [i0 i1] --plan scene/house.json --layout refl_layout.json
+#     blender -b scene.blend -P scripts/reflprobe.py -- '<slot json>' out_dir [i0 i1] --plan scripts/plan.json --layout refl_layout.json
 #   lamps: the house's lamps by switch group, at the bake's physical level (lamp_groups.py scene: lights lampgrpNN_*,
 #     lamp surfaces tagged lamp_group = NN), once for every slot. Per probe each group is measured with a quick render;
 #     the brightest groups get a panorama of their own (up to --max-layers), the other visible groups share one, and the
 #     site weighs every panorama by its groups' live switch levels (lightmap.js reflProbe, lamp_groups_pack.py refl).
 #     One more panorama holds all of them, for small devices (one layer per probe, weighed by its groups' light shares).
 #     blender -b lampgroups.blend -P scripts/reflprobe.py -- '{"slot": "dusk"}' out_dir [i0 i1] --lamps groups.json \
-#       --plan scene/house.json --layout refl_layout.json [--max-layers 3]
+#       --plan scripts/plan.json --layout refl_layout.json [--max-layers 3]
 #   --with-lamps: the old single-layer probes (every lamp at the slot's lamp level), for sites without lamp groups.
 # --layout: points and boxes are computed once (by the first task to run, from the scene it renders) and every slot and
 # lamp task reuses them, so the slots' boxes agree exactly (lightmap_slots.js refuses slots whose boxes differ).
@@ -27,7 +27,7 @@ def option(flag, default=None, has_value=True):
     i = argv.index(flag)
     if not has_value: del argv[i]; return True
     v = argv[i + 1]; del argv[i:i + 2]; return v
-PLAN = option('--plan', 'scene/house.json'); LAYOUT = option('--layout'); LAMPS = option('--lamps')
+PLAN = option('--plan'); LAYOUT = option('--layout'); LAMPS = option('--lamps')
 MAXL = int(option('--max-layers', '3')); WITH_LAMPS = option('--with-lamps', False, False)
 SIZE = [int(v) for v in option('--size', '512x256').split('x')]; SPP = int(option('--samples', '512'))
 cfg = resolve(json.loads(argv[0])); out = argv[1]; os.makedirs(out, exist_ok=True)
@@ -106,7 +106,7 @@ def scene_extents(p):
 def make_layout():
     rows = []
     for i, p in enumerate(L.points(plan)):
-        if not L.in_plan(plan, p[0], p[1]) and not L.annex_of(p[0], p[1]): p = scene_point(p)
+        if not L.in_plan(plan, p[0], p[1]) and not L.annex_of(plan, p[0], p[1]): p = scene_point(p)
         b = L.plan_box(plan, p) or L.box(p, scene_extents(p))
         rows.append(dict(i=i, b=list(p), **b, where=L.room_of(plan, p[0], p[1])))
     return rows

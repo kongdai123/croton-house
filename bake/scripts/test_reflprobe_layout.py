@@ -1,10 +1,10 @@
-"""Reflection probe layout against the floor plan, without Blender: python3 bake/scripts/test_reflprobe_layout.py"""
+"""Reflection probe layout against the plan model, without Blender: python3 bake/scripts/test_reflprobe_layout.py"""
 import json, sys, unittest
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'bake/scripts'))
 import reflprobe_layout as L
-plan = L.load_plan(ROOT / 'web/data/house.json')
+plan = L.load_plan(ROOT / 'web/data/plan.json')
 
 
 class Layout(unittest.TestCase):

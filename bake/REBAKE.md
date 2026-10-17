@@ -34,15 +34,16 @@ Everything of the rebake goes to `scene/$V/`, `bakes/$V/`, `site_$V/`; nothing o
 ```sh
 git status   # scene and bake branches merged; then:
 cd web && node tools/build.mjs && for t in tools/test_*.mjs; do node $t || break; done && python3 tools/test_package.py && cd ..
-python3 bake/scripts/test_lamp_groups.py && python3 bake/scripts/test_reflprobe_layout.py
-python3 bake/scripts/reflprobe_layout.py web/data/house.json          # the reflection probe table: every point in a room
+python3 bake/scripts/test_lamp_groups.py && python3 bake/scripts/test_reflprobe_layout.py && python3 bake/scripts/test_plan.py
+python3 bake/scripts/reflprobe_layout.py web/data/plan.json           # the reflection probe table: every point in a room
 NODE_PATH=web/node_modules web/node_modules/.bin/esbuild bake/export/export_entry.js --bundle --outfile=/tmp/export_bundle.js
 ```
 Sync to the cluster (one rsync per folder):
 ```sh
 ssh $HOST "cd $R && mkdir -p fixbake/prev && cp -a scripts fixbake/prev/scripts && cp -a validate/export.mjs validate/lights.mjs validate/switch_groups.mjs fixbake/prev/"   # backup
 rsync -a --exclude __pycache__ bake/scripts/ $HOST:$R/scripts/                     # the canonical pipeline copy
-rsync -a bake/export/setup.py bake/export/render.py web/data/house.json /tmp/export_bundle.js $HOST:$R/scene/$V/
+rsync -a web/data/plan.json $HOST:$R/scripts/                                      # the plan model, next to plan.py
+rsync -a bake/export/setup.py bake/export/render.py web/data/house.json web/data/plan.json /tmp/export_bundle.js $HOST:$R/scene/$V/
 rsync -a bake/export/export.mjs bake/export/lights.mjs bake/export/switch_groups.mjs $HOST:$R/validate/
 ssh $HOST "cd $R && cp -rs $R/site_sofa site_$V && rm -rf site_$V/dist site_$V/data site_$V/index.html site_$V/style.css"
 rsync -a web/dist web/data web/index.html web/style.css $HOST:$R/site_$V/
@@ -100,7 +101,7 @@ $P scripts/lamp_groups_tasks.py scene/$V/groups.json scene/$V/scene_lm_lampgroup
 ```
 Then, as task files in `tasks/pending/` (shell lines that `worker.sh` runs from `$R`):
 ```sh
-O="--plan scene/$V/house.json --layout bakes/$V/refl_layout.json"
+O="--plan scripts/plan.json --layout bakes/$V/refl_layout.json"
 # first, in a short GPU job, the layout alone (no renders); every reflection task then reuses bakes/$V/refl_layout.json
 $B scene/$V/scene_dry.blend -P scripts/reflprobe.py -- '{"slot": "noon"}' bakes/$V/refl_scratch 0 0 $O
 for SLOT in sunrise noon golden dusk; do

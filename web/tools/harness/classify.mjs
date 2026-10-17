@@ -24,7 +24,7 @@ export const QUOTED = [
   ['probe.occl', 'web/src/lightmap.js:1288 (foliageBake absent in the headless scene)', 'foliage && !material.foliageBake'],
   ['mesh.sided', 'web/src/lightmap.js:743 (material of a mesh under a door root or an animated root with a toggle)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh under dynamic roots'],
   ['mesh.doorPart', 'web/src/lightmap.js:660-664', "root.userData.door && kind not in {french, slider}: every mesh whose parent is not the door root"],
-  ['mesh.interior', 'web/src/lighting.js:258-262 inside() + :285', 'inside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)'],
+  ['mesh.interior', 'web/src/lighting.js collectMaterials region (plan.isInside)', 'plan.isInside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)'],
   ['mesh.isPlantRoot', 'web/src/lightmap.js:193', "any ancestor userData.id matches /^(plants|garden|flowers)-/"],
   ['mesh.pcssPlant', 'web/src/lightmap.js:201', 'any material foliage || isPlantRoot'],
   ['mesh.contactExcluded', 'web/src/contact.js:171-173 depthOf', 'm.transparent || m.transmission > 0 || m.isShaderMaterial || m.alphaTest > 0 || /^(garden-|plant)/.test(m.name) (first of the mesh materials that triggers)'],
@@ -90,7 +90,7 @@ export function captureClassify(w, ix) {
       o2.insidePlan = w.lightmapInsidePlan(c.x, -c.z);
       // lighting.js:285 uses the GEOMETRY box transformed by matrixWorld; for the unrotated common case this equals the tight box
       o.geometry.computeBoundingBox(); const gb = new T.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld), gc = gb.getCenter(new T.Vector3());
-      const inside = (x, y) => { const f = x < -3.5 || x > 3.97 ? -5.94 : -4.82; return x >= -8.1 && x <= 8.1 && y >= f && y <= 5.62; };   // lighting.js:258-262
+      const inside = (x, y) => w.plan.isInside(x, y);   // lighting.js collectMaterials
       const exteriorFinish = ms.some(m => m.userData?.exteriorFinish);
       o2.interior = !exteriorFinish && inside(gc.x, -gc.z) && gc.y < house.ceiling + 0.05 && gb.max.x - gb.min.x < 17 && gb.max.z - gb.min.z < 13;
       o2.puddleTier = o.isInstancedMesh || foliage ? 1 : w.puddlesIndoors(box) ? 2 : 0;

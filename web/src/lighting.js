@@ -15,6 +15,7 @@ import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
 import { ReflectionPass, markReflective } from './reflections.js';
+import { isInside, indoorWeight as planIndoorWeight } from './plan.js';
 
 // Tone curve: Khronos PBR Neutral (the daylight look, fitted to the listing photos), whose final step pulls bright
 // highlights toward white. uHuePreserve scales that step away, so at dusk warm lamps stay amber instead of bleaching.
@@ -255,17 +256,8 @@ export function createLighting(renderer, scene, camera, house, preset) {
     return skies.get(name);
   }
 
-  function inside(x, y) {
-    // Include the west garage annex, but respect the recessed front porch.
-    const front = x < -3.5 || x > 3.97 ? -5.94 : -4.82;
-    return x >= -8.1 && x <= 8.1 && y >= front && y <= 5.62;
-  }
-  function indoorWeight(position) {
-    const x = position.x, y = -position.z;
-    const front = x < -3.5 || x > 3.97 ? -5.74 : -4.66;
-    const distance = Math.min(x + 7.9, 7.91 - x, y - front, 5.47 - y);
-    return smooth(-0.45, 0.55, distance) * (1 - smooth(house.ceiling, house.ceiling + 0.6, position.y));
-  }
+  // 0 outdoors .. 1 inside, from the camera's distance to the plan outline (plan.js); faded out above the ceiling.
+  const indoorWeight = position => planIndoorWeight(position.x, -position.z, position.y);
 
   function collectMaterials(root) {
     // Layout's light budget can be exhausted before the porch sconce is reached.
@@ -282,7 +274,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
       if (!o.isMesh || o.isReflector) return;
       o.geometry.computeBoundingBox();
       box.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.getCenter(center);
-      const region = inside(center.x, -center.z) && center.y < house.ceiling + 0.05 && box.max.x - box.min.x < 17 && box.max.z - box.min.z < 13 ? interiorMaterials : exteriorMaterials;
+      const region = isInside(center.x, -center.z) && center.y < house.ceiling + 0.05 && box.max.x - box.min.x < 17 && box.max.z - box.min.z < 13 ? interiorMaterials : exteriorMaterials;
       const assign = material => {
         if (material) hqEffects.collect(material);
         if (!material?.isMeshStandardMaterial) return material;

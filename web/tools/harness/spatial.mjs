@@ -48,8 +48,6 @@ function glslOutside(src) {
 export function jsClassifiers(w) {
   const H = w.house, T = w.T;
   const rect = (r, x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
-  // lighting.js:258-262 inside() (a closure of createLighting: quoted)
-  const lightingInside = (x, y) => { const front = x < -3.5 || x > 3.97 ? -5.94 : -4.82; return x >= -8.1 && x <= 8.1 && y >= front && y <= 5.62; };
   const hx = w.houseConsts;
   const label = (n) => H.notes.filter(m => m.room === n.id).map(m => m.label).join('/') || n.id.slice(0, 6);
   const zones = [['garage', hx.GARAGE], ['laundry', hx.LAUNDRY], ['walkin', hx.WALKIN], ['linen', hx.LINEN], ['porch', hx.PORCH], ['patio', hx.PATIO], ['courtA', hx.COURT_A], ['courtB', hx.COURT_B], ['drive', hx.DRIVE], ['pad', hx.PAD], ['walk', hx.WALK]];
@@ -58,11 +56,9 @@ export function jsClassifiers(w) {
     // [name, source, quoted?, fn(x, y)]
     ['js:roam.areaOf', 'web/src/pets/roam.js:44 (scene z = -y)', false, (x, y) => w.areaOf(x, -y)],
     ['js:roam.isIndoor', 'web/src/pets/roam.js:52', false, (x, y) => w.isIndoor(x, -y)],
-    ['js:lighting.indoorWeight@1m', 'web/src/lighting.js:263 (returned by createLighting), position.y = 1.0', false, (x, y) => Math.round(w.lighting.indoorWeight({ x, y: 1.0, z: -y }) * 1000)],
     ['js:lightmap.insidePlan', 'web/src/lightmap.js:39', false, (x, y) => w.lightmapInsidePlan(x, y)],
     ['js:puddles.insidePlan', 'web/src/puddles.js:66', false, (x, y) => w.puddlesInsidePlan(x, y)],
     ['js:photo.insideHouse', 'web/src/photo.js:167', false, (x, y) => w.photoInsideHouse(x, y)],
-    ['js:lighting.inside', 'web/src/lighting.js:258-262', true, lightingInside],
     ['js:webgpu.scene.inside', 'web/src/webgpu/scene.js:15-18', true, (x, y) => { const front = x < -3.5 || x > 3.97 ? -5.94 : -4.82; return x >= -8.1 && x <= 8.1 && y >= front && y <= 5.62; }],
     ['js:glsl.lightmap.outsideHouse', 'web/src/lightmap.js:94 (GLSL, 1 = outside)', true, (x, y) => { const f = (x < -3.5 || x > 3.97) ? -5.94 : -4.82; return (x >= -8.1 && x <= 8.1 && y >= f && y <= 5.62) ? 0 : 1; }],
     ['js:glsl.volumetric.outsideHouse', 'web/src/volumetric.js:21 (GLSL, 1 = outside)', true, (x, y) => { const f = (x < -3.5 || x > 3.97) ? -5.94 : -4.82; return (x >= -8.1 && x <= 8.1 && y >= f && y <= 5.62) ? 0 : 1; }],

@@ -197,7 +197,7 @@ function resolveMesh(o, ctx) {
   else if (movable) motion = 'movable';
   else if (door) motion = o.parent === door ? 'still' : 'door';
   // bake: the lightmap for what holds still; the probe volume for the rest, with the reason unwrap.py and the site report
-  const leaves = door?.userData.door.kind === 'french' || door?.userData.door.kind === 'slider' ? 'lightmap' : 'probe';
+  const leaves = door ? declared(door).leaves ?? 'probe' : null;   // the door declares how its leaves are lit (house.js)
   let why = null;
   if (presentation) why = 'presentation';
   else if (!lmMesh(o)) why = 'instanced';
@@ -397,4 +397,17 @@ const pickKeys = (r, keys) => Object.fromEntries(keys.map(k => [k, r[k] ?? null]
 export const meshRecord = o => pickKeys(meshLighting(o), MESH_KEYS);
 export const materialRecord = m => pickKeys(lightingOf(m), MATERIAL_KEYS);
 export const exportLighting = r => JSON.stringify(r);
+// GLTFExporter plugin (exporter.register(gltfLightingPlugin())): every node's record (photo.js puts it on the exported
+// meshes) and every material's, as the extras string "lighting". Runs after the exporter's own userData extras.
+export const gltfLightingPlugin = () => () => ({
+  writeNode(o, def) { if (o.userData.lighting) (def.extras ??= {}).lighting = exportLighting(o.userData.lighting.resolved ? meshRecord(o) : o.userData.lighting); },
+  async writeMaterialAsync(m, def) { (def.extras ??= {}).lighting = exportLighting(materialRecord(m)); },
+});
 export { MESH_KEYS, MATERIAL_KEYS };
+// The questions the bake scripts ask of the records (bake/scripts/lighting.py PREDICATES: the same answers, checked by
+// web/tools/test_lighting_roundtrip.mjs).
+export function bakeAnswers(kind, r) {
+  if (kind === 'mesh') return { movable: r.motion === 'movable', weather: r.weather ?? null, lightmap: r.bake === 'lightmap' };
+  return { clearGlass: r.glass?.export === 'pane', sheer: r.sheer != null, seeThrough: r.surface === 'glass' || r.sheer != null, emitter: r.emits?.kind ?? null,
+    lampSurface: !!r.emits && (r.emits.kind === 'lamp' || !!r.emits.switched), bakedFoliage: !!r.foliage?.bakedPerVertex };
+}

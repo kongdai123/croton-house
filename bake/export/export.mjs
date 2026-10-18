@@ -6,10 +6,12 @@
 //   site dir: a built site to serve (on a GPU node); without it the dev server on :8780
 //   --dusk: the sheers drawn as the site draws them in the dusk slot (main.js onTime); same units as the day export, so
 //           unwrap.py --reuse keeps the layout (for the dusk slot's sky / sun-bounce bake)
-// Toggle states: the site's startup (daytime) states, except BAKE_OPEN; every door and toggle is listed in
+// Toggle states: the site's startup (daytime) states, except doors whose bakePose is open; every door and toggle is listed in
 // <out.glb>.state.json and the log, so the bake's states can be checked against the site's (bake/REBAKE.md).
 // Every mesh carries its lightmap identity (batch.js) as node extras: {lm: id} or {lmSkip: 'movable'}; unwrap.py keys
-// the lightmap units by it.
+// the lightmap units by it. Every node and material also carries its lighting manifest record (web/src/lighting_roles.js)
+// as extras "lighting", a JSON string (bake/scripts/lighting.py reads it in unwrap.py, setup.py and the bake scripts).
+// Doors are posed as their manifest says (bakePose 'open': baked open although the site starts them shut).
 import { createRequire } from 'module';
 import { createServer } from 'http';
 import { readFile, writeFile } from 'fs/promises';
@@ -17,10 +19,6 @@ import { extname, join } from 'path';
 const { chromium } = await import('playwright').catch(() => createRequire(new URL('../../web/package.json', import.meta.url))('playwright'));
 const args = process.argv.slice(2).filter(a => !a.startsWith('--')), DUSK = process.argv.includes('--dusk');
 const [out, bundle, site] = args;
-// Doors baked open although the site starts them shut: their leaves take the probe volume at run time in every pose
-// (lightmap.js doorParts), so the bake only decides how much light reaches what is behind them. The front bedroom's
-// louvered reach-in closet: shut in the bake, its inside stayed black when the visitor opened it.
-const BAKE_OPEN = ['d8425baf7a'];
 let origin = 'http://127.0.0.1:8780', server = null;
 if (site) {
   const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
@@ -39,10 +37,12 @@ await page.goto(`${origin}/index.html?capture&legacy&pins=0&pets=0&tex=2k&x=0.3&
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 240000 });
 await page.addScriptTag({ path: bundle });
 const dl = page.waitForEvent('download', { timeout: 900000 });
-const info = await page.evaluate(async ({ BAKE_OPEN, DUSK }) => {
+const info = await page.evaluate(async ({ DUSK }) => {
   const A = window.__app, P = A.photo;
+  // doors baked open although the site starts them shut (their leaves take the probe volume in every pose, so the bake
+  // only decides how much light reaches what is behind them)
   for (const d of A.getDoors()) {
-    if (!BAKE_OPEN.includes(d.id)) continue;
+    if (d.group.userData.lighting?.bakePose !== 'open') continue;
     if (d.kind === 'bifold') { d.target = 1; d.tick(10); }
     else if (d.pivot) { d.target = d.openAngle ?? 1.35; d.pivot.rotation.y = d.target; }
   }
@@ -66,11 +66,13 @@ const info = await page.evaluate(async ({ BAKE_OPEN, DUSK }) => {
   } });
   let tris = 0, ids = 0, skips = 0, meshes = 0;
   scene.traverse(o => { if (o.isMesh) { const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; meshes++; if (o.userData.lm) ids++; else if (o.userData.lmSkip) skips++; } });
-  const glb = await new window.__GLTFExporter().parseAsync(scene, { binary: true, onlyVisible: true, maxTextureSize: 2048 });
+  // the manifest records as JSON strings (Blender's importer keeps a string extra as it is)
+  const exporter = new window.__GLTFExporter(); exporter.register(A.roles.gltfLightingPlugin());
+  const glb = await exporter.parseAsync(scene, { binary: true, onlyVisible: true, maxTextureSize: 2048 });
   const url = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
   const a = document.createElement('a'); a.href = url; a.download = 'croton.glb'; document.body.appendChild(a); a.click();
   return { bytes: glb.byteLength, textures: seen.size, tris: Math.round(tris), meshes, lmIds: ids, lmSkip: skips, stats: P.buildStats, state };
-}, { BAKE_OPEN, DUSK });
+}, { DUSK });
 console.log(JSON.stringify({ ...info, state: undefined }));
 for (const d of info.state.doors) console.log(`door ${d.id} ${d.kind} ${d.open ? 'open' : 'shut'}${d.siteDefault !== null && d.siteDefault !== d.open ? ' (site starts it ' + (d.siteDefault ? 'open' : 'shut') + ')' : ''} at ${d.at}`);
 for (const t of info.state.toggles) console.log(`toggle ${t.id} "${t.label}" ${t.on ? 'on' : 'off'} (${t.value}) at ${t.at}`);

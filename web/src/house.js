@@ -404,6 +404,9 @@ function buildDoor(o, house) {
     const d = { id: o.id, group: g, leaves, kind: 'french', open: 0, target: 0, plan: { cx, cy, isH }, w, thick };
     doors.push(d); g.userData.door = d; setFrench(d, 0);
   }
+  // Lighting manifest: hinged and bifold leaves take the probe volume in every pose (the bake fits only the pose it saw);
+  // the glazed garden doors (french, sliders) keep the bake. bakePose: the pose the bake export sets (plan bakeOpen).
+  if (g.userData.door) declare(g, { role: 'door', leaves: ['french', 'slider'].includes(g.userData.door.kind) ? 'lightmap' : 'probe', bakePose: o.bakeOpen ? 'open' : 'site' });
   return g;
 }
 // Door motion profile (smootherstep): leaves start and stop gently.

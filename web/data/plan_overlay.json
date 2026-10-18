@@ -90,7 +90,7 @@
    "e5f2f69eea": { "type": "slider" },
    "9f018d7dea": { "type": "slider" },
    "0f9916c91a": { "type": "bifold" },
-   "d8425baf7a": { "type": "bifold", "white": true, "swing": "S", "open": false, "why": "front bedroom: white louvers fold into the room" },
+   "d8425baf7a": { "type": "bifold", "white": true, "swing": "S", "open": false, "bakeOpen": true, "why": "front bedroom: white louvers fold into the room; baked open (shut in the bake, the reach-in closet behind stayed black when opened; the leaves take the probe volume in every pose)" },
    "3809b9067a": { "type": "opening" },
    "c1bf892aaa": { "type": "pineOpening" },
    "2e2d4a125a": { "type": "door", "hinge": "S", "swing": "W", "open": false, "why": "kitchen -> garage, into the garage (closed in g12)" },

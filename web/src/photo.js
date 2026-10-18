@@ -12,7 +12,7 @@ import { makeSky, photoSupport, photoExposurePolicy, parseMood, kelvin, DEFAULT_
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
 import { isInside } from './plan.js';
-import { lightingOf, meshLighting } from './lighting_roles.js';
+import { lightingOf, meshLighting, meshRecord, materialRecord } from './lighting_roles.js';
 
 const visible = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
 // Helpers that only exist for the walkthrough's look (the manifest's role 'presentation': overlays, glow cards, decals,
@@ -22,8 +22,9 @@ const presentation = o => {
   for (let p = o; p; p = p.parent) if (p.userData.presentation || p.userData.reflection) return true;
   return false;
 };
-// the lightmap identity (batch.js) rides along into the bake's GLB export as node extras
-const lmTag = (o, m) => { if (o.userData.lmId) m.userData.lm = o.userData.lmId; else if (o.userData.lmSkip) m.userData.lmSkip = o.userData.lmSkip; return m; };
+// the lightmap identity (batch.js) and the lighting manifest record (lighting_roles.js) ride along into the bake's GLB
+// export as node extras (bake/export/export.mjs writes the record as a JSON string)
+const lmTag = (o, m) => { if (o.userData.lmId) m.userData.lm = o.userData.lmId; else if (o.userData.lmSkip) m.userData.lmSkip = o.userData.lmSkip; m.userData.lighting = meshRecord(o); return m; };
 
 // One world-space geometry holding every instance of an InstancedMesh (the tracer only understands plain meshes).
 async function expandInstanced(mesh, own, pause) {
@@ -160,7 +161,7 @@ function traceMaterial(material, cache, own) {
     if (out === material) out = material.clone();
     out.emissive.setHex(0); out.emissiveIntensity = 0; out.emissiveMap = null;
   }
-  if (out !== material) own(out);
+  if (out !== material) { own(out); out.userData.lighting = materialRecord(material); }   // the source's manifest record
   cache.set(material, out);
   return out;
 }

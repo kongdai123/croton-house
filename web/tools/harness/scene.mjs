@@ -63,6 +63,7 @@ export async function buildRealScene() {
       export { collectLightSwitches } from './src/furniture/light_switch.js';
       export { batchStatic, meshId, stillParts } from './src/batch.js';
       export * as roles from './src/lighting_roles.js';
+      export { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
       export { createLighting } from './src/lighting.js';
       export { buildGarden } from './src/grass.js';
       export { areaOf, isIndoor } from './src/pets/roam.js';

@@ -330,7 +330,7 @@ export class PhotoMode {
           // notably on the two garage-shopLight RectAreaLights (base 120); neither belongs in the tracer.
           const dusk = mood ? mood.sun.el < 2 : this.lighting.lightSwitches?.dusk ?? o.userData.lightSwitch?.dusk ?? false;
           const outside = o.userData.exterior, lamps = mood?.lamps ?? 1;
-          const level = outside ? (dusk ? lamps : 0) : mood ? lamps : dusk || o.userData.always ? 1 : Math.min(1, o.userData.day ?? 0.2);
+          const level = outside ? (dusk ? lamps : 0) : mood ? lamps : dusk ? 1 : Math.min(1, o.userData.day ?? 0.2);
           const toggle = o.userData.lightSwitch, switched = mood && !toggle?.manual ? 1 : (toggle?.value ?? 1);
           intensity = base * level * switched;
           if (mood) color = kelvin(mood.lampK).multiply(o.color.clone().multiplyScalar(1 / Math.max(o.color.r, o.color.g, o.color.b, 1e-3))).lerp(kelvin(mood.lampK), 0.6);

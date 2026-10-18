@@ -382,6 +382,30 @@ const LIGHTS = new WeakMap();
 export function ownLight(holder, light) { if (!LIGHTS.has(holder)) LIGHTS.set(holder, []); LIGHTS.get(holder).push(light); }
 export const ownedLights = holder => LIGHTS.get(holder) ?? [];
 
+// ---- emission levels -------------------------------------------------------------------------------------------------------
+// How bright an emitter or a live light is, one rule per path (the raster walkthrough, the baked lighting), read by every
+// consumer that drives them: light_switch.js, lamp_groups.js, lighting.js and lightmap.js.
+// A lamp surface of a switch (glow: { base, wash }: wash, an additive glow card driven through its opacity). Raster: x1.8
+// at dusk, its own base by day for fixtures meant to be on by day (spec.day), else the faint 0.12 off-level; baked: x1.8
+// at the lamp level (its lamp group's, or the slot's); a wash card at its base times the level.
+export function glowLevel(glow, { baked = false, dusk = false, day = false, level = 1 } = {}) {
+  if (glow.wash) return glow.base * (baked ? level : 1);
+  if (baked) return glow.base * 1.8 * level;
+  return dusk ? glow.base * 1.8 : day ? glow.base : 0.12;
+}
+// A live light's factor on its base in the raster look: an exterior light is on at dusk (or when switched on by hand);
+// an interior one x5 at dusk, by day its spec's day factor (else 0.2) when switched by hand or while the eye is indoors.
+export function lightLevel(light, { dusk = false, indoor = 1, manual = false } = {}) {
+  if (light.userData.exterior) return dusk || manual ? 1 : 0;
+  return dusk ? 5 : manual || indoor > 0.01 ? light.userData.day ?? 0.2 : 0;
+}
+// A raster stand-in emissive (not a real light source: cloth, paper): faint by day, x1.8 at dusk.
+export const standInEmission = (base, dusk) => dusk ? base * 1.8 : 0.12;
+// An emitter's intensity under the baked lighting on a material standing in for its source (a lightmapped copy, or the
+// probe-lit material itself): a lamp no switch drives at the slot's lamp level; a switched lamp surface, a screen, an
+// indicator or a fire as its source shows it now (its switch, its own level, the fire's flicker).
+export const bakedEmission = (record, source, base, slotLamps) => record.emits?.kind === 'lamp' && !record.emits.switched ? base * slotLamps : source.emissiveIntensity;
+
 // ---- export --------------------------------------------------------------------------------------------------------------
 // The records as the bake reads them (glTF extras "lighting", a JSON string: Blender's importer keeps strings as they are).
 const MESH_KEYS = ['role', 'motion', 'bake', 'why', 'probeSide', 'sun', 'weather', 'zone', 'space', 'puddleMirror', 'fakeShadow'];

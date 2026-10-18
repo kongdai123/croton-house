@@ -30,7 +30,7 @@ import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
 import { insideGLSL, pieces as planPieces, plan } from './plan.js';
-import { lightingOf, meshLighting } from './lighting_roles.js';
+import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
@@ -628,7 +628,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const byId = new Map(), byCount = new Map();
   for (const u of header.units) { if (u.id) byId.set(u.id, u); if (!byCount.has(u.vc)) byCount.set(u.vc, []); byCount.get(u.vc).push(u); }
   const weather = new Map(), emissionCopies = new Map();
-  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = lightingOf(e.source).emits.switched ? e.source.emissiveIntensity : e.base * level; };
+  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = bakedEmission(e.record, e.source, e.base, level); };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
   pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them
@@ -678,7 +678,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       if (mats.has(key)) return mats.get(key);
       // a clean copy: none of the walkthrough's fake-GI shader patches, the bake's light instead of the sky's diffuse
       const c = m.clone(); c.onBeforeRender = m.onBeforeRender;
-      if (lightingOf(m).emits) emissionCopies.set(c, { source: m, base: m.emissiveIntensity });   // copies must follow their switch even with one slot
+      if (lightingOf(m).emits) emissionCopies.set(c, { record: lightingOf(m), source: m, base: m.emissiveIntensity });   // copies must follow their switch even with one slot
       if (multi) weather.set(c, { cls: cls === 'ground' ? null : cls, color: c.color.clone(), roughness: c.roughness });
       wetten(c, cls === 'ground' ? null : cls, SLOTS[slot].wet);   // ground wetness is per pixel
       if (!lightingOf(m).emits) c.emissiveIntensity = 0;   // a raster glow stand-in: the bake has the real light
@@ -757,7 +757,10 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         if (!m?.isMeshStandardMaterial || m.lightMap || m.isFogVolumeMaterial || !volume) continue;
         if (!hooks.has(m) && !m.userData.probeLit) {
           hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, bakedHooks: m.bakedHooks });
-          if (!lightingOf(m).emits) m.emissiveIntensity = 0;
+          const L = lightingOf(m);
+          if (!L.emits) m.emissiveIntensity = 0;
+          // an unswitched lamp follows the slot's lamp level as its lightmapped copies do (switched lamps: their switch)
+          else if (L.emits.kind === 'lamp' && !L.emits.switched) emissionCopies.set(m, { record: L, source: m, base: m.emissiveIntensity });
           probeLit(m, volume, pcss, sided.has(m)); probeLitCount++;
         }
         if (envTarget) setEnv(m);
@@ -921,7 +924,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const setFixtureGlow = level => {
     if (!groups) for (const { toggle } of lighting.lightSwitches ?? []) for (const g of toggle.glows) {
       const property = g.wash ? 'opacity' : 'emissiveIntensity';
-      g.material[property] = (g.wash ? g.base : g.base * 1.8) * level * (toggle.manual ? toggle.value : 1);
+      g.material[property] = glowLevel(g, { baked: true, level: level * (toggle.manual ? toggle.value : 1) });
     }
     syncEmissionCopies(level);
   };

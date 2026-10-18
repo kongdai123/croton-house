@@ -10,6 +10,7 @@
 // place of the shared lamps layer's sampler.
 import * as THREE from 'three';
 import { lightmapBitmap } from './lightmap_assets.js';
+import { glowLevel } from './lighting_roles.js';
 
 // Default switch states per slot: the lighting manifest's (lighting_roles.js), declared with the fixtures (defaultOn: the
 // slots a switch starts on; dusk, blue hour, has every lamp on; the island pendant at sunrise, someone is up; the living
@@ -153,7 +154,7 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     },
     // lamp-surface glow per switch: its level (full glow when on, as at dusk before)
     applyGlow() {
-      for (const r of records) for (const g of r.toggle.glows) g.material[g.wash ? 'opacity' : 'emissiveIntensity'] = (g.wash ? g.base : g.base * 1.8) * r.level;
+      for (const r of records) for (const g of r.toggle.glows) g.material[g.wash ? 'opacity' : 'emissiveIntensity'] = glowLevel(g, { baked: true, level: r.level });
     },
     async setResolution(wanted) {
       wanted = capRes(wanted);

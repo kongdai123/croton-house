@@ -57,5 +57,23 @@ for (const [kind, name, old, now, expected, why] of FIXES) {
   if (errs.length) fail(`switches: ${errs.length} errors\n  ${errs.slice(0, 8).join('\n  ')}`); else console.log(`ok   switches: ${w.switches.length} switches, ${plates.length} plates, one group each`);
 }
 
+// ---- 4. emission levels: the one rule each path uses (lighting_roles.js) ----------------------------------------------------
+{
+  const { glowLevel, lightLevel, bakedEmission, standInEmission } = roles, g = { base: 2 }, wash = { base: 0.4, wash: true };
+  const light = (exterior, day) => ({ userData: { exterior, day } });
+  const table = [
+    [glowLevel(g, { dusk: true }), 3.6], [glowLevel(g, { day: true }), 2], [glowLevel(g), 0.12], [glowLevel(wash, { dusk: true }), 0.4],
+    [glowLevel(g, { baked: true, level: 0.5 }), 1.8], [glowLevel(wash, { baked: true, level: 0.5 }), 0.2],
+    [lightLevel(light(true), { dusk: false }), 0], [lightLevel(light(true), { dusk: true }), 1], [lightLevel(light(true), { manual: true }), 1],
+    [lightLevel(light(false), { dusk: true }), 5], [lightLevel(light(false, 2.5), { indoor: 1 }), 2.5], [lightLevel(light(false), { indoor: 0 }), 0], [lightLevel(light(false), { indoor: 0, manual: true }), 0.2],
+    [standInEmission(1, true), 1.8], [standInEmission(1, false), 0.12],
+    [bakedEmission({ emits: { kind: 'lamp', switched: false } }, { emissiveIntensity: 9 }, 2, 0.25), 0.5],
+    [bakedEmission({ emits: { kind: 'lamp', switched: true } }, { emissiveIntensity: 9 }, 2, 0.25), 9],
+    [bakedEmission({ emits: { kind: 'fire', switched: false } }, { emissiveIntensity: 1.3 }, 2, 0.25), 1.3],
+  ];
+  const bad = table.map(([a, b], i) => Math.abs(a - b) > 1e-9 ? `row ${i}: ${a} != ${b}` : null).filter(Boolean);
+  if (bad.length) fail(`emission levels: ${bad.join('; ')}`); else console.log(`ok   emission levels: ${table.length} cases`);
+}
+
 console.log(`${failed ? 'FAILED' : 'lighting manifest OK'} (${((performance.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(failed ? 1 : 0);

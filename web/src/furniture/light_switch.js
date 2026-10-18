@@ -1,6 +1,6 @@
 import { THREE, box } from '../kit.js';
 import { meshId } from '../batch.js';
-import { declare, fixtureOf, fixturesIn, lampGroupAt, ownedLights } from '../lighting_roles.js';
+import { declare, fixtureOf, fixturesIn, glowLevel, lampGroupAt, lightLevel, ownedLights } from '../lighting_roles.js';
 
 // a fixture's lamp surfaces: whatever glows inside it (the switch turns them into switched emitters)
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
@@ -23,7 +23,7 @@ function wallPlate(scene, entry, [x, y, ry], white) {
   return plate;
 }
 
-function switchLight(root, meshes, lights, { name, zh, exterior = false, always = false, day = false } = {}) {
+function switchLight(root, meshes, lights, { name, zh, exterior = false, day = false } = {}) {
   const materials = new Map(), glows = [];
   for (const mesh of meshes) {
     const original = mesh.material;
@@ -35,7 +35,6 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
       glows.push({ material, base: original.emissiveIntensity ?? original.opacity, wash: !original.emissive });
     }
     mesh.material = material; mesh.userData.noBatch = mesh.userData.noHighlight = true;
-    if (always) mesh.onBeforeRender = THREE.Mesh.prototype.onBeforeRender;
   }
   name ??= root.userData.name || root.name; zh ??= root.userData.zh || name;
   const toggle = {
@@ -55,13 +54,13 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
     },
     apply() {
       const e = this.manual ? this.t * this.t * (3 - 2 * this.t) : 1;
-      for (const { material, base, wash, from } of glows) {
-        const power = wash ? base : always ? base : this.dusk ? base * 1.8 : day ? base : 0.12;
-        material[wash ? 'opacity' : 'emissiveIntensity'] = this.manual ? THREE.MathUtils.lerp(from, power * +this.on, e) : power * this.value;
+      for (const glow of glows) {
+        const power = glowLevel(glow, { dusk: this.dusk, day });   // lighting_roles.js: the raster glow rule
+        glow.material[glow.wash ? 'opacity' : 'emissiveIntensity'] = this.manual ? THREE.MathUtils.lerp(glow.from, power * +this.on, e) : power * this.value;
       }
       for (const light of lights) {
         const base = light.userData.base ?? light.userData.switchBase;
-        const factor = always || exterior || light.userData.always ? 1 : this.dusk ? 5 : light.userData.day ?? 0.2;
+        const factor = lightLevel(light, { dusk: this.dusk, manual: true });
         if (this.manual) light.intensity = THREE.MathUtils.lerp(light.userData.switchFrom, base * factor * +this.on, e);
         else if (light.userData.base === undefined) light.intensity = base * this.value;
       }

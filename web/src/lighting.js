@@ -16,7 +16,7 @@ import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
 import { ReflectionPass, markReflective } from './reflections.js';
 import { indoorWeight as planIndoorWeight } from './plan.js';
-import { lightingOf, meshLighting } from './lighting_roles.js';
+import { lightingOf, lightLevel, meshLighting, standInEmission } from './lighting_roles.js';
 
 // Tone curve: Khronos PBR Neutral (the daylight look, fitted to the listing photos), whose final step pulls bright
 // highlights toward white. uHuePreserve scales that step away, so at dusk warm lamps stay amber instead of bleaching.
@@ -367,7 +367,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     // Raster look: every emissive outside a light switch (screens, LEDs, and the cellular shades and sheers, whose glow
     // stands in for daylight through the cloth) settles at a faint 0.12 by day, the lamps' own off level
     // (light_switch.js), and brightens at dusk. Baked lighting drops the stand-ins (physicalEmission).
-    for (const [material, base] of emissives) material.emissiveIntensity = dusk ? base * 1.8 : 0.12;
+    for (const [material, base] of emissives) material.emissiveIntensity = standInEmission(base, dusk);
     for (const { toggle } of lightSwitches) toggle.onTime(dusk);
     indoor = indoorWeight(camera.position);
     update(0, true);
@@ -394,8 +394,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     for (const light of fixtures.children) if (light.isLight) {
       const toggle = light.userData.lightSwitch;
       if (toggle?.manual) continue;
-      const auto = light.userData.exterior ? (dusk ? 1 : 0) : dusk ? (light.userData.always ? 1 : 5) : (indoor > 0.01 ? light.userData.day ?? 0.2 : 0);
-      light.intensity = light.userData.base * auto * (toggle?.value ?? 1);
+      light.intensity = light.userData.base * lightLevel(light, { dusk, indoor }) * (toggle?.value ?? 1);
     }
     if (!dusk) for (const light of windowLights) {
       light.intensity = light.userData.dayIntensity * smooth(0.01, 0.7, indoor);

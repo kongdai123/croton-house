@@ -135,7 +135,7 @@ export const PLACEMENTS = [
   { m: 'garage', i: 'shopLight', x: -5.7, y: -1.6, ry: E, lamp: { plate: [-3.519, -0.45, W] } }, { m: 'garage', i: 'shopLight', x: -4.4, y: -3.6, ry: E },
   // Porch & front
   { m: 'decor', i: 'ironColumn', x: -1.15, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' }, { m: 'decor', i: 'ironColumnMirror', x: 1.2, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' },
-  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.732, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
+  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.882, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
   { m: 'decor', i: 'ironColumn', x: 4.98, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'decor', i: 'ironColumnMirror', x: 6.93, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'outdoor', i: 'frontPallet', x: -2.45, y: -9.45, h: .22, ry: S, zh: '前院木平台', n: 'Front garden pallet platform' },

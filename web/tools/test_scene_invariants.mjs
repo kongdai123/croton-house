@@ -89,12 +89,42 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   for (const [g, n] of groups) if (n > 1) off.push(`group ${g}: ${n} plates`);
   // on solid wall (the plan's walls, annex included), clear of every opening and its casing on that wall
   for (const p of plates) {
-    const ry = p.rotation.y, x = p.position.x, y = -p.position.z, dx = -Math.sin(ry) * 0.02, dy = Math.cos(ry) * 0.02;
-    const wall = w.plan.walls.find(q => x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1);
+    // behind it: a plan wall 2 cm back, or an exterior wall behind its 0.15 m stucco skin (the porch plate)
+    const ry = p.rotation.y, x = p.position.x, y = -p.position.z, at = b => [-Math.sin(ry) * b, Math.cos(ry) * b];
+    const backed = (b, ext) => { const [dx, dy] = at(b); return w.plan.walls.find(q => (!ext || q.exterior) && x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1); };
+    const wall = backed(0.02, false) ?? backed(0.17, true);
     if (!wall) { off.push(`plate ${p.name}: no wall behind it`); continue; }
     if (w.plan.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065))) off.push(`plate ${p.name}: in a door or its casing`);
   }
   invariant('switch-plates-map-to-fixtures', 'every wall plate drives a fixture of its own lamp group, every declared plate was made (one per group), on solid wall clear of doors', off);
+}
+
+// ---- 2b. every wall plate is pickable: in front of every collider that stops a pick (interact.js wallDist) --------------------
+// The porch plate was typed against the plan wall's face and sat 1.2 cm inside the exterior stucco skin's collider: no
+// standing spot could pick it (smoke test switches). Its face (the 8 mm plate's front) is >= 1 cm in front of every wall /
+// closet / slider collider along its normal, at its centre and edges; and a pick ray from eye height, up to 0.8 m in front
+// (short of the next collider), reaches the face before any such collider.
+{
+  const off = [], cols = w.getColliders().filter(c => (c.tag === 'wall' || c.tag === 'closet' || c.tag === 'slider'));
+  const ray = new T.Ray(), hit = new T.Vector3(), bx = new T.Box3();
+  for (const p of plates) {
+    const n = new T.Vector3(Math.sin(p.rotation.y), 0, Math.cos(p.rotation.y)), t = new T.Vector3(n.z, 0, -n.x);
+    const face = p.position.clone().addScaledVector(n, 0.004), y = p.position.y;
+    const inside = c => q => q.x > c.x0 && q.x < c.x1 && q.z > c.z0 && q.z < c.z1 && q.y < c.top;
+    for (const c of cols) {
+      let bad = false;
+      for (const l of [-0.035, 0, 0.035]) for (let s = -0.01; s <= 0.3 + 1e-9 && !bad; s += 0.005) if (inside(c)(face.clone().addScaledVector(t, l).addScaledVector(n, s))) bad = true;
+      if (bad) off.push(`${p.name} at (${p.position.x.toFixed(3)}, ${y.toFixed(2)}, ${p.position.z.toFixed(3)}): a ${c.tag} collider (x ${c.x0.toFixed(3)}..${c.x1.toFixed(3)}, z ${c.z0.toFixed(3)}..${c.z1.toFixed(3)}) within 1 cm behind or 30 cm in front of its face`);
+    }
+    // the visitor's eye: up to 0.8 m straight out, short of the first collider in front (a closet is 0.5..0.6 m across)
+    let room = 0.8; for (let s = 0.01; s <= 0.85; s += 0.01) if (cols.some(c => inside(c)(face.clone().addScaledVector(n, s)))) { room = s - 0.1; break; }
+    if (room < 0.3) { off.push(`${p.name}: only ${room.toFixed(2)} m to stand in front of it`); continue; }
+    const eye = face.clone().addScaledVector(n, room); eye.y = 1.6; ray.set(eye, face.clone().sub(eye).normalize());
+    const dist = eye.distanceTo(face); let wall = Infinity;
+    for (const c of cols) { bx.min.set(c.x0, 0, c.z0); bx.max.set(c.x1, c.top, c.z1); if (ray.intersectBox(bx, hit)) wall = Math.min(wall, hit.distanceTo(eye)); }
+    if (wall < dist - 1e-3) off.push(`${p.name}: a pick from ${room.toFixed(2)} m in front stops at a collider ${wall.toFixed(2)} m out, before the plate (${dist.toFixed(2)} m)`);
+  }
+  invariant('switch-plates-pickable', 'every wall plate\'s face stands >= 1 cm in front of every pick-blocking collider and a pick from in front reaches it', off);
 }
 
 // ---- 3. no static mesh is probe-lit without a reason ------------------------------------------------------------------------------

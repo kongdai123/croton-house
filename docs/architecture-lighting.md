@@ -85,3 +85,5 @@ test links them.
 - Every closet and the laundry nook gets a ceiling light on its own switch (rule, enforced by the
   rooms-have-switched-light invariant over every plan space), not added piecemeal.
 - The outline's porch-side face (garage block inner vs outer face) is corrected in the bake-affecting step.
+- Closet-rule fixture placement: centre of the largest clear part of the space (not above furniture taller than
+  ~1.9 m), so the laundry can moves off the washer-dryer stack. Applied in the bake-affecting step.

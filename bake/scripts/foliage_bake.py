@@ -15,6 +15,7 @@ if os.environ.get('CROTON_SITE_PACKAGES'): sys.path.append(os.environ['CROTON_SI
 import numpy as np
 from pygltflib import GLTF2
 sys.path.insert(0, 'scripts'); from layer_lights import configure
+import lighting   # the lighting manifest: which materials take the per-vertex foliage bake
 from slots import resolve
 cfg = resolve(json.loads(sys.argv[sys.argv.index('--') + 1])); t0 = time.time()
 scene = bpy.context.scene; c = scene.cycles
@@ -23,8 +24,9 @@ prefs.compute_device_type = 'OPTIX'; prefs.get_devices()
 for d in prefs.devices: d.use = d.type == 'OPTIX'
 c.device = 'GPU'
 
-# ---- plant units from the glTF: the parts sharing a POSITION accessor and a node matrix (as unwrap.py), grass layers
-# (garden-*, instanced at run time) left out
+# ---- plant units from the glTF: the parts sharing a POSITION accessor and a node matrix (as unwrap.py) whose material
+# takes the per-vertex foliage bake (lighting manifest foliage.bakedPerVertex: the modelled plants; the garden's leaf
+# cards are instanced at run time and left out)
 g = GLTF2().load(cfg['glb']); blob = g.binary_blob()
 DT = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8, 5122: np.int16, 5120: np.int8}
 NC = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
@@ -35,7 +37,7 @@ def read(i):
     out = np.lib.stride_tricks.as_strided(raw, shape=(a.count, dt.itemsize * n), strides=(stride, 1)).copy().view(dt).reshape(a.count, n)
     if a.normalized and dt != np.float32: out = out.astype(np.float32) / np.iinfo(dt).max
     return out
-def plant(mi): return mi is not None and (g.materials[mi].name or '').startswith('plant')
+def plant(mi): return mi is not None and lighting.baked_foliage(lighting.material(g.materials[mi]))
 units = {}
 for ni, n in enumerate(g.nodes):
     if n.mesh is None: continue
@@ -65,7 +67,7 @@ P, N, UV, COL, F, FM = to_b(np.concatenate(P)), to_b(np.concatenate(N)), np.conc
 print(f'{len(meta)} plant units, {len(P)} vertices, {len(F)} triangles, {len(mats)} materials, {time.time() - t0:.0f} s', flush=True)
 
 # ---- swap the imported plants for one mesh in glTF vertex order
-for o in [o for o in scene.objects if o.type == 'MESH' and o.material_slots and all(s.material and s.material.name.split('.')[0].startswith('plant') for s in o.material_slots)]:
+for o in [o for o in scene.objects if o.type == 'MESH' and o.material_slots and all(s.material and lighting.baked_foliage(lighting.material(s.material)) for s in o.material_slots)]:
     bpy.data.objects.remove(o, do_unlink=True)
 # Every triangle gets its own corners, pulled `shrink` metres toward its centre: a sample exactly on a vertex sits on
 # the edges of its neighbours too, and Cycles (which only skips the triangle a ray leaves) finds them in the way of

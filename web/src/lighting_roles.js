@@ -408,6 +408,6 @@ export { MESH_KEYS, MATERIAL_KEYS };
 // web/tools/test_lighting_roundtrip.mjs).
 export function bakeAnswers(kind, r) {
   if (kind === 'mesh') return { movable: r.motion === 'movable', weather: r.weather ?? null, lightmap: r.bake === 'lightmap' };
-  return { clearGlass: r.glass?.export === 'pane', sheer: r.sheer != null, seeThrough: r.surface === 'glass' || r.sheer != null, emitter: r.emits?.kind ?? null,
+  return { clearGlass: r.glass?.export === 'pane', sheer: r.sheer != null, seeThrough: r.surface === 'glass' || r.sheer != null || !!r.alphaCutout, emitter: r.emits?.kind ?? null,
     lampSurface: !!r.emits && (r.emits.kind === 'lamp' || !!r.emits.switched), bakedFoliage: !!r.foliage?.bakedPerVertex };
 }

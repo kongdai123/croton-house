@@ -3,10 +3,12 @@
 #
 # Units: the exporter splits a multi-material mesh into one node per material that share the POSITION accessor, and
 # meshes that share a geometry reuse it under different matrices. A unit is one runtime mesh: the parts that share a
-# POSITION accessor, a node matrix and a lightmap id. The id (node extras "lm", web/src/batch.js) names the runtime mesh;
-# nodes without one (animated plants, toggled curtains, the garden) and carried pieces (extras "lmSkip": "movable") get
-# no unit. Plants (alpha-masked leaves), glass, and the huge or far ground planes are left out too; they are lit by the
-# probe volume at run time. Exports without ids fall back to scene/movables.json and bounding-box matching.
+# POSITION accessor, a node matrix and a lightmap id. The id (node extras "lm", web/src/batch.js) names the runtime mesh.
+# Which units get a lightmap is the lighting manifest's (node and material extras "lighting", bake/scripts/lighting.py):
+# carried pieces (motion movable), moving parts (no id), door leaves that take the probe volume in every pose, and units
+# whose every material says bake 'probe' (plants, leaf cards, glass, sheer cloth) get none; nor do the huge or far
+# ground planes (the plan's lightmap volume). They are lit by the probe volume at run time. Exports without ids or
+# lighting records are refused.
 #
 # Outputs
 #   croton_lm.glb : the scene for Blender, every unit re-indexed with split seams and a TEXCOORD_1 lightmap set
@@ -27,17 +29,10 @@ if '--reuse' in sys.argv: i = sys.argv.index('--reuse'); REUSE = sys.argv[i + 1]
 src, dst_glb, dst_bin = sys.argv[1:4]
 RES = int(sys.argv[4]) if len(sys.argv) > 4 else 4096
 import os
-# movable objects (chairs and stools the visitor can carry): no lightmap, hidden in the bake, lit by probes at run time
-MOVABLE = json.load(open('scene/movables.json'))['meshes'] if os.path.exists('scene/movables.json') else []
-def movable(vc, lo, hi):
-    # three's world (x, y, z) is what both the site and this export use
-    # same vertex count and size; position within 0.6 m (placement can differ by centimetres between runs)
-    size = [h - l for l, h in zip(lo, hi)]; ctr = [(h + l) / 2 for l, h in zip(lo, hi)]
-    for m in MOVABLE:
-        if m['vc'] != vc: continue
-        ms = [h - l for l, h in zip(m['min'], m['max'])]; mc = [(h + l) / 2 for l, h in zip(m['min'], m['max'])]
-        if max(abs(a - b) for a, b in zip(size, ms)) < 0.01 and sum((a - b) ** 2 for a, b in zip(ctr, mc)) ** 0.5 < 0.6: return True
-    return False
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import plan as planlib
+import lighting
+PLAN = planlib.load()
 t0 = time.time()
 g = GLTF2().load(src)
 blob = bytearray(g.binary_blob())
@@ -70,12 +65,8 @@ def world(n):
     return m
 
 
-def material_skip(mi):
-    if mi is None: return False
-    m = g.materials[mi]; name = (m.name or '')
-    if m.alphaMode == 'MASK' or name.startswith('garden-') or name.startswith('plant'): return True
-    if m.extensions and 'KHR_materials_transmission' in m.extensions: return True
-    return False
+def material_record(mi):   # the material's lighting manifest record (None for a primitive without a material)
+    return lighting.material(g.materials[mi]) if mi is not None else None
 
 
 # ---- gather units
@@ -90,41 +81,40 @@ for ni, n in enumerate(g.nodes):
 for mi, users in mesh_users.items():
     for ni in users[1:]: g.meshes.append(copy.deepcopy(g.meshes[mi])); g.nodes[ni].mesh = len(g.meshes) - 1
 IDS = any('lm' in extras(n) for n in g.nodes)
+if not IDS: raise SystemExit('the export has no lightmap ids: export it again (bake/export/export.mjs)')
 units = {}
 for ni, n in enumerate(g.nodes):
     if n.mesh is None: continue
     for p in g.meshes[n.mesh].primitives:
         key = (p.attributes.POSITION, tuple(np.round(world(n).ravel(), 6)), extras(n).get('lm'))
         units.setdefault(key, []).append((ni, p))
-keep, skipped, skip_ids = [], {'plant/glass': 0, 'ground/far': 0, 'movable': 0, 'dynamic': 0}, {}
+# the plan's lightmap volume (web/data/plan.json volumes.lightmap): outside it, or over its area, a unit is ground/far
+LMV = PLAN.data['volumes']['lightmap']
+far = lambda c, area: area > LMV['maxArea'] or c[0] < LMV['x0'] or c[0] > LMV['x1'] or -c[2] < LMV['y0'] or -c[2] > LMV['y1']
+keep, skipped, skip_ids = [], {'plant/glass': 0, 'ground/far': 0, 'movable': 0, 'dynamic': 0, 'instanced': 0, 'door': 0}, {}
 for key, parts in units.items():
-    lm, ex = key[2], extras(g.nodes[parts[0][0]])
-    if IDS and ex.get('lmSkip') == 'movable':
-        skipped['movable'] += 1
-        for ni, _ in parts: g.nodes[ni].name = f'movable_{ni}'
+    lm, node = key[2], g.nodes[parts[0][0]]
+    rec = lighting.mesh(node)
+    why = 'dynamic' if not lm and rec['why'] is None else lighting.unit_skip(rec, [m for m in (material_record(p.material) for _, p in parts) if m])
+    if why:
+        skipped[why] = skipped.get(why, 0) + 1
+        if lm: skip_ids[lm] = why
+        if why == 'movable':
+            for ni, _ in parts: g.nodes[ni].name = f'movable_{ni}'
         continue
-    if IDS and not lm: skipped['dynamic'] += 1; continue
-    if all(material_skip(p.material) for _, p in parts): skipped['plant/glass'] += 1; skip_ids[lm] = 'plant/glass'; continue
     M = world(g.nodes[parts[0][0]]); P = read(key[0]).astype(np.float64)
     W = (np.c_[P, np.ones(len(P))] @ M.T)[:, :3]
     # non-indexed parts draw their vertices in order
     idx = np.concatenate([read(p.indices).ravel() if p.indices is not None else np.arange(g.accessors[key[0]].count) for _, p in parts]).astype(np.uint32)
     tri = W[idx.reshape(-1, 3)]; area = 0.5 * np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1).sum()
     c = W.mean(0)
-    if not IDS and movable(len(W), W.min(0), W.max(0)):
-        skipped['movable'] += 1
-        for ni, _ in parts: g.nodes[ni].name = f'movable_{ni}'
-        continue
-    if area > 300 or abs(c[0]) > 14 or -c[2] > 18 or -c[2] < -14: skipped['ground/far'] += 1; skip_ids[lm] = 'ground/far'; continue
+    if far(c, area): skipped['ground/far'] += 1; skip_ids[lm] = 'ground/far'; continue
     keep.append(dict(key=key, parts=parts, W=W.astype(np.float32), idx=idx, area=area))
 print(f'units {len(units)}, ids {IDS}, kept {len(keep)}, skipped {skipped}, area {sum(u["area"] for u in keep):.0f} m2, {sum(len(u["idx"]) for u in keep) // 3} tris, {time.time() - t0:.0f} s')
 
 # ---- unwrap and pack
 # Texel density by class, by scaling each piece before packing (xatlas sizes charts by area): furniture gets the finest
 # texels (crisp contact shading on small pieces), architecture medium, outdoor coarse. DENSITY scales all three.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import plan as planlib
-PLAN = planlib.load()
 def inside_plan(x, y):   # under the roof: the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
     return PLAN.is_inside(x, y)
 def reuse(path):
@@ -179,7 +169,7 @@ if not REUSE:
 
 # ---- write the Blender scene and the site sidecar
 header = {'atlas': list(ATLAS), 'units': [], 'ownPrimitives': True}; chunks = []; offset = 0   # the site trusts shared-geometry units
-if IDS: header['skipped'] = {k: v for k, v in skip_ids.items() if k}
+header['skipped'] = {k: v for k, v in skip_ids.items() if k}
 for i, u in enumerate(keep):
     vmap, nidx, uvs = layout[i] if REUSE else atlas[i]
     vmap = vmap.astype(np.uint32); nidx = nidx.astype(np.uint32).ravel()

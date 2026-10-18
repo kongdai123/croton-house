@@ -97,7 +97,7 @@ def unit_skip(mesh_rec, material_recs):
 
 def clear_glass(m): return bool(m['glass']) and m['glass'].get('export') == 'pane'   # window glass: clear, transmissive in Cycles
 def sheer(m): return m['sheer']                                                      # { reflect, transmit } or None
-def see_through(m): return m['surface'] == 'glass' or m['sheer'] is not None         # reflection-probe rays pass it
+def see_through(m): return m['surface'] == 'glass' or m['sheer'] is not None or m['alphaCutout']   # reflection-probe rays pass it
 def emitter(m): return (m['emits'] or {}).get('kind')                                 # lamp / screen / indicator / fire, or None
 def lamp_surface(m): return bool(m['emits']) and (m['emits'].get('kind') == 'lamp' or bool(m['emits'].get('switched')))
 def baked_foliage(m): return bool(m['foliage']) and bool(m['foliage'].get('bakedPerVertex'))

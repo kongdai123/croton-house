@@ -13,6 +13,7 @@
  "site": { "westFenceY": 0.17, "garageXE": -3.393 },
  "volumes": {
   "probe": { "why": "the runtime light-probe grid (lightmap.js VOL, webgpu/probes.js)", "x0": -12.5, "x1": 12.5, "y0": -11.5, "y1": 15.5, "step": 0.5, "heights": [0.35, 0.95, 1.55] },
+  "lightmap": { "why": "bake/scripts/unwrap.py ground/far: a unit whose centroid lies outside this box or whose area exceeds maxArea m2 (the site-wide ground planes, far scenery) gets no lightmap unit; the probe volume lights it", "x0": -14, "x1": 14, "y0": -14, "y1": 18, "maxArea": 300 },
   "daylight": { "why": "window-light volume baked into web/data/daylight.bin at this size: change only with a daylight rebake", "x0": -8.1, "x1": 8.1, "y0": -5.94, "y1": 5.62, "z0": 0, "z1": 2.44 }
  },
  "spaces": [

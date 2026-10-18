@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from slots import resolve
 from layer_lights import configure_world
 import reflprobe_layout as L
+import lighting as manifest   # the lighting manifest records (glTF extras, kept as custom properties)
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 def option(flag, default=None, has_value=True):
@@ -42,8 +43,8 @@ dg = bpy.context.evaluated_depsgraph_get()
 
 # ---- layout: points and boxes
 def see_through(obj, index):
-    """Surfaces a reflection box should not stop at: glass, cloth (sheers, shades), alpha-blended or cut-out surfaces,
-    the mist volume, anything hidden from the render."""
+    """Surfaces a reflection box should not stop at: glass, cloth (sheers, shades) and cut-out surfaces (the lighting
+    manifest's see_through), the mist volume, anything hidden from the render."""
     if obj is None: return False
     if obj.name == 'mist' or obj.hide_render: return True
     if obj.type != 'MESH' or not obj.material_slots: return False
@@ -51,9 +52,8 @@ def see_through(obj, index):
     except (IndexError, AttributeError): mi = 0
     m = obj.material_slots[min(mi, len(obj.material_slots) - 1)].material
     if m is None: return False
-    if 'sheer' in m.keys(): return True
-    b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
-    return b is not None and (b.inputs['Transmission Weight'].default_value > 0.5 or b.inputs['Alpha'].is_linked or b.inputs['Alpha'].default_value < 0.99)
+    rec = manifest.material(m, required=False)   # materials the bake scene made itself have none: they stop the ray
+    return rec is not None and manifest.see_through(rec)
 
 def ray(p, d, limit=L.MAX_RAY):
     """Distance to the first surface along d that is not see-through, and whether that surface was hit from behind."""

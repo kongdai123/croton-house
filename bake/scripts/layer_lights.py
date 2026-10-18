@@ -5,6 +5,7 @@
 # Movable objects are hidden: they are lit by probes at run time.
 import bpy, math
 from slots import resolve
+import lighting   # the lighting manifest records (glTF extras, kept as custom properties)
 
 def configure_world(scene, cfg):
     """Shared world settings for diffuse, foliage, sky and full reflection passes."""
@@ -53,9 +54,11 @@ def configure(scene, cfg):
         for o in scene.objects:
             if o.type == 'LIGHT' and o.name.startswith('lamp'): o.hide_render = not o.name.startswith(f'lampgrp{group:02d}_')
     bpy.data.objects['mist'].hide_render = True
-    # movable objects are lit by probes at run time: keep them out of the bake entirely (no ghost shadows)
+    # movable objects (manifest motion 'movable') are lit by probes at run time: keep them out of the bake entirely (no
+    # ghost shadows)
     for o in scene.objects:
-        if o.name.startswith('movable'): o.hide_render = True
+        rec = lighting.mesh(o, required=False) if o.type == 'MESH' else None
+        if rec and lighting.movable(rec): o.hide_render = True
     # lamp shades glow only in the lamps layer
     for m in bpy.data.materials:
         b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None

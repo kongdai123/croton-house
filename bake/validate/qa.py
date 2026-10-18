@@ -359,13 +359,14 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
         if n[i] < uT['minTexels']: continue
         if min(dark[s][i] for s in slotkeys) < uT['blackFraction']: continue                    # lit in at least one slot
         if lamp_dark is not None and lamp_dark[i] < uT['blackFraction']: continue              # or by the shared lamps layer
+        if group_stats is not None and group_stats['dark'][:, i].min() < uT['blackFraction']: continue   # or by its lamp group (a shut closet's plate)
         alb = objs.albedo(units[i].get('id'))
         row = f'{names[i]}{SEP}{objs.name(units[i].get("id"), units[i]["centre"])}'
         if alb is None and objs.ok and not objs.mesh(units[i].get('id')): unknown_mat.append(row)
         elif alb is None: dim_ok += 1   # emissive / transparent: black light is plausible
         elif alb >= uT['minAlbedo']: black.append(row + f' (albedo {alb:.2f})')
         else: dim_ok += 1
-    rep.check('units-black', f'units black in every slot and layer (>= {uT["blackFraction"]:.0%} of texels under {floor}) on a material with albedo >= {uT["minAlbedo"]} (the vertex-colour bug)', 'fail', black)
+    rep.check('units-black', f'units black in every slot and layer, lamp groups included (>= {uT["blackFraction"]:.0%} of texels under {floor}) on a material with diffuse albedo >= {uT["minAlbedo"]} (the vertex-colour bug)', 'fail', black)
     rep.check('units-black-unknown-material', 'units black in every slot and layer that objects.json has no material for', 'warn', unknown_mat)
     rep.metric('units.blackNonBlackMaterial', len(black)); rep.metric('units.blackAll', len(black) + len(unknown_mat) + dim_ok)
 

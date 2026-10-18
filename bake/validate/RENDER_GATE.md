@@ -62,3 +62,13 @@ done
 ## After a layout or plan change
 `node bake/validate/make_cameras.mjs` (add `--map top.ppm` for a top view of the cameras), commit `cameras.json`, then a
 new run is compared camera by camera: moved cameras have no baseline frame (a warning) until the next approve.
+
+## What the first baseline showed (master 047d084, before the rebake)
+- Two runs of the same build agree to 0.05 stop in every cell (deterministic: fixed exposure, stepped clock), so the
+  baseline thresholds (0.15 stop per frame, 0.4 per cell) leave a wide margin for driver noise.
+- Cycles differs wherever the switches differ: Cycles lights every lamp at the slot's level, the site starts with the
+  slot's default switches (golden: bedrooms and the primary bath off, -3 to -4 stops; sunrise: kitchen and living on,
+  +2), and at dusk with every switch on the site is about 1 stop brighter than Cycles (median; the group gains). Read
+  Cycles per room with that in mind; the baseline comparison is the enforced one.
+- Black at dusk with every switch on: bath B and the hall bath (no baked lamp group in the shipped bake).
+

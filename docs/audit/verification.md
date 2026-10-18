@@ -126,6 +126,9 @@ report and a nonzero exit on failure with named objects:
 Cost: authoring 2 days; run ~1-3 min per slot for 4 slots (atlases are tens of MB, CPU numpy). Run post-bake, before `deployment.py` and before commit.
 
 ### (c) Per-room render regression (GPU node)
+Implemented (2026-10-18): `bake/validate/RENDER_GATE.md` (cameras from the plan, 57 frames per slot and tier, baseline
+and Cycles comparisons, contact sheets, approve). The paragraphs below are the original proposal.
+
 Reuse `bake/validate/shoot.mjs` (already refuses software rasterisers and serves the site). Add `cameras.json`: 1-2 cameras per room (about 20 rooms) x 4 slots
 = ~120 frames at 960x600, plus special cameras for the previously broken spots (bath mirrors, open front door at noon, stool, porch lantern at dusk, bedroom mirror).
 Three comparisons per frame:

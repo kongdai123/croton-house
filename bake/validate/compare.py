@@ -1,18 +1,21 @@
 """Gate (c), per-room render regression: compare a shoot.mjs run with the approved baseline, with Cycles, and between
 tiers; absolute checks on every frame; contact sheets of the worst frames; approve a run as the new baseline.
 
-  compare.py check <run> [--tiers hq,mobile] [--states sunrise,...] [--baseline DIR] [--cycles DIR] [--pair hq:mobile]
+  compare.py check <run> [--tiers hq,mobile,hq-visitor,...] [--states sunrise,...] [--baseline DIR] [--cycles DIR]
+                   [--pair hq:mobile,hq-visitor:mobile-visitor]
                    [--cameras cameras.json] [--thresholds thresholds.json] [--out DIR] [--worst 12] [--overview]
   compare.py approve <run> <baseline dir> [--note TEXT] [--manifest FILE]
 
-Layout: a run (and the baseline) is <dir>/<tier>/<state>/<camera>.png plus report.json per <tier>/<state> (shoot.mjs);
+Layout: a run (and the baseline) is <dir>/<set>/<state>/<camera>.png (set: a tier at the slot's fixed exposure, or
+<tier>-visitor with auto exposure and local adaptation; black-frame checks apply to visitor sets only) plus report.json per <tier>/<state> (shoot.mjs);
 Cycles references are <cycles>/<state>/<camera>.png (cycles_refs.py; tier-independent). Metrics are on linear luminance
 (sRGB decoded, Rec. 709 weights) at half resolution: the frame's exposure difference in stops, the largest per-cell
 difference over a grid (default 8 x 6), the largest per-cell colour shift (log2 of R/G and B/G), and, against the
 baseline and the other tier, the largest per-cell growth of saturated (HSV s > 0.8) and of exact-black area (the red /
 yellow band and NaN classes). Absolute checks, which need no reference and so are loose (warm wood at sunrise is
 legitimately saturated, dark foliage at dusk legitimately black): a black frame (p99), exact-zero pixels, magenta (three's
-missing-texture colour, NaN in some drivers), and saturated single-hue area over the frame and per cell. Also
+missing-texture colour, NaN in some drivers), and saturated single-hue area over the frame and per cell; a finding the
+approved baseline frame has as well is a warning, not a failure. Also
 from report.json: page errors, shader errors, link failures. Thresholds and per-camera overrides: thresholds.json.
 Exit status 1 if an enforced check fails, 2 on missing frames.
 Needs numpy and pillow only (no GPU): run it in the GPU job after the shots, or anywhere the PNGs are.
@@ -169,7 +172,11 @@ def check(a):
     states = a.states.split(',') if a.states else STATES
     os.makedirs(a.out, exist_ok=True)
     frames, missing, runinfo = [], [], {}
-    pair = a.pair.split(':') if a.pair else None
+    pairs = dict(reversed(x.split(':')) for x in a.pair.split(',')) if a.pair else {}   # second -> first
+    VISITOR_ONLY = T.get('visitorOnly', ['blackP99', 'zeroFrac'])
+    def abs_thr(tier, cam):   # black frames are expected at the slot's fixed exposure (a closet), not after adaptation
+        t = thresholds_for(T, cam, 'absolute')
+        return t if tier.endswith('-visitor') else {k: v for k, v in t.items() if k not in VISITOR_ONLY}
     for tier in tiers:
         for state in states:
             d = os.path.join(a.run, tier, state)
@@ -184,18 +191,24 @@ def check(a):
                 s, l = load(p)
                 fr = {'tier': tier, 'state': state, 'cam': cam, 'path': p, 'fails': [], 'warn': [], 'score': 0.0}
                 fr['abs'] = absolute(s, l, grid)
-                f, sc = judge_abs(fr['abs'], thresholds_for(T, cam, 'absolute'))
+                f, sc = judge_abs(fr['abs'], abs_thr(tier, cam))
                 fr['fails'] += ['abs ' + x for x in f]; fr['absScore'] = sc; fr['score'] = max(fr['score'], sc)
                 refs = []
                 if a.baseline: refs.append(('baseline', os.path.join(a.baseline, tier, state, cam + '.png')))
-                if a.cycles: refs.append(('cycles', os.path.join(a.cycles, state, cam + '.png')))
-                if pair and tier == pair[1]: refs.append(('pair', os.path.join(a.run, pair[0], state, cam + '.png')))
+                # Cycles renders at the slot's fixed exposure: only the fixed set compares with it
+                if a.cycles and not tier.endswith('-visitor'): refs.append(('cycles', os.path.join(a.cycles, state, cam + '.png')))
+                if tier in pairs: refs.append(('pair', os.path.join(a.run, pairs[tier], state, cam + '.png')))
                 for kind, rpath in refs:
                     if not os.path.exists(rpath):
                         if kind == 'baseline': fr['warn'].append('no baseline frame')
                         continue
                     rs, rl = load(rpath)
                     m = versus(l, rl, grid, s, rs if kind != 'cycles' else None); m['ref'] = rpath
+                    if kind == 'baseline':
+                        # an absolute finding the approved frame has too (a bath with its lights off at dusk) is known, not new
+                        known = {x.split()[0].rstrip(':') for x in judge_abs(absolute(rs, rl, grid), abs_thr(tier, cam))[0]}
+                        still = [x for x in fr['fails'] if x.startswith('abs ') and x.split()[1].rstrip(':') in known]
+                        fr['fails'] = [x for x in fr['fails'] if x not in still]; fr['warn'] += [x + ' (also in the baseline)' for x in still]
                     t = thresholds_for(T, cam, kind)
                     f, sc = judge(m, t); m['fails'] = f; m['score'] = sc
                     fr[kind] = m
@@ -241,14 +254,23 @@ def check(a):
     if rows:
         rows = [sum(rows[i:i + 3], []) for i in range(0, len(rows), 3)]
         sheet(rows, os.path.join(a.out, 'worst_absolute.jpg'), f'{rep["run"]}: highest absolute-check scores')
-    if a.overview:
-        for tier in tiers:
+    if a.overview:   # one sheet per tier and state; with a visitor set, each camera fixed | visitor side by side
+        for tier in [t for t in tiers if not t.endswith('-visitor')] + [t for t in tiers if t.endswith('-visitor') and t[:-8] not in tiers]:
+            vis = tier + '-visitor' if tier + '-visitor' in tiers else None
             for state in states:
                 fs = [f for f in frames if f['tier'] == tier and f['state'] == state]
                 if not fs: continue
-                ts = [tile(f['path'], f['cam'] + (' FAIL' if f['fails'] else '')) for f in fs]
-                rows = [ts[i:i + 6] for i in range(0, len(ts), 6)]
-                sheet(rows, os.path.join(a.out, f'overview_{tier}_{state}.jpg'), f'{rep["run"]}: {tier} {state}, {len(fs)} cameras')
+                byv = {f['cam']: f for f in frames if vis and f['tier'] == vis and f['state'] == state}
+                ts = []
+                for f in fs:
+                    ts.append(tile(f['path'], f['cam'] + (' fixed' if vis else '') + (' FAIL' if f['fails'] else '')))
+                    if vis:
+                        g = byv.get(f['cam'])
+                        ts.append(tile(g['path'] if g else None, f['cam'] + ' visitor' + (f' {g["abs"]["mean"]:.3f}' if g else ' missing') + (' FAIL' if g and g['fails'] else '')))
+                per = 6
+                rows = [ts[i:i + per] for i in range(0, len(ts), per)]
+                head = f'{rep["run"]}: {tier} {state}, {len(fs)} cameras' + (' (fixed exposure | visitor: auto exposure + local adaptation)' if vis else '')
+                sheet(rows, os.path.join(a.out, f'overview_{tier}_{state}.jpg'), head)
     if missing: return 2
     return 1 if failed or page_fails else 0
 

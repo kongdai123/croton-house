@@ -101,6 +101,7 @@ function wallBox(x0, x1, y0, y1, h0, h1, mat, collide = true) {
 export function buildHouse(house, mods, opts = {}) {
   resizeWindows(house);
   const root = new THREE.Group(); root.name = 'house';
+  declare(root, { role: 'architecture' });   // lighting manifest: the shell (doors declare their own role)
   const interior = new THREE.Group(), exterior = new THREE.Group(); root.add(interior, exterior);
   const fp = house.footprint;
 

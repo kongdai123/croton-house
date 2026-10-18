@@ -31,7 +31,7 @@ try {
   const scene = new T.Scene(), fixtures = new T.Group();
   // The porch sconce and a baked bath can as placed (their placement rows declare the plates), and the garden lantern.
   const place = (make, row) => { const o = make(); o.userData.placement = row; o.position.set(row.x, row.h ?? 0, -row.y); o.rotation.y = row.ry ?? 0; scene.add(o); return o; };
-  place(decor.wallLightBlack, PLACEMENTS.find(p => p.i === 'wallLightBlack'));
+  const sconce = place(decor.wallLightBlack, PLACEMENTS.find(p => p.i === 'wallLightBlack'));
   const canRow = PLACEMENTS.find(p => p.i === 'recessedLight' && p.bake && p.lamp?.plate); assert.equal(canRow.light, false);
   place(decor.recessedLight, canRow);
   const lantern = outdoor.frontLamp(); lantern.userData.placement = PLACEMENTS.find(p => p.i === 'frontLamp');
@@ -46,7 +46,7 @@ try {
     assert.ok(plate.children.every(o => o.userData.noBatch));
   }
   const garden = switches.find(s => s.root === lantern); assert.ok(garden); assert.equal(lantern.userData.onTime, undefined);
-  const porch = switches.find(s => s.root.userData.id === 'decor-wall-light-black');
+  const porch = switches.find(s => s.root === sconce);
   assert.ok(porch.lighting.exterior && garden.lighting.exterior && porch.lighting.group === 'porch' && garden.lighting.group === 'porch');
   const members = [porch, garden].map(s => ({ id: s.root.userData.id, root: [s.root.position.x, -s.root.position.z, s.root.position.y], w: 0.5 }));
   const lamps = createLampGroups({ meta: { textures: 1, groups: [{ name: 'porch', index: 0, tex: 0, ch: 0, color: [1, 1, 1], K: 1, members }] }, switches: [porch, garden] });

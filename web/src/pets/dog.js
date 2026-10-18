@@ -405,7 +405,7 @@ const DOG = { radius: 0.15, walkSpeed: 0.35, trotSpeed: 0.62, callSpeed: 0.9, ju
 let cached = null;   // geometry + strand texture are shared by every dog (≈150 ms to build)
 
 export function createPet(opts = {}) {
-  const root = new THREE.Group(); root.name = 'pet-dog';
+  const root = new THREE.Group(); root.name = 'pet-dog'; declare(root, { role: 'pet' });
   const built = opts.fresh || !cached ? { ...buildGeometry(), strand: strandTexture() } : cached;
   if (!opts.fresh) cached = built;
   const { counts, strand } = built, mat = furMaterial(strand), geo = new THREE.InstancedBufferGeometry();   // own instanceCount, shared buffers

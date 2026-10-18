@@ -894,7 +894,7 @@ let cached = null;
 export function createPet(opts = {}) {
   const built = opts.fresh || !cached ? buildCat(opts) : cached;
   if (!opts.fresh) cached = built;
-  const root = new THREE.Group(); root.name = 'pet-cat';
+  const root = new THREE.Group(); root.name = 'pet-cat'; declare(root, { role: 'pet' });
   const bones = BONES.map(([name]) => { const b = new THREE.Bone(); b.name = 'cat_' + name; return b; });
   BONES.forEach((b, i) => { bones[i].position.set(...OFF[i]); if (PARENT[i] >= 0) bones[PARENT[i]].add(bones[i]); });
   root.add(bones[0]); root.updateMatrixWorld(true);

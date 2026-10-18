@@ -4,8 +4,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { M } from './materials.js';
-export { M };
-export { declare } from './lighting_roles.js';
+import { declare } from './lighting_roles.js';
+export { M, declare };
 export { THREE };
 
 export function shadow(o) { o.traverse?.(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } }); if (o.isMesh) { o.castShadow = o.receiveShadow = true; } return o; }
@@ -61,7 +61,7 @@ export function pillow(w, h, d, mat, opts = {}) { const p = box(w, h, d, mat, { 
 // seat: a place a person can sit. local (x, y=seat top height, z), facing = yaw in radians (0 = +Z of the piece).
 export function addSeat(root, { x = 0, y = 0.45, z = 0, facing = 0, kind = 'chair', back = 0 } = {}) { (root.userData.seats ??= []).push({ x, y, z, facing, kind, back }); return root; }
 // movable: the user can grab and slide it on the floor (chairs, stools, ottomans). mass hints the drag feel.
-export function setMovable(root, { mass = 8, radius = 0.3 } = {}) { root.userData.movable = { mass, radius }; return root; }
+export function setMovable(root, { mass = 8, radius = 0.3 } = {}) { root.userData.movable = { mass, radius }; return declare(root, { role: 'movable' }); }
 // collider: axis-aligned footprint box in local space the player cannot walk through; `auto` computes it from geometry.
 export function setCollider(root, { w, d, x = 0, z = 0, h = 1 } = {}) { root.userData.collider = { w, d, x, z, h }; return root; }
 export function autoCollider(root, shrink = 0.02) { root.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(root); const inv = root.matrixWorld.clone().invert(); b.applyMatrix4(inv); root.userData.collider = { w: Math.max(0.05, b.max.x - b.min.x - shrink * 2), d: Math.max(0.05, b.max.z - b.min.z - shrink * 2), x: (b.max.x + b.min.x) / 2, z: (b.max.z + b.min.z) / 2, h: b.max.y }; return root; }

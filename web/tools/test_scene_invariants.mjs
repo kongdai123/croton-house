@@ -87,7 +87,9 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
     if (!emits || ALLOWED.has(emits.kind)) continue;
     if (owned.has(o)) continue;
     const f = fixtureOf(o);
-    if (f && (f.userData.light || f.userData.lightFixture) && [...switches].some(s => { for (let p = s.root; p; p = p.parent) if (p === f) return true; return false; })) continue;
+    // under a declared fixture (lighting_roles.js fixtureOf) that has a switch
+    let fixture = null; for (let p = o; p && !fixture; p = p.parent) if (w.roles.fixtureOf(p)) fixture = p;
+    if (fixture && switches.some(s => { for (let p = s.root; p; p = p.parent) if (p === fixture) return true; for (let p = fixture; p; p = p.parent) if (p === s.root) return true; return false; })) continue;
     off.push(`${ix.placedKey.get(f) ?? ix.regionOf(o)} [${m.name || m.type}, emits ${emits.kind}]`);
   }
   invariant('emitters-belong-to-fixture', 'every lamp-kind emitting material is on a switched fixture (screens, indicators and fire are allowed anywhere)', off);
@@ -173,6 +175,44 @@ invariant('switches-map-to-groups', 'every switch in one lamp group, every group
     }
   }
   invariant('plan-is-single-source', 'no hand-typed room tables, inside rectangles, annex rects or plan volumes outside the plan model (web/data/plan.json)', off);
+}
+
+// ---- 10. every visible mesh and material has a lighting manifest record, with a declared role -------------------------------
+// lighting_roles.js validateLighting: resolved, a role declared where the object is made (or structural: reflectors,
+// presentation surfaces), known vocabulary, no see-through material left undeclared, no fixture inside a fixture.
+invariant('lighting-manifest-complete', 'every visible mesh has a lighting manifest record with a declared role; no contradictory declaration', w.roles.validateLighting(scene));
+
+// ---- 11. no consumer decides lighting by name, id or coordinate --------------------------------------------------------------
+// The old rules of docs/audit/lighting-roles.md, by pattern: material / mesh name prefixes, the mirror name, the pets'
+// blob names, the niche can's name, fixture ids and id substrings, the exterior regex, light names, the bake-open door id,
+// the old flags and tables. Declarations (where objects are made) carry ids and names as identity, not as rules.
+{
+  const FORBIDDEN = [
+    ['plant / leaf-card name regex', String.raw`/\^\(garden-\|plant\)/|/\^garden-/|/\^plant/|startswith\('(plant|garden-)`],
+    ['turf mesh name', String.raw`/\^garden-turf/`],
+    ['mirror by name', String.raw`name === 'mirror'|name == 'mirror'`],
+    ['pet blob names', String.raw`/\^\(cat-blob|=== 'cat-blob'|=== 'dog-contact-shadow'`],
+    ['niche can by name', String.raw`=== 'niche-recessed-can'|== 'niche-recessed-can'`],
+    ['fixture by id', String.raw`userData\.id === '|\['id'\] == '|s\['id'\] in \(|'kitchen-west-run' in|'props-rooms' in|'garage' in s\[`],
+    ['exterior regex', String.raw`porch\|wall-light-black`],
+    ['light by name', String.raw`'Porch sconce source'|'sconce' in|'fire' in \(L`],
+    ['bake-open door id', String.raw`BAKE_OPEN`],
+    ['old lighting tables / flags', String.raw`WALL_SWITCHES|ALWAYS_DEFAULT|DEFAULT_ON = \{|isPlantRoot|exteriorFinish|lightFixture|startswith\('movable|/flame/i`],
+  ];
+  const ALLOW_DIRS = ['docs/', 'web/tools/golden/', 'web/tools/harness/'];
+  const ALLOW = ['web/tools/test_scene_invariants.mjs'];
+  const off = [];
+  for (const [name, re] of FORBIDDEN) {
+    let out = '';
+    try { out = execFileSync('git', ['grep', '-nIP', '--', re, '--', 'web/src', 'web/tools', 'bake', ':!*.min.js', ':!*.bundle.js', ':!*.md'], { cwd: REPO, encoding: 'utf8' }); }
+    catch (e) { if (e.status !== 1) throw e; }
+    for (const line of out.split('\n').filter(Boolean)) {
+      const file = line.slice(0, line.indexOf(':'));
+      if (ALLOW.includes(file) || ALLOW_DIRS.some(d => file.startsWith(d))) continue;
+      off.push(`${line.slice(0, line.indexOf(':', file.length + 1))}: ${name}`);
+    }
+  }
+  invariant('no-name-based-lighting', 'no lighting decision keyed on a name, id or coordinate outside the declarations (lighting_roles.js manifest)', off);
 }
 
 // ---- report ---------------------------------------------------------------------------------------------------------------------------

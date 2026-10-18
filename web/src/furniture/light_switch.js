@@ -10,6 +10,7 @@ const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 // placement's origin; the plate reuses that switch's toggle, so pressing it moves the lamp group. Named after the group.
 function wallPlate(scene, entry, [x, y, ry], white) {
   const plate = new THREE.Group(); plate.name = 'wall-switch-' + entry.lighting.group;
+  declare(plate, { role: 'fixture' });
   plate.position.set(x, 1.12, -y); plate.rotation.y = ry;
   plate.userData.lightSwitch = entry.toggle;
   plate.add(box(0.075, 0.12, 0.008, white, { r: 0.004 }));
@@ -85,6 +86,7 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, day = f
   const proxy = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), hitMaterial);
   proxy.position.copy(bounds.getCenter(new THREE.Vector3())); proxy.visible = false;
   proxy.userData.noBatch = proxy.userData.lightHit = true; root.add(proxy);
+  declare(proxy, { role: 'presentation' });   // an invisible raycast target, never lit
   return { root, toggle, meshes, proxy };
 }
 

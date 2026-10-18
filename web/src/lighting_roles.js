@@ -41,7 +41,7 @@ export const SCHEMA = {
     zone: [null, 'exterior'],                      // exterior: the street faces of the shell, always the exterior copy
   },
   mesh: {
-    role: ['architecture', 'furniture', 'plant', 'ground', 'glass', 'cloth', 'mirror', 'emitter', 'fixture', 'door', 'movable', 'pet', 'presentation'],
+    role: ['architecture', 'furniture', 'plant', 'ground', 'glass', 'cloth', 'mirror', 'emitter', 'fixture', 'door', 'movable', 'pet', 'visitor', 'presentation'],
     motion: ['static', 'still', 'moving', 'movable', 'door'],   // still: holds still inside a moving root; door: a door's leaf
     bake: ['lightmap', 'probe', 'none'],           // none: never lit by the bake (presentation helpers)
     why: [null, 'instanced', 'movable', 'dynamic', 'plant/glass', 'door', 'presentation', 'hidden'],   // unwrap.py adds ground/far (the plan's lightmap volume)
@@ -60,7 +60,7 @@ export const EMIT_KINDS = ['lamp', 'screen', 'indicator', 'fire'];
 
 // Presets: what a role or surface implies unless declared otherwise.
 export const ROLE_PRESETS = {
-  architecture: {}, furniture: {}, ground: {}, glass: {}, cloth: {}, mirror: {}, emitter: {}, fixture: {}, pet: {},
+  architecture: {}, furniture: {}, ground: {}, glass: {}, cloth: {}, mirror: {}, emitter: {}, fixture: {}, pet: {}, visitor: {},
   plant: { sunTrack: 'plant' },
   door: { probeSide: 'face' },
   movable: { motion: 'movable' },
@@ -206,7 +206,10 @@ function resolveMesh(o, ctx) {
   for (let p = o; p; p = p.parent) if (p.userData.door || (p.userData.animate && p.userData.toggle)) { probeSide = 'face'; break; }
   const plant = role === 'plant' || ms.some(m => lightingOf(m).foliage);
   const own = declared(o);
-  return { declared: own, role, motion, bake, why: hidden && !why ? 'hidden' : why, probeSide,
+  // roleFrom (validateLighting): declared by the mesh or an ancestor, structural (a reflector, a presentation surface) or
+  // nobody's (an error: every placed, built or added object declares its role where it is made)
+  const roleFrom = roleDecl ? 'declared' : presentation ? 'structural' : 'default';
+  return { declared: own, roleFrom, role, motion, bake, why: hidden && !why ? 'hidden' : why, probeSide,
     sun: { cast: m0 ? lightingOf(m0).castsSun : true, track: plant ? 'plant' : 'static' },
     ...placeOf(o, ctx), puddleMirror: own.puddleMirror ?? true, fakeShadow: !!own.fakeShadow };
 }
@@ -290,6 +293,9 @@ export function validateLighting(root) {
     const l = RECORDS.get(o);
     if (!l) { errors.push(`${name(o)}: not classified`); return; }
     if (!ROLES.includes(l.role)) errors.push(`${name(o)}: unknown role ${l.role}`);
+    if (l.roleFrom === 'default') errors.push(`${name(o)}: no declared role (declare one where it is made)`);
+    let fixtures = 0; for (let p = o; p; p = p.parent) if (declared(p).fixture) fixtures++;
+    if (fixtures > 1) errors.push(`${name(o)}: inside two fixture declarations`);
     for (const m of mats(o)) {
       const ml = RECORDS.get(m), md = declared(m);
       if (!ml) { errors.push(`${name(o)} [${m.name || m.type}]: material not classified`); continue; }

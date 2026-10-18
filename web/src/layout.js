@@ -8,7 +8,7 @@ import { STYLING as STYLING_ROOMS } from './styling_rooms.js';
 import { STYLING as STYLING_GARDEN } from './styling_garden.js';
 import { STYLING as STYLING_FLOWERS } from './styling_flowers.js';
 import { addAABB } from './house.js';
-import { exteriorAt, lightingOf, lightLocal, ownLight } from './lighting_roles.js';
+import { declare, exteriorAt, lightingOf, lightLocal, ownLight } from './lighting_roles.js';
 import { spaces as planSpaces, openings as planOpenings, walls as planWalls } from './plan.js';
 import { bbox, inPoly as inPlanPoly } from './plan_geom.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
@@ -469,6 +469,8 @@ export class Layout {
       if (generated.has(p)) plantClearance(obj, p);
       obj.userData.placement = p; if (p.zh) obj.userData.zh = p.zh; if (p.n) obj.userData.name = p.n;
       if (p.noBatch) obj.userData.noBatch = true;   // kept out of the merged cells (the closet rule's new cans, until a rebake)
+      // lighting manifest: a placed piece is furniture unless it declares otherwise (plants, movables, fixtures, ...)
+      if (obj.userData.lighting?.role === undefined) declare(obj, { role: obj.userData.lighting?.fixture ? 'fixture' : 'furniture' });
       this.root.add(obj); this.placed.push(obj);
       if (obj.userData.seats?.length || obj.userData.movable || obj.userData.toggle) { obj.userData.interactiveRoot = true; this.interactive.push(obj); }
       if (obj.userData.movable) { this.movables.push(obj); }

@@ -1,10 +1,11 @@
-// Switchable baked lamps. The bake (bake/scripts/lamp_groups*.py) lights the house once per lamp group (a room's
-// switches with the same default state), each group alone at its physical level, and stores the group's luminance in
+// Switchable baked lamps. The bake (bake/scripts/lamp_groups*.py) lights the house once per lamp group (a room circuit's
+// switches: the lighting manifest's lampGroupAt), each group alone at its physical level, and stores the group's luminance in
 // one channel of a tone-curved RGB atlas (three groups per WebP, K per group) plus its luminance SH at the light probes.
 // Here every light switch (light_switch.js) drives its group: a switch that is ON is at the bake's full physical level,
 // OFF is 0, with the switch's 0.25 s fade; all switches in a group move together to match its single baked layer. Lamp
-// brightness never depends on the time of day: a slot only chooses which switches are on by default (DEFAULT_ON), and
-// the lamps' colour is each group's own warm white (its mean baked chromaticity).
+// brightness never depends on the time of day: a slot only chooses which switches are on by default (the fixtures'
+// declared defaultOn slots, lighting_roles.js), and the lamps' colour is each group's own warm white (its mean baked
+// chromaticity).
 // Data: v2/lampgroups/encoding.json, lampgroups_<t>_0/1.webp (full, split), half|quarter/lampgroups_<t>.webp, probes.bin.
 // The WebPs become the layers of ONE texture array: one sampler for every group (Apple GPUs allow 16 per shader), in
 // place of the shared lamps layer's sampler.

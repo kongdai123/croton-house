@@ -16,7 +16,17 @@ const fail = msg => { failed++; console.log('FAIL ' + msg); };
 // ---- 1. validator ----------------------------------------------------------------------------------------------------
 const errors = roles.validateLighting(w.scene);
 if (errors.length) fail(`validator: ${errors.length} errors\n  ${errors.slice(0, 12).join('\n  ')}`);
-else console.log('ok   validator: every visible mesh and material resolved');
+else console.log('ok   validator: every visible mesh and material resolved, every role declared');
+{ // and it does catch what it is for: an undeclared mesh, an undeclared see-through material, a fixture in a fixture
+  const T = w.T, probe = new T.Scene(), bare = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial());
+  const jar = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial({ transparent: true, opacity: 0.3 })); jar.userData.lighting = { role: 'furniture' };
+  const lamp = new T.Group(); lamp.userData.lighting = { role: 'fixture', fixture: { kind: 'lamp' } };
+  const bulb = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); bulb.userData.lighting = { fixture: { kind: 'lamp' } }; lamp.add(bulb);
+  probe.add(bare, jar, lamp); roles.classifyLighting(probe);
+  const e = roles.validateLighting(probe), want = ['no declared role', 'see-through', 'inside two fixture declarations'];
+  const missing = want.filter(k => !e.some(x => x.includes(k)));
+  if (missing.length) fail(`validator misses: ${missing.join(', ')} (${e.join('; ')})`); else console.log('ok   validator: rejects an undeclared role, an undeclared see-through material, nested fixtures');
+}
 
 // ---- 2. deliberate fixes ------------------------------------------------------------------------------------------------
 // Every decision a consumer reads from the manifest was first checked equal to the rule it replaced, for every material and

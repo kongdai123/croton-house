@@ -28,9 +28,16 @@ Encoding: 8-bit RGB, stored y = sqrt(x / (x + K)), decoded x = K y^2 / (1 - y^2)
 Environment: `BLENDER` (Blender 4.5 LTS), `CROTON_SITE_PACKAGES` (numpy for Blender's Python), `CROTON_SITE` (site
 folder that `shoot.mjs` serves). Cluster job wrappers are kept outside the repo in `bake/cluster/`.
 
-Lamp groups (web/src/lamp_groups.js): the house's light switches grouped by room and default state, every group baked
-alone at its physical level (lamps layer, 3000 K) and stored as luminance in one channel of an RGB atlas (three groups per
-WebP, K per group; the group's mean baked chromaticity in encoding.json), with its luminance SH at the light probes. A
-switch that is on is at full level at every time of day; a slot only picks which switches are on by default
-(`DEFAULT_ON`). Without `v2/lampgroups/` the site falls back to the shared lamps layer at the slot's level.
+Lamp groups (web/src/lamp_groups.js): the house's light switches grouped by the lighting manifest (web/src/lighting_roles.js:
+the plan space of a switch's lamp surfaces plus the fixture's circuit; every exterior fixture on the porch switch), every
+group baked alone at its physical level (lamps layer, 3000 K) and stored as luminance in one channel of an RGB atlas (three
+groups per WebP, K per group; the group's mean baked chromaticity in encoding.json), with its luminance SH at the light
+probes. A switch that is on is at full level at every time of day; a slot only picks which switches are on by default
+(the fixtures' declared `defaultOn` slots, written into encoding.json per group). Without `v2/lampgroups/` the site falls
+back to the shared lamps layer at the slot's level.
+
+Lighting manifest: every exported node and material carries its record as glTF extras `lighting` (a JSON string,
+export.mjs); `scripts/lighting.py` reads it for unwrap.py (which units get a lightmap), setup.py (after-rain classes,
+glass, sheer cloth, emitters, the lights' bake flag), foliage_bake.py, reflprobe.py and layer_lights.py. Exports without
+records are refused.
 

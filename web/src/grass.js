@@ -261,7 +261,7 @@ function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, ca
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (hMin + hMax) / 2, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0, hMax - hMin) / 2 + 0.7);
     mesh.receiveShadow = true; mesh.castShadow = cast; if (depthMat) mesh.customDepthMaterial = depthMat;
     mesh.matrixAutoUpdate = false; mesh.name = 'garden-' + name;
-    if (!puddleMirror) declare(mesh, { puddleMirror: false });
+    if (!puddleMirror) declare(mesh, { role: 'ground', puddleMirror: false });   // the lawn: ground, out of the puddle reflection
     group.add(mesh);
     tiles.push({ mesh, n: m, x0, x1, z0, z1, y: hMin, lod, density, cast });
   }
@@ -386,6 +386,7 @@ function genTufts(rnd, plants) {
 // ---------- public ----------
 export function buildGarden({ quality = 'hq', camera = null } = {}) {
   const group = new THREE.Group(); group.name = 'garden';
+  declare(group, { role: 'plant' });   // lighting manifest: the garden's instanced ground cover, tufts and lawn
   const tiles = [], rnd = lcg(2513);
   const U = { time: { value: 0 }, wind: { value: new THREE.Vector2(-0.55, -0.83).normalize() }, turf: { value: 1 }, cover: { value: 1 }, tuft: { value: 1 } };
   // modelled plants and outdoor furniture the instanced layers keep clear of

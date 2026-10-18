@@ -1,13 +1,13 @@
 // Seated body you see when you look down: the Yireeb World Builder block-human proxy (1.70 m, spine .485, thigh .43,
 // shin .42, hip width .28) posed sitting, with the same Mii-style face so he recognises the little guy.
-import { THREE, M, box, sphere, cyl, group } from './kit.js';
+import { THREE, M, box, sphere, cyl, group, declare } from './kit.js';
 
 const BODY = { spine: 0.485, thigh: 0.43, shin: 0.42, hipWidth: 0.28, ankleHeight: 0.06, head: 0.305 };
 export class Human {
   constructor(scene, player) {
     this.scene = scene; this.player = player;
     const shirt = new THREE.MeshStandardMaterial({ color: 0xcfe0f1, roughness: 0.85 }), pants = new THREE.MeshStandardMaterial({ color: 0x353c48, roughness: 0.85 }), skin = new THREE.MeshStandardMaterial({ color: 0xf5dcc6, roughness: 0.7 }), shoe = new THREE.MeshStandardMaterial({ color: 0x2a2220, roughness: 0.6 });
-    const g = new THREE.Group(); this.root = g; g.visible = false;
+    const g = new THREE.Group(); this.root = g; g.visible = false; declare(g, { role: 'visitor' });
     // seated pose in local space: origin at the seat point (hip centre on the seat), facing +Z
     this.torso = box(0.34, BODY.spine, 0.2, shirt, { r: 0.03, y: BODY.spine / 2 + 0.02, z: -0.05 }); g.add(this.torso);
     this.head = sphere(BODY.head / 2, skin, { y: BODY.spine + 0.02 + BODY.head / 2 + 0.03, z: -0.03 }); g.add(this.head);

@@ -34,7 +34,7 @@ Everything of the rebake goes to `scene/$V/`, `bakes/$V/`, `site_$V/`; nothing o
 ```sh
 git status   # scene and bake branches merged; then:
 cd web && node tools/build.mjs && for t in tools/test_*.mjs; do node $t || break; done && python3 tools/test_package.py && cd ..
-python3 bake/scripts/test_lamp_groups.py && python3 bake/scripts/test_reflprobe_layout.py && python3 bake/scripts/test_plan.py
+python3 bake/scripts/test_lamp_groups.py && python3 bake/scripts/test_reflprobe_layout.py && python3 bake/scripts/test_plan.py && python3 bake/scripts/test_lighting.py
 python3 bake/scripts/reflprobe_layout.py web/data/plan.json           # the reflection probe table: every point in a room
 NODE_PATH=web/node_modules web/node_modules/.bin/esbuild bake/export/export_entry.js --bundle --outfile=/tmp/export_bundle.js
 ```
@@ -166,11 +166,12 @@ the front-bedroom closet opened, the kitchen counters, bedroom 3's floor along i
 errors; `baked.auditSamplers()` max <= 16.
 
 ## Toggle states of the bake (export.mjs)
-The export is the site's startup state in daytime (`?legacy`, not dusk), except `BAKE_OPEN`.
+The export is the site's startup state in daytime (`?legacy`, not dusk), except the doors whose plan door spec says
+`bakeOpen` (web/data/plan_overlay.json; their lighting manifest's bakePose is 'open').
 | Object | Site default | Bake |
 |---|---|---|
 | Front door (ca2bb42b5a) | open | open |
-| Front-bedroom reach-in bifold, white louvers (d8425baf7a) | shut | **open** (BAKE_OPEN: light reaches the closet's inside; its leaves are probe-lit in every pose) |
+| Front-bedroom reach-in bifold, white louvers (d8425baf7a) | shut | **open** (bakeOpen: light reaches the closet's inside; its leaves are probe-lit in every pose) |
 | Primary closet bifold (0f9916c91a) | open | open |
 | Kitchen -> garage (2e2d4a125a), primary bath (143ab6b9ba), bath B (57fafde9ea), hall bath (054ac1818a), linen closet (029f0013aa), garage side door | shut | shut |
 | Vestibule -> kitchen (40c340903a), bedroom 3 (60bf34160a), bedroom B (498f1f300a), other hinged doors | open | open |

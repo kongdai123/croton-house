@@ -15,7 +15,7 @@ import json, sys
 MESH_KEYS = ('role', 'motion', 'bake', 'why', 'probeSide', 'sun', 'weather', 'zone', 'space', 'puddleMirror', 'fakeShadow')
 MATERIAL_KEYS = ('surface', 'alphaCutout', 'twoSided', 'foliage', 'wet', 'weather', 'glass', 'sheer', 'emits', 'reflection',
                  'clearcoat', 'castsSun', 'bake', 'contact', 'zone')
-ROLES = ('architecture', 'furniture', 'plant', 'ground', 'glass', 'cloth', 'mirror', 'emitter', 'fixture', 'door', 'movable', 'pet', 'presentation')
+ROLES = ('architecture', 'furniture', 'plant', 'ground', 'glass', 'cloth', 'mirror', 'emitter', 'fixture', 'door', 'movable', 'pet', 'visitor', 'presentation')
 SURFACES = ('opaque', 'foliage', 'leafCard', 'glass', 'sheer', 'mirror', 'lamp', 'screen', 'indicator', 'fire', 'presentation')
 EMIT_KINDS = ('lamp', 'screen', 'indicator', 'fire')
 MOTIONS = ('static', 'still', 'moving', 'movable', 'door')

@@ -9,6 +9,8 @@ import { STYLING as STYLING_GARDEN } from './styling_garden.js';
 import { STYLING as STYLING_FLOWERS } from './styling_flowers.js';
 import { addAABB } from './house.js';
 import { exteriorAt, lightingOf, lightLocal, ownLight } from './lighting_roles.js';
+import { spaces as planSpaces, openings as planOpenings, walls as planWalls } from './plan.js';
+import { bbox, inPoly as inPlanPoly } from './plan_geom.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.js';
@@ -400,6 +402,47 @@ function plantClearance(obj, p) {
   if (move) { p.x = +(p.x + move[0]).toFixed(3); p.y = +(p.y + move[1]).toFixed(3); obj.position.set(p.x, p.h || 0, -p.y); }
 }
 
+// ---- The closet rule (owner decision 2026-10-17): every closet and the laundry nook gets a ceiling light on its own switch.
+// From the plan: a baked recessed can (light: false, bake: true, as the bath and hall cans) at the space's centre, clear of
+// the shelving below it, its wall plate inside the space by its door; its lamp group is the space's own (lighting_roles.js:
+// the space's id). A space that already has a can in the placement table (the walk-in closet) keeps it. The new cans stay
+// out of the merged cells (noBatch) until the next rebake, so the merged meshes keep the lightmap ids of the committed bake.
+const CLOSET_KINDS = new Set(['closet', 'laundry']);
+const r3 = v => Math.round(v * 1000) / 1000;
+// A wall plate in space s by one of its doors: on the door's wall beside a jamb, else on a side wall 15 cm in from the
+// door wall; backed by a plan wall, clear of that wall's openings, facing into the space. [x, y, ry] or null.
+export function platePlace(s) {
+  const b = bbox(s.polygon), OFF = 0.012, CLEAR = 0.11;
+  const ok = (x, y, fx, fy) => {
+    if (!inPlanPoly(x + fx * 0.05, y + fy * 0.05, s.polygon)) return false;
+    const bx = x - fx * 0.02, by = y - fy * 0.02, wall = planWalls.find(w => bx >= w.x0 && bx <= w.x1 && by >= w.y0 && by <= w.y1);
+    if (!wall) return false;
+    // clear of every door, opening and window in that wall (and its casing)
+    return !planOpenings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - CLEAR && y < o.y1 + CLEAR : x > o.x0 - CLEAR && x < o.x1 + CLEAR));
+  };
+  for (const o of planOpenings.filter(o => o.kind !== 'window' && o.connects?.includes(s.id))) {
+    const side = o.connects[0] === s.id ? -1 : 1, H = o.dir === 'H';   // connects: [south / west side, north / east side]
+    const face = H ? (side < 0 ? o.y0 : o.y1) : (side < 0 ? o.x0 : o.x1);
+    const cands = [];
+    for (const a of [(H ? o.x0 : o.y0) - 0.15, (H ? o.x1 : o.y1) + 0.15]) cands.push(H ? [a, face + side * OFF, 0, side] : [face + side * OFF, a, side, 0]);
+    const into = face + side * 0.15;
+    if (H) cands.push([b.x0 + OFF, into, 1, 0], [b.x1 - OFF, into, -1, 0]); else cands.push([into, b.y0 + OFF, 0, 1], [into, b.y1 - OFF, 0, -1]);
+    for (const [x, y, fx, fy] of cands) if (ok(x, y, fx, fy)) return [r3(x), r3(y), Math.atan2(fx, -fy)];
+  }
+  return null;
+}
+function closetLights(rows) {
+  const out = [];
+  for (const s of planSpaces) {
+    if (!CLOSET_KINDS.has(s.kind) || rows.some(p => p.i === 'recessedLight' && inPlanPoly(p.x, p.y, s.polygon))) continue;
+    const b = bbox(s.polygon), plate = platePlace(s);
+    if (!plate) { console.warn('closet rule: no wall for a switch plate in', s.id); continue; }
+    out.push({ m: 'decor', i: 'recessedLight', x: r3((b.x0 + b.x1) / 2), y: r3((b.y0 + b.y1) / 2), light: false, bake: true, noBatch: true, lamp: { plate }, rule: 'closet' });
+  }
+  return out;
+}
+export const CLOSET_LIGHTS = closetLights(PLACEMENTS);
+
 export class Layout {
   constructor(scene, fixtures, house, points) {
     this.scene = scene; this.fixtures = fixtures; this.house = house; this.points = points;
@@ -414,7 +457,7 @@ export class Layout {
     for (let i = 0; i < names.length; i++) { progress(i / names.length * 0.5, names[i]); try { mods[names[i]] = await MODULES[names[i]](); } catch (e) { console.error('module failed', names[i], e); mods[names[i]] = { items: {} }; } }
     let k = 0;
     const planting = generatePlanting(7), generated = new Set(planting);
-    const all = PLACEMENTS.concat(STYLING_LIVING, STYLING_KITCHEN, STYLING_ROOMS, STYLING_GARDEN, STYLING_FLOWERS.filter(p => p.zone !== 'front' && p.zone !== 'island'), planting);
+    const all = PLACEMENTS.concat(STYLING_LIVING, STYLING_KITCHEN, STYLING_ROOMS, STYLING_GARDEN, STYLING_FLOWERS.filter(p => p.zone !== 'front' && p.zone !== 'island'), planting, CLOSET_LIGHTS);
     for (const p of all) {
       k++; if (k % 20 === 0) { progress(0.5 + (k / all.length) * 0.5, p.i); await new Promise(r => setTimeout(r)); }
       const builder = mods[p.m]?.items?.[p.i]; if (!builder) { console.warn('missing item', p.m, p.i); continue; }
@@ -425,6 +468,7 @@ export class Layout {
       frontBounds(obj, p); bedroomFrontClearance(obj, p);
       if (generated.has(p)) plantClearance(obj, p);
       obj.userData.placement = p; if (p.zh) obj.userData.zh = p.zh; if (p.n) obj.userData.name = p.n;
+      if (p.noBatch) obj.userData.noBatch = true;   // kept out of the merged cells (the closet rule's new cans, until a rebake)
       this.root.add(obj); this.placed.push(obj);
       if (obj.userData.seats?.length || obj.userData.movable || obj.userData.toggle) { obj.userData.interactiveRoot = true; this.interactive.push(obj); }
       if (obj.userData.movable) { this.movables.push(obj); }

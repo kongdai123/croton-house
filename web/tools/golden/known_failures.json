@@ -1,28 +1,22 @@
 {
  "note": "Known invariant violations (docs/audit). The invariants test fails on any offender not listed here and lists entries that disappeared. Regenerate with UPDATE_KNOWN=1 only to shrink the list or when a violation is accepted.",
  "invariants": {
-  "rooms-have-switched-light": {
-   "title": "every interior space of the plan has at least one emitting fixture with a wall switch",
-   "count": 5,
-   "offenders": [
-    "bedroomBCloset (Closet)",
-    "hallCloset (Closet)",
-    "laundry (Laundry)",
-    "linen (Closet)",
-    "primaryBathCloset (Linen closet)"
-   ]
-  },
   "encoding-matches-lamp-groups-order": {
-   "title": "committed lampgroups/encoding.json groups (15) equal the manifest's lamp groups (22)",
-   "count": 7,
+   "title": "committed lampgroups/encoding.json groups (15) equal the manifest's lamp groups (27)",
+   "count": 12,
    "offenders": [
     "missing from encoding.json: bathB",
     "missing from encoding.json: bedroom3Lamps",
+    "missing from encoding.json: bedroomBCloset",
     "missing from encoding.json: bedroomBLamps",
     "missing from encoding.json: closet",
     "missing from encoding.json: hallBath",
+    "missing from encoding.json: hallCloset",
     "missing from encoding.json: kitchenCabinet",
-    "missing from encoding.json: livingNiche"
+    "missing from encoding.json: laundry",
+    "missing from encoding.json: linen",
+    "missing from encoding.json: livingNiche",
+    "missing from encoding.json: primaryBathCloset"
    ]
   },
   "reflection-probes-match-layout": {

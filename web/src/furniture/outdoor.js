@@ -48,6 +48,7 @@ function firePit() {
     const l = shadow(new THREE.Mesh(logGeo, mats)); l.rotation.set(0, ry, PI / 2 + (i - 1) * 0.12, 'YXZ'); l.position.set(x, y + (cy - 0.48), z); g.add(l); });
   // One permanent warm light; intensity fades to zero in daylight or when extinguished.
   const glow = new THREE.PointLight(0xff8b38, 0, 3.5, 2); glow.position.y = 0.55; g.add(glow);
+  declare(glow, { emits: { kind: 'fire' }, bake: false });   // the fire's light: live (and in photo mode), not in the bake
   const flameMat = new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 }, strength: { value: 0 } }, transparent: true,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,

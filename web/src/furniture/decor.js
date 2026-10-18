@@ -374,10 +374,9 @@ function wallLightBlack() {
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.014, d - 0.02), L.warm()); glow.rotation.x = s > 0 ? -Math.PI / 2 : Math.PI / 2; glow.position.set(0, y + s * (h / 2 - 0.02), 0.002); root.add(glow);
     const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.55), L.wash()); wash.position.set(0, y + s * (h / 2 + 0.26), zb + 0.0015); if (s < 0) wash.rotation.z = Math.PI; root.add(wash);
   }
-  root.userData.light = { type: 'point', y: 2.05, intensity: 0.7, color: 0xffd9a0, distance: 4 };
-  // The porch's own warm source just in front of the sconce, made whether or not the layout's light budget reached it
-  // (lighting.js collectMaterials); exterior, so it follows dusk.
-  declare(root, { fixture: { kind: 'wall', extraLights: [{ name: 'Porch sconce source', type: 'point', color: 0xffd29b, intensity: 3, distance: 3.5, decay: 2, y: 2.05, z: 0.088, exterior: true }] } });
+  // its one light, just in front of the perforated panel (an exterior light: on at dusk, off by day)
+  root.userData.light = { type: 'point', y: 2.05, z: 0.088, intensity: 3, color: 0xffd29b, distance: 3.5, decay: 2 };
+  declare(root, { fixture: { kind: 'wall' } });
   return finish(root, { id: 'decor-wall-light-black', name: 'Porch wall sconce (black, perforated)', zh: '门廊壁灯' }, false);
 }
 

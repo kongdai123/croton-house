@@ -102,10 +102,17 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   const off = [];
   for (const { node: o, key } of ix.placed) {
     const spec = o.userData.light; if (!spec || switches.some(s => s.lighting.exterior && fixtureOf(s.root) === o)) continue;
-    const p = new T.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(o.matrixWorld);
+    const p = new T.Vector3(...w.roles.lightLocal(spec)).applyMatrix4(o.matrixWorld);
     if (!w.plan.isInside(p.x, -p.z, 0)) off.push(`${key} light at plan (${p.x.toFixed(2)}, ${(-p.z).toFixed(2)})`);
   }
   invariant('interior-light-in-outline', 'light specs of interior fixtures lie inside the plan outline', off);
+}
+
+// ---- 6b. every fixture that should have a live light got one (layout.js caps live lights at 16) ----------------------------
+{
+  const off = [];
+  for (const { key, node: o } of ix.placed) if (o.userData.light && o.userData.placement?.light !== false && !w.roles.ownedLights(o).length) off.push(`${key}: no live light (light budget exhausted?)`);
+  invariant('fixtures-have-live-lights', 'every fixture with a live light spec owns its live light', off);
 }
 
 // ---- 7. committed lamp-group encoding == the manifest's lamp groups (lighting_roles.js lampGroupOrder) ------------------------

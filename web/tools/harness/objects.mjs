@@ -158,7 +158,7 @@ export function captureObjects(world, ix) {
     bakeSwitches[key] = { i, key, id, name: toggle.label.en.replace(/^Turn on · /, ''), root: plan(wpos), group: toggle.lighting.group, space: toggle.lighting.space,
       exterior: toggle.lighting.exterior, kind: toggle.lighting.kind, circuit: toggle.lighting.circuit, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
       lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new T.Vector3())), intensity: l.userData.base !== undefined ? r4(l.userData.base) : l.userData.switchBase !== undefined ? r4(l.userData.switchBase) : undefined })),
-      spec: spec ? { ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])), p: plan(new T.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null, glows };
+      spec: spec ? { ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])), p: plan(new T.Vector3(...world.roles.lightLocal(spec)).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null, glows };
   });
 
   const counts = { meshes: ix.meshes.length, placed: ix.placed.length, withLmId: ix.meshes.filter(e => e.node.userData.lmId).length, lmSkip: ix.meshes.filter(e => e.node.userData.lmSkip).length };

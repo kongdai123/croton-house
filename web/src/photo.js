@@ -335,7 +335,7 @@ export class PhotoMode {
           if (mood) color = kelvin(mood.lampK).multiply(o.color.clone().multiplyScalar(1 / Math.max(o.color.r, o.color.g, o.color.b, 1e-3))).lerp(kelvin(mood.lampK), 0.6);
         }
         if (o.isHemisphereLight || o.isAmbientLight || !(intensity > 0)) continue;
-        const fire = o.parent?.userData.id === 'outdoor-fire-pit';
+        const fire = o.userData.lighting?.emits?.kind === 'fire';   // a declared fire light (outdoor.js fire pit)
         if (!fixture && !o.userData.lightSwitch && !fire) continue; // identified physical sources; sky/sun are rebuilt below
         if (o === this.lighting.sun) continue;
         if (this.lighting.windowLights.includes(o)) continue;   // real-time fill standing in for daylight through glass

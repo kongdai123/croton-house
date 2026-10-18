@@ -41,7 +41,7 @@ const out = await page.evaluate(() => {
       root: plan(root.getWorldPosition(new V())), group: toggle.lighting.group, space: toggle.lighting.space, exterior: toggle.lighting.exterior,
       kind: toggle.lighting.kind, circuit: toggle.lighting.circuit, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
       lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new V())), intensity: l.userData.base ?? l.userData.switchBase })),
-      spec: spec ? { ...spec, p: plan(new V(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
+      spec: spec ? { ...spec, p: plan(new V(...A.roles.lightLocal(spec)).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
       glows,
     };
   });

@@ -8,7 +8,7 @@ import { STYLING as STYLING_ROOMS } from './styling_rooms.js';
 import { STYLING as STYLING_GARDEN } from './styling_garden.js';
 import { STYLING as STYLING_FLOWERS } from './styling_flowers.js';
 import { addAABB } from './house.js';
-import { ownLight } from './lighting_roles.js';
+import { exteriorAt, lightLocal, ownLight } from './lighting_roles.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.js';
@@ -453,12 +453,14 @@ export class Layout {
   addLight(obj, spec) {
     if (this.lightCount >= 16) return;
     obj.updateMatrixWorld(true);
-    const wp = new THREE.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(obj.matrixWorld);
+    const wp = new THREE.Vector3(...lightLocal(spec)).applyMatrix4(obj.matrixWorld);
     let l;
     if (spec.type === 'spot') { l = new THREE.SpotLight(spec.color ?? 0xfff1dc, spec.intensity ?? 2, spec.distance ?? 7, spec.angle ?? 0.6, 0.5, 1.2); l.position.copy(wp); l.target.position.set(wp.x, 0, wp.z); this.fixtures.add(l.target); }
     else if (spec.type === 'rect') { l = new THREE.RectAreaLight(spec.color ?? 0xfff1dc, spec.intensity ?? 5, spec.w ?? 1, spec.h ?? 0.1); l.position.copy(wp); l.rotation.copy(obj.rotation); l.rotateX(-Math.PI / 2); }
-    else { l = new THREE.PointLight(spec.color ?? 0xffe7c0, spec.intensity ?? 1, spec.distance ?? 6, 1.6); l.position.copy(wp); }
-    l.userData.base = l.intensity; if (spec.day !== undefined) l.userData.day = spec.day; this.fixtures.add(l); this.lightCount++;
+    else { l = new THREE.PointLight(spec.color ?? 0xffe7c0, spec.intensity ?? 1, spec.distance ?? 6, spec.decay ?? 1.6); l.position.copy(wp); }
+    l.userData.base = l.intensity; if (spec.day !== undefined) l.userData.day = spec.day;
+    if (exteriorAt(wp.x, -wp.z)) l.userData.exterior = true;   // outdoors: on at dusk only (lighting.js), as its switch
+    this.fixtures.add(l); this.lightCount++;
     ownLight(obj, l);   // the fixture's live light (light_switch.js takes it by ownership, lighting_roles.js)
   }
   // One reflection per cabinet, preserving the door seams and round mirror outline.

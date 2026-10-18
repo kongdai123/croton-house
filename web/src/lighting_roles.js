@@ -320,7 +320,6 @@ export function validateLighting(root) {
 //   defaultOn: the time slots the switch starts on (lighting_slots.js names; dusk: every lamp)
 //   plate:     [x, y, ry] the wall plate (plan metres, facing), on the switch nearest the placement's origin
 //   lights:    'spec' (the live light layout.js made from the fixture's light spec) or 'children' (lights inside it)
-//   extraLights: light specs created besides the spec's, outside the layout's light budget
 export const SLOTS = ['sunrise', 'noon', 'golden', 'dusk'];
 export const CIRCUITS = { main: '', lamps: 'Lamps', pendant: 'Pendant', cabinet: 'Cabinet', niche: 'Niche', center: 'Center' };
 export const FIXTURE_KINDS = { ceiling: 'main', track: 'main', pendant: 'main', wall: 'main', lantern: 'main', opener: 'main', strip: 'main', lamp: 'lamps', cabinet: 'cabinet', niche: 'niche' };
@@ -338,7 +337,7 @@ export function fixtureOf(o) {
     heads: !!d.heads, owner: d.owner ?? null, label: d.label ?? null,
     defaultOn: row.defaultOn ?? d.defaultOn ?? DEFAULT_ON,
     plate: row.plate ?? d.plate ?? null,
-    lights: d.lights ?? 'spec', extraLights: d.extraLights ?? [],
+    lights: d.lights ?? 'spec',
     spec: holder?.userData.light ?? null, holder,
     live: holder ? holder.userData.placement?.light !== false : false, bake: !!holder?.userData.placement?.bake,
   };
@@ -380,6 +379,11 @@ export function validateSwitches(entries, plates = []) {
   for (const p of plates) if (!entries.some(e => e.toggle === p.userData.lightSwitch)) errors.push(`plate ${p.name}: drives no switch`);
   return errors;
 }
+// A light spec's point in its fixture's frame (layout.js addLight, the bake export): x, y (default 2.3 m), z.
+export const lightLocal = spec => [spec.x ?? 0, spec.y ?? 2.3, spec.z ?? 0];
+// Is a light at plan (x, y) an exterior one (on at dusk only): the plan space it is in (a light in a wall takes the space it
+// faces), as the switches' lamp groups.
+export const exteriorAt = (x, y) => spaceAt(x, y, 0.3)?.zone === 'exterior';
 // Live lights a fixture owns (layout.js addLight, lighting.js extra lights): registered here, not matched by position.
 const LIGHTS = new WeakMap();
 export function ownLight(holder, light) { if (!LIGHTS.has(holder)) LIGHTS.set(holder, []); LIGHTS.get(holder).push(light); }

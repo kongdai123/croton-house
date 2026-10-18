@@ -27,15 +27,16 @@ const out = await page.evaluate(() => {
     if (o.isLight && !o.isHemisphereLight && !o.isDirectionalLight && o.intensity > 0 && !A.lighting.windowLights.includes(o)) {
       const p = o.getWorldPosition(new A.THREE.Vector3()), t = o.target ? o.target.getWorldPosition(new A.THREE.Vector3()) : null;
       // plan coordinates: x east, y north (= -z), z up
-      lights.push({ type: o.type, name: o.name || o.parent?.name, p: [p.x, -p.z, p.y], t: t && [t.x, -t.z, t.y], color: '#' + o.color.getHexString(), intensity: o.intensity, w: o.width, h: o.height, angle: o.angle, penumbra: o.penumbra, distance: o.distance });
+      // bake: false for lights the bake leaves out (lighting manifest: the fire pit's live fire light)
+      lights.push({ type: o.type, name: o.name || o.parent?.name, p: [p.x, -p.z, p.y], t: t && [t.x, -t.z, t.y], color: '#' + o.color.getHexString(), intensity: o.intensity, w: o.width, h: o.height, angle: o.angle, penumbra: o.penumbra, distance: o.distance, bake: o.userData.lighting?.bake !== false });
     }
     // fixtures without a live light (placement light: false) that are lamps in the bake (placement bake: true): the light
     // layout.js addLight would make, at the fixture's light height
     const pl = o.userData.placement, spec = o.userData.light;
     if (spec && pl?.bake && pl.light === false) {
-      const p = new A.THREE.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(o.matrixWorld), t = spec.type === 'spot' ? [p.x, -p.z, 0] : null;
+      const p = new A.THREE.Vector3(...A.roles.lightLocal(spec)).applyMatrix4(o.matrixWorld), t = spec.type === 'spot' ? [p.x, -p.z, 0] : null;
       const type = { spot: 'SpotLight', rect: 'RectAreaLight' }[spec.type] || 'PointLight';
-      lights.push({ type, name: 'bake-only ' + (o.userData.id || o.name), p: [p.x, -p.z, p.y], t, color: '#' + new A.THREE.Color(spec.color ?? 0xfff1dc).getHexString(), intensity: spec.intensity ?? 1, w: spec.w, h: spec.h, angle: spec.angle, penumbra: 0.5, distance: spec.distance, bakeOnly: true });
+      lights.push({ type, name: 'bake-only ' + (o.userData.id || o.name), p: [p.x, -p.z, p.y], t, color: '#' + new A.THREE.Color(spec.color ?? 0xfff1dc).getHexString(), intensity: spec.intensity ?? 1, w: spec.w, h: spec.h, angle: spec.angle, penumbra: 0.5, distance: spec.distance, bakeOnly: true, bake: true });
     }
     if (o.isMesh) for (const m of [].concat(o.material)) if (m.emissive && m.emissiveIntensity > 0 && m.emissive.getHex() !== 0) emissive[m.name || m.uuid] = { color: '#' + m.emissive.getHexString(), intensity: m.emissiveIntensity };
   });

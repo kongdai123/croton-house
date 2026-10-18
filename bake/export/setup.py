@@ -166,7 +166,7 @@ for m in bpy.data.materials:
 # ---- soft warm lamps inside, from the walkthrough's own fixtures (dusk state: everything that can be on)
 data = json.load(open(LIGHTS))
 for i, L in enumerate(data['lights']):
-    if 'fire' in (L['name'] or '') or 'sconce' in (L['name'] or '').lower():
+    if L.get('bake') is False:   # a light the bake leaves out (lights.mjs, the lighting manifest: the fire pit's live fire)
         continue
     x, y, z = L['p']
     if L['type'] == 'RectAreaLight':

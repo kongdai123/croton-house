@@ -1,7 +1,7 @@
 // bath_parts — shared local materials/textures for the bath module, plus the garage / laundry pieces
 // (washer-dryer tower, water heater, wire shelving, ping-pong table, rustic wine console, electrical panel).
 // Refs: refs/bath/g48, g49 (garage). Units metres, origin on the floor at the footprint centre, +Z = front.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, legs, autoCollider, describe, sphere, torus } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, legs, autoCollider, describe, sphere, torus, declare } from '../kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const once = (fn) => { let v; return () => (v ??= fn()); };
@@ -72,7 +72,7 @@ export const L = {
   mosaic: once(() => { const m = M.tileMosaic().clone(); m.color = new THREE.Color(0xf0f4fa); m.roughness = 0.45; return m; }),
   slate: once(() => new THREE.MeshPhysicalMaterial({ color: 0x66738a, roughness: 0.38, metalness: 0.35, clearcoat: 0.5, clearcoatRoughness: 0.25 })),
   bezel: once(() => new THREE.MeshPhysicalMaterial({ color: 0x2a2d32, roughness: 0.3, metalness: 0.1, clearcoat: 0.6 })),
-  doorGlass: once(() => new THREE.MeshPhysicalMaterial({ color: 0x9aa6b4, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false, clearcoat: 1, envMapIntensity: 1.5 })),
+  doorGlass: once(() => declare(new THREE.MeshPhysicalMaterial({ color: 0x9aa6b4, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false, clearcoat: 1, envMapIntensity: 1.5 }), { surface: 'glass' })),
   rubber: once(() => new THREE.MeshStandardMaterial({ color: 0x55585c, roughness: 0.85 })),
   blackGlass: once(() => new THREE.MeshPhysicalMaterial({ color: 0x0d0e10, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 })),
   steelDark: once(() => { const m = M.steel().clone(); m.color = new THREE.Color(0x6a6e73); m.roughness = 0.4; return m; }),
@@ -88,7 +88,7 @@ export const L = {
   blueHandle: once(() => new THREE.MeshStandardMaterial({ color: 0x1f4fa3, roughness: 0.45 })),
   label: once(() => new THREE.MeshStandardMaterial({ roughness: 0.7, map: canvasTex(128, 160, (g) => { g.fillStyle = '#f4d23a'; g.fillRect(0, 0, 128, 160); g.fillStyle = '#222'; g.fillRect(8, 8, 112, 18); g.fillRect(8, 34, 70, 6); g.fillRect(8, 46, 90, 6); g.fillStyle = '#2c6fb3'; g.fillRect(8, 64, 112, 26); g.fillStyle = '#222'; for (let i = 0; i < 6; i++) g.fillRect(8, 100 + i * 9, 40 + ((i * 37) % 70), 4); }) })),
   hose: once(() => new THREE.MeshStandardMaterial({ color: 0x9c9fa3, roughness: 0.55, metalness: 0.6 })),
-  tote: once(() => new THREE.MeshPhysicalMaterial({ color: 0xc4c8cc, roughness: 0.35, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide, clearcoat: 0.3 })),
+  tote: once(() => declare(new THREE.MeshPhysicalMaterial({ color: 0xc4c8cc, roughness: 0.35, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide, clearcoat: 0.3 }), { surface: 'glass' })),   // a translucent plastic tote: see-through
   toteLid: once(() => new THREE.MeshStandardMaterial({ color: 0x5e6266, roughness: 0.5 })),
   kraft: once(() => new THREE.MeshStandardMaterial({ roughness: 0.92, map: canvasTex(256, 256, (g, W, H) => { const r = rng(17); g.fillStyle = '#b48a5a'; g.fillRect(0, 0, W, H); g.globalAlpha = 0.12; for (let i = 0; i < 3000; i++) { g.fillStyle = r() > 0.5 ? '#d8b282' : '#7d5a34'; g.fillRect(r() * W, r() * H, 1 + r() * 3, 1); } g.globalAlpha = 0.5; g.fillStyle = '#2a2a2a'; g.font = 'bold 22px sans-serif'; g.fillText('THIS SIDE UP ↑', 40, 200); }) })),
   tape: once(() => new THREE.MeshStandardMaterial({ color: 0xc9a46c, roughness: 0.35, transparent: true, opacity: 0.85 })),

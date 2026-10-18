@@ -25,7 +25,7 @@ export const SCHEMA = {
     foliage: 'null, or { groundOcclusion, bakedPerVertex }: the plant treatment (probe occlusion near the ground, per-vertex foliage bake)',
     wet: ['auto', 'dry'],                          // auto: per-pixel wet ground / puddles where the mask says (outdoors, low, facing up)
     weather: ['auto', 'plant'],                    // the after-rain class of meshes using it: plant forces the leaf rule
-    glass: 'null, or { overlay, export }: overlay = Fresnel sky overlay of window panes; export = pane (clear transmissive glass for the bake) or keep',
+    glass: 'null, or { pane, overlay, export, daylightOpacity }: one glass definition (declared surface glass: no sun shadow, no lightmap); a window pane also takes the Fresnel sky overlay, becomes clear transmissive glass in the bake (export pane) and swaps to its day opacity',
     sheer: 'null, or { reflect, transmit } (decor.js voile, cellular shades)',
     // Real light sources: the lamp surfaces light_switch.js collects from the fixtures (switched) and materials marked where
     // they are made ('lamp' for bulbs, shades and diffusers outside a switch, 'screen' and 'indicator' for displays and
@@ -90,7 +90,8 @@ const declared = t => t?.userData?.lighting ?? {};
 export const isResolved = t => RECORDS.has(t);
 
 // ---- materials ---------------------------------------------------------------------------------------------------------
-const glassLike = m => m.transmission > 0 || m.userData?.daylightOpacity !== undefined || (!!m.transparent && m.opacity < 0.6);
+// what an undeclared see-through material looks like (validateLighting: it must declare glass, sheer or presentation)
+const seeThroughLike = m => m.transmission > 0 || (!!m.transparent && m.opacity < 0.6);
 const presentationLike = m => !!m.userData?.presentation || m.blending === 2 /* AdditiveBlending */ ||
   (!!m.isMeshBasicMaterial && !!m.transparent && !m.depthWrite && !!m.polygonOffset && m.color?.getHex?.() === 0);
 
@@ -101,16 +102,19 @@ export function resolveMaterial(m) {
   const d = declared(m), u = m.userData;
   const emits = d.emits !== undefined ? d.emits : u.emits ? { kind: u.emits, switched: !!u.lightGlow } : u.lightGlow ? { kind: 'lamp', switched: true } : null;
   let surface = d.surface;
-  if (!surface) surface = u.sheer ? 'sheer' : presentationLike(m) ? 'presentation' : glassLike(m) ? 'glass' : emits ? emits.kind : 'opaque';
+  if (!surface) surface = u.sheer ? 'sheer' : presentationLike(m) ? 'presentation' : emits ? emits.kind : 'opaque';
   const alphaCutout = m.alphaTest > 0, preset = SURFACE_PRESETS[surface] ?? {};
   const pick = (k, dflt) => d[k] !== undefined ? d[k] : preset[k] !== undefined ? preset[k] : dflt;
   // the plant treatment is a plant's (foliage, leaf cards), not an alpha mask's: a net, a lattice or a perforated panel
   // is a cut-out surface lit like any other
   const foliage = pick('foliage', null), leaf = surface === 'leafCard' || (!!foliage && alphaCutout);
-  const glass = surface === 'glass' ? { overlay: u.daylightOpacity !== undefined || m.transmission > 0, export: u.daylightOpacity !== undefined ? 'pane' : 'keep', ...(d.glass ?? {}) } : null;
+  // glass: one definition (declared surface 'glass'); a window pane also takes the Fresnel sky overlay, becomes clear
+  // transmissive glass in the bake, and swaps to its day opacity in the raster path
+  const pane = surface === 'glass' && !!d.glass?.pane;
+  const glass = surface === 'glass' ? { pane, overlay: d.glass?.overlay ?? pane, export: d.glass?.export ?? (pane ? 'pane' : 'keep'), daylightOpacity: pane ? u.daylightOpacity ?? null : null } : null;
   const sheer = u.sheer ?? d.sheer ?? null;
   // what unwrap.py leaves out of the atlas (plant, glass): alpha masks, plants, and what the export turns into transmission
-  const unwrapGlass = !m.isShaderMaterial && (!!sheer || u.daylightOpacity !== undefined || m.transmission > 0);
+  const unwrapGlass = !m.isShaderMaterial && (!!sheer || surface === 'glass' || m.transmission > 0);
   const r = {
     declared: d, surface, alphaCutout,
     twoSided: pick('twoSided', false),
@@ -121,7 +125,7 @@ export function resolveMaterial(m) {
     glass, sheer, emits,
     reflection: pick('reflection', 'probe'),
     clearcoat: d.clearcoat !== undefined ? d.clearcoat : m.clearcoat > 0 ? 'probe' : null,
-    castsSun: d.castsSun ?? !glassLike(m),
+    castsSun: d.castsSun ?? !(surface === 'glass' || surface === 'presentation' || m.transmission > 0),   // light passes
     // no lightmap for plants, leaf cards, glass and cloth, nor for cut-outs (a hole has no surface to bake)
     bake: d.bake ?? (alphaCutout || preset.bake === 'probe' && surface !== 'sheer' || unwrapGlass ? 'probe' : 'lightmap'),
     // the contact-shadow depth pass draws solid depth: no plants (wind), nothing see-through, no cut-outs (no alpha there)
@@ -291,6 +295,7 @@ export function validateLighting(root) {
       if (!SURFACES.includes(ml.surface)) errors.push(`${name(o)} [${m.name || m.type}]: unknown surface ${ml.surface}`);
       if (md.alphaCutout !== undefined && md.alphaCutout !== m.alphaTest > 0) errors.push(`${name(o)} [${m.name || m.type}]: alphaCutout declared ${md.alphaCutout} but alphaTest ${m.alphaTest}`);
       if (ml.emits && !EMIT_KINDS.includes(ml.emits.kind)) errors.push(`${name(o)} [${m.name || m.type}]: unknown emitter kind ${ml.emits.kind}`);
+      if (seeThroughLike(m) && !m.isShaderMaterial && !['glass', 'sheer', 'presentation'].includes(ml.surface)) errors.push(`${name(o)} [${m.name || m.type}]: see-through (opacity ${m.opacity}) but declared ${ml.surface}: declare glass, sheer or presentation`);
     }
   });
   return errors;

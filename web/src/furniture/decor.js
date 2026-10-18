@@ -63,10 +63,11 @@ const L = {
   driedHead: once(() => new THREE.MeshStandardMaterial({ color: 0xe6d8bd, roughness: 1 })),
   driedPink: once(() => new THREE.MeshStandardMaterial({ color: 0xc9a7a4, roughness: 1 })),
   cork: once(() => new THREE.MeshStandardMaterial({ color: 0xb48a5c, roughness: 0.9 })),
-  glassClear: once(() => { const m = M.glass().clone(); m.opacity = 0.3; return m; }),
-  glassGreen: once(() => { const m = M.glass().clone(); m.color = new THREE.Color(0x3f6b42); m.opacity = 0.55; return m; }),
-  glassAmber: once(() => { const m = M.glass().clone(); m.color = new THREE.Color(0x8a531a); m.opacity = 0.6; return m; }),
-  oil: once(() => new THREE.MeshStandardMaterial({ color: 0xb08a2a, roughness: 0.2, transparent: true, opacity: 0.55, depthWrite: false })),
+  // bottles cut from the window glass: glass, but not panes (no window overlay, kept as they look in the bake)
+  glassClear: once(() => { const m = declare(M.glass().clone(), { glass: { pane: false } }); m.opacity = 0.3; return m; }),
+  glassGreen: once(() => { const m = declare(M.glass().clone(), { glass: { pane: false } }); m.color = new THREE.Color(0x3f6b42); m.opacity = 0.55; return m; }),
+  glassAmber: once(() => { const m = declare(M.glass().clone(), { glass: { pane: false } }); m.color = new THREE.Color(0x8a531a); m.opacity = 0.6; return m; }),
+  oil: once(() => declare(new THREE.MeshStandardMaterial({ color: 0xb08a2a, roughness: 0.2, transparent: true, opacity: 0.55, depthWrite: false }), { surface: 'glass' })),
   pages: once(() => {
     const [c, g] = canvas(64, 64); g.fillStyle = '#f1eadb'; g.fillRect(0, 0, 64, 64); g.strokeStyle = 'rgba(150,135,110,0.35)';
     for (let y = 0; y < 64; y += 2) { g.beginPath(); g.moveTo(0, y + 0.5); g.lineTo(64, y + 0.5); g.stroke(); }

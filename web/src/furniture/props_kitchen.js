@@ -1,10 +1,10 @@
 // Counter styling from g12–g18. Origins rest on the stone; +Z is front.
-import { THREE, M, box, cyl, torus, tube, lathe, describe } from '../kit.js';
+import { THREE, M, box, cyl, torus, tube, lathe, describe, declare } from '../kit.js';
 import { driedSpray } from './props_living_parts.js';
 import { paint } from './plants_parts.js';
 
 const ceramic = new THREE.MeshPhysicalMaterial({ color: 0xf8f7f1, roughness: 0.22, clearcoat: 0.65, clearcoatRoughness: 0.18 });
-const glass = new THREE.MeshPhysicalMaterial({ color: 0xf0f5f1, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.19, depthWrite: false, transmission: 0, clearcoat: 0.7 });
+const glass = declare(new THREE.MeshPhysicalMaterial({ color: 0xf0f5f1, roughness: 0.12, metalness: 0, transparent: true, opacity: 0.19, depthWrite: false, transmission: 0, clearcoat: 0.7 }), { surface: 'glass' });
 const black = M.blackMatte(), wire = new THREE.MeshStandardMaterial({ color: 0xa7aaa3, roughness: 0.3, metalness: 0.8 });
 const bamboo = M.oak().clone(); bamboo.color.set(0xd8b778); bamboo.roughness = 0.55;
 const wood = M.acacia(), label = new THREE.MeshStandardMaterial({ color: 0x292c27, roughness: 0.85 });

@@ -132,7 +132,8 @@ export const M = {
   asphalt: once(() => new THREE.MeshStandardMaterial({ color: 0x5b5b5a, roughness: 0.95 })),
   mulch: once(() => pbr('palm_tree_bark', { scale: 1.1, color: 0x4a2f1f, roughness: 1, normalScale: 1.0 })),
   // Glass: thin transparent physical material; `transmission` would cost a lot with this many panes.
-  glass: once(() => Object.assign(new THREE.MeshPhysicalMaterial({ color: 0xdfeaf0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.2, side: THREE.DoubleSide, depthWrite: false }), { userData: { daylightOpacity: 0.035 } })),
+  // window glass (lighting manifest: a pane: the Fresnel sky overlay, clear transmissive glass for the bake, its day opacity)
+  glass: once(() => declare(Object.assign(new THREE.MeshPhysicalMaterial({ color: 0xdfeaf0, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, envMapIntensity: 1.2, side: THREE.DoubleSide, depthWrite: false }), { userData: { daylightOpacity: 0.035 } }), { surface: 'glass', glass: { pane: true } })),
   mirror: once(() => declare(Object.assign(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.02, metalness: 1.0 }), { name: 'mirror' }), { surface: 'mirror' })),
   aluminum: once(() => new THREE.MeshStandardMaterial({ color: 0xdedfe0, roughness: 0.35, metalness: 0.9 })),
   ironBlack: once(() => new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.55, metalness: 0.7 })),

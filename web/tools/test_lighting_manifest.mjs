@@ -31,6 +31,11 @@ const FIXES = [
   ['material', 'wet', m => m.alphaTest > 0 || L(m).surface === 'leafCard' ? 'dry' : 'auto', m => L(m).wet, 14, 'non-plant cut-outs may take the wet-ground patch'],
   ['material', 'weather', m => m.alphaTest > 0 || L(m).surface === 'leafCard' ? 'plant' : 'auto', m => L(m).weather, 14, 'non-plant cut-outs take the outdoor / ground after-rain rule'],
   ['mesh', 'sunTrack', o => R(o).role === 'plant' || [].concat(o.material ?? []).some(m => m && (m.alphaTest > 0 || plantSurface(m))), o => R(o).sun.track === 'plant', 19, 'non-plant cut-outs may be promoted to the moving sun casters'],
+  // 2. one glass definition (audit section 3, item 2: four tests in the site, three in the bake)
+  ['material', 'castsSun', m => !(m.transmission > 0 || m.userData.daylightOpacity !== undefined || (m.transparent && m.opacity < 0.6)), m => L(m).castsSun, 2, 'glass blocks no sun: the declared glass (the kitchen oil bottle at opacity 0.6), and no presentation helper does (the flame)'],
+  ['material', 'lightmap', m => !(m.alphaTest > 0 || ['foliage', 'leafCard'].includes(L(m).surface) || (!m.isShaderMaterial && (!!m.userData.sheer || m.userData.daylightOpacity !== undefined || m.transmission > 0))), m => L(m).bake === 'lightmap', 11, 'every glass is probe-lit, not only what the export made transmissive'],
+  ['material', 'windowOverlay', m => m.userData.daylightOpacity !== undefined || m.transmission > 0, m => !!L(m).glass?.overlay, 0, 'only window panes take the overlay'],
+  ['material', 'clearGlass', m => m.userData.daylightOpacity !== undefined, m => L(m).glass?.export === 'pane', 0, 'only window panes become clear glass in the bake'],
 ];
 const items = { material: [], mesh: ix.meshes.map(({ key, node }) => [key, node]) };
 { const seen = new Set(); for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seen.has(m)) { seen.add(m); items.material.push([materialKey(m), m]); } }

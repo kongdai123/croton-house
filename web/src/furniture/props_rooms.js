@@ -47,10 +47,10 @@ const L = {
   rope: once(() => solid(0xb39b71, 0.97)), wax: once(() => solid(0xf2e9d8, 0.75)),
   amber: once(() => new THREE.MeshPhysicalMaterial({ color: 0x85522e, roughness: 0.23, metalness: 0.08,
     transparent: true, opacity: 0.84, depthWrite: false })),
-  glass: once(() => new THREE.MeshPhysicalMaterial({ color: 0xe7eeea, roughness: 0.13, metalness: 0.02,
-    transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide })),
-  glassEdge: once(() => solid(0xcdd9d3, 0.16, { transparent: true, opacity: 0.5, depthWrite: false })),
-  water: once(() => solid(0xc1d3cd, 0.08, { transparent: true, opacity: 0.14, depthWrite: false })),
+  glass: once(() => declare(new THREE.MeshPhysicalMaterial({ color: 0xe7eeea, roughness: 0.13, metalness: 0.02,
+    transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide }), { surface: 'glass' })),
+  glassEdge: once(() => declare(solid(0xcdd9d3, 0.16, { transparent: true, opacity: 0.5, depthWrite: false }), { surface: 'glass' })),
+  water: once(() => declare(solid(0xc1d3cd, 0.08, { transparent: true, opacity: 0.14, depthWrite: false }), { surface: 'glass' })),   // water in a glass
   shade: once(() => new THREE.MeshPhysicalMaterial({ map: fabricMap(), color: 0xfff4df, roughness: 0.95,
     emissive: 0xffe1af, emissiveIntensity: 0.20, sheen: 0.6, side: THREE.DoubleSide, userData: { emits: 'lamp' } })),
   // cut-out leaves of the decor greenery: plant foliage (lighting manifest), not baked per vertex like the modelled plants

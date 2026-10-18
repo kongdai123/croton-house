@@ -1,7 +1,7 @@
 // bath — three bathrooms (refs/bath g30 primary, g31/g34 hall, g36 guest) + garage / laundry (g48, g49).
 // Bathroom pieces live here; shared local materials and the garage pieces are in bath_parts.js.
 // Units metres; origin on the floor at the footprint centre; +Z = front; wall-mounted pieces have their back at -Z.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, setCollider, autoCollider, describe, sphere, torus } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, setCollider, autoCollider, describe, sphere, torus, declare } from '../kit.js';
 import { L, PI, retile, rod, washerDryer, waterHeater, wireShelving, pingPongTable, consoleRustic, electricalPanel } from './bath_parts.js';
 
 const rrect = (x0, y0, x1, y1, r, n = 6) => {
@@ -154,7 +154,7 @@ function shower({ win = null, reveal = 0.14 } = {}) {
   const gx0 = -S / 2 + lt + 0.004, gw = 0.6, gz = S / 2 - curb / 2;
   root.add(box(gw, 2.0, 0.008, M.glass(), { x: gx0 + gw / 2, y: curb, z: gz, bottom: true }));
   root.add(box(gw, 0.02, 0.02, L.chrome(), { r: 0.002, x: gx0 + gw / 2, y: curb, z: gz, bottom: true }));
-  const edgeMat = new THREE.MeshPhysicalMaterial({ color: 0xa8c8bc, roughness: 0.1, transparent: true, opacity: 0.55, depthWrite: false });
+  const edgeMat = declare(new THREE.MeshPhysicalMaterial({ color: 0xa8c8bc, roughness: 0.1, transparent: true, opacity: 0.55, depthWrite: false }), { surface: 'glass' });   // the glass panel's edge
   root.add(box(0.009, 2.0, 0.0085, edgeMat, { x: gx0 + gw - 0.0045, y: curb, z: gz, bottom: true }));
   root.add(box(gw, 0.009, 0.0085, edgeMat, { x: gx0 + gw / 2, y: curb + 2.0 - 0.009, z: gz, bottom: true }));
   for (const y of [0.45, 1.75]) root.add(box(0.04, 0.06, 0.03, L.chrome(), { r: 0.005, x: gx0 + 0.016, y, z: gz }));

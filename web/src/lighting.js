@@ -300,7 +300,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
           };
           local.customProgramCacheKey = () => previousKey + '|hq-shadow|skip-dark-lights|daylight';
           uses.set(materialRegion, local); materialRegion.add(local);
-          if (local.userData.daylightOpacity !== undefined && materialRegion === interiorMaterials) glass.set(local, local.opacity);
+          if (lightingOf(local).glass?.pane && materialRegion === interiorMaterials) glass.set(local, local.opacity);   // window panes: day opacity
         }
         if (local.emissive && local.emissiveIntensity > 0 && !lightingOf(local).emits?.switched) emissives.set(local, local.emissiveIntensity);
         return local;
@@ -334,7 +334,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     // A later toggle may have overtaken the asynchronous HDR load.
     if (isDusk !== dusk) return;
     if (daylight) daylight.day.value = dusk ? 0 : 1;
-    for (const [material, opacity] of glass) material.opacity = dusk ? opacity : material.userData.daylightOpacity;
+    for (const [material, opacity] of glass) material.opacity = dusk ? opacity : lightingOf(material).glass.daylightOpacity;
     scene.background = renderConfig.hdr ? sky.background : new THREE.Color(dusk ? 0x303b50 : 0xa9c9e4); scene.backgroundBlurriness = 0;
     scene.backgroundIntensity = dusk ? 0.6 : 0.9;
     scene.environment = sky.target?.texture ?? null;

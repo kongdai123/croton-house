@@ -402,7 +402,7 @@ function frontCurb() {
 function frontLamp() {
   const g = root(), white = renderWhite();
   g.add(latheM([[0, 0], [.11, 0], [.11, .04], [.075, .12], [.055, .19], [.048, 1.43], [.075, 1.45], [.075, 1.49], [.105, 1.52]], white, { seg: 24 }));
-  const glass = new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: .18, transparent: true, opacity: .19, roughness: .12, depthWrite: false, userData: { emits: 'lamp' } });
+  const glass = declare(new THREE.MeshPhysicalMaterial({ color: 0xe9f2ef, emissive: 0xffdf9f, emissiveIntensity: .18, transparent: true, opacity: .19, roughness: .12, depthWrite: false, userData: { emits: 'lamp' } }), { surface: 'glass' });   // the lantern's glowing globe
   const globe = new THREE.Mesh(new THREE.SphereGeometry(.14, 24, 16), glass); globe.position.y = 1.70; globe.scale.y = 1.35; g.add(globe);
   for (let k = 0; k < 6; k++) {
     const a = k * PI / 3;

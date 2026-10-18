@@ -149,6 +149,19 @@ $P scripts/lamp_groups_pack.py refl scene/$V/groups.json $V/lampgroups/refl $V/l
 The gains are the shipped set (15 groups); the new groups (livingNiche, kitchenCabinet, closet, bedroomBLamps, bathB,
 hallBath, bedroom3Lamps) start at 1 until the lead calibrates them.
 
+**QA (gate b), straight after packing: CPU only, numpy + Pillow, ~20 s for the four slots; no GPU, so on the Mac or any node.**
+```sh
+python3 bake/validate/qa.py bakes/$V --switches scene/$V/switches.json --plan web/data/plan.json --out bakes/$V/qa.json
+```
+It reads the bake folder as it stands (`<slot>/` with the layers, `half/`, `quarter/`, `probes.bin`, `refl/`; `lightmap_uv2.bin.gz`;
+`lampgroups/out`) and prints one line per check: files and encodings, per-unit coverage / black units on a non-black material
+(the vertex-colour bug) / no-texel units, tier bleed, lamp-group list, energy and footprint, probes in walls and SH sanity,
+reflection layout and black panoramas (thresholds: `bake/validate/qa_thresholds.json`). It exits non-zero on any failure
+that is not in `bake/validate/qa_baseline.json` (known violations of the shipped bake, shrink-only) and on any metric that
+moved beyond its tolerance. Fix the cause and rebake the affected part, or, once the owner has accepted the change,
+`--approve` (new expected failures also need `--allow-new-failures`) and commit the new baseline. The result must be clean
+(or approved) before the publish below; the same run on `web/assets/lightmaps` after publishing must exit 0.
+
 Publish into a test site (`site_$V/assets/lightmaps/`), then, after validation, into `web/assets/lightmaps/`:
 | From | To |
 |---|---|

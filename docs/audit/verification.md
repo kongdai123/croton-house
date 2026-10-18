@@ -115,6 +115,8 @@ Invariants (each a named test, all asserting against `house.json` rooms in plan 
 Cost: author ~2-3 days (scene stubbing is the long pole); run ~5-10 s. Runs pre-commit (changed-file filter optional) and in CI.
 
 ### (b) Bake QA statistics (new `bake/validate/qa.py`; numpy/PIL, CPU, no GPU)
+*Implemented (gates/qa): `bake/validate/qa.py`, limits in `qa_thresholds.json`, approved expected failures and metrics in `qa_baseline.json`, checker tested by `bake/scripts/test_qa.py`; runs in ~20 s on the shipped assets. The bullets below are the original proposal.*
+
 Run on the cluster login/CPU node or locally on the finished `bakes/v2/<slot>` arrays + tiers, after composite and before packaging. Outputs a JSON
 report and a nonzero exit on failure with named objects:
 * Per object (from the UV tables): covered texel fraction (alpha>0) with a minimum; list zero-coverage visible units (bug 5).

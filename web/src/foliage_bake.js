@@ -13,6 +13,7 @@
 // caught.
 import * as THREE from 'three';
 import { lightingOf } from './lighting_roles.js';
+import { FOLIAGE_VERTEX_PARS, FOLIAGE_VERTEX, FOLIAGE_MAIN } from './shaders/foliage.glsl.js';
 
 // Baked shader edits are transactional: a three chunk changing must never leave half a patch installed.
 const warned = new Set(), failures = [];
@@ -73,16 +74,9 @@ const uniforms = { uFolK: { value: new THREE.Vector2(1, 1) }, uFolLamps: { value
 export const FOLIAGE = {
   patch(sh, reflections) {
     Object.assign(sh.uniforms, uniforms);
-    sh.vertexShader = 'attribute vec3 foliage; varying vec3 vFoliage; uniform vec2 uFolK;\n' + shaderReplace(sh.vertexShader, '#include <begin_vertex>', `#include <begin_vertex>
-      { vec2 y2 = foliage.xy * foliage.xy; vFoliage = vec3( uFolK * y2 / max( 1.0 - y2, vec2( 1.0 / 255.0 ) ), foliage.z ); }`, 'foliage vertex');
+    sh.vertexShader = FOLIAGE_VERTEX_PARS + shaderReplace(sh.vertexShader, '#include <begin_vertex>', FOLIAGE_VERTEX, 'foliage vertex');
     const marker = 'void main() {';
-    sh.fragmentShader = shaderReplace(sh.fragmentShader, marker, `varying vec3 vFoliage; uniform float uFolLamps;
-float foliageScale( vec3 p ) {
-  vec3 uvw = probeUVW( p );
-  float mean = 0.886227 * dot( vec3( probeSH( uvw, 0.0 ).x, probeSH( uvw, 1.0 ).x, probeSH( uvw, 2.0 ).x ), vec3( 0.2126, 0.7152, 0.0722 ) );
-  return min( PI * ( vFoliage.x + uFolLamps * vFoliage.y ) / max( mean, 1e-5 ), 8.0 );
-}
-void main() {`, 'foliage main');
+    sh.fragmentShader = shaderReplace(sh.fragmentShader, marker, FOLIAGE_MAIN, 'foliage main');
     sh.fragmentShader = shaderReplace(sh.fragmentShader, 'probeIrradiance( vProbeWorld, ', 'foliageScale( vProbeWorld ) * probeIrradiance( vProbeWorld, ', 'foliage irradiance', 3);
     if (reflections) sh.fragmentShader = shaderReplace(sh.fragmentShader, 'vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25,', 'vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95,', 'foliage reflection', 2);
     sh.fragmentShader = shaderReplace(sh.fragmentShader, 'sunPCSS( vDirectionalShadowCoord[ i ], directionalLightShadow.shadowBias )', 'min( sunPCSS( vDirectionalShadowCoord[ i ], directionalLightShadow.shadowBias ), vFoliage.z )', 'foliage sun');

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { TAA_GLSL } from './shaders/taa.glsl.js';
 
 const vertex = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const color = `
@@ -121,10 +122,7 @@ function textureBias(sh, bias) {
     samples.lastIndex = 0; const chunk = THREE.ShaderChunk[name]; return chunk && samples.test(chunk) ? chunk : include;
   }).replace(samples, 'taaSample( $1,');
   sh.uniforms.uTaaLodBias = bias;
-  sh.fragmentShader = `uniform float uTaaLodBias;
-vec4 taaSample(sampler2D tex, vec2 uv) { return texture2D(tex, uv, uTaaLodBias); }
-vec4 taaSample(sampler2D tex, vec2 uv, float bias) { return texture2D(tex, uv, bias + uTaaLodBias); }
-` + sh.fragmentShader;
+  sh.fragmentShader = TAA_GLSL + sh.fragmentShader;
 }
 const material = (fragmentShader, uniforms) => new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.NoBlending });
 const target = (name, depth = false) => {

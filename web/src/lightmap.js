@@ -29,7 +29,12 @@ import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
-import { insideGLSL, pieces as planPieces, plan } from './plan.js';
+import { pieces as planPieces, plan } from './plan.js';
+import { WET_GLSL } from './shaders/wet.glsl.js';
+import { PCSS_TAPS, PCSS_GLSL, PCSS_LOOKUP, PCSS_CALL } from './shaders/pcss.glsl.js';
+import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
+import { reflGLSL, CLEARCOAT_IBL } from './shaders/reflection.glsl.js';
+import { PROBE_GLSL, PROBE_SIDE } from './shaders/probe.glsl.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -52,7 +57,7 @@ function wetPatch(sh, wet) {
     vWetWorld = ( modelMatrix * wetPosition ).xyz;`, 'wet vertex');
   const normal = sh.fragmentShader.includes('#include <normal_fragment_begin>') ? '#include <normal_fragment_begin>' : 'vec3 nonPerturbedNormal = normal;';
   sh.fragmentShader = rep(sh.fragmentShader, normal, normal + '\nfloat wetMask = wetGround( inverseTransformDirection( normal, viewMatrix ) ); float wetPuddle = wetMask * puddle();', 'wet normal');
-  sh.fragmentShader = PUDDLE_GLSL + rep(sh.fragmentShader, '#include <lights_physical_fragment>', 'diffuseColor.rgb *= mix( 1.0, 0.62, wetMask ) * mix( 1.0, 0.55, wetPuddle ); roughnessFactor = mix( roughnessFactor, max( 0.06, roughnessFactor * 0.3 ), wetMask ); roughnessFactor = mix( roughnessFactor, 0.03, wetPuddle );\n#include <lights_physical_fragment>', 'wet physical');
+  sh.fragmentShader = WET_GLSL + rep(sh.fragmentShader, '#include <lights_physical_fragment>', 'diffuseColor.rgb *= mix( 1.0, 0.62, wetMask ) * mix( 1.0, 0.55, wetPuddle ); roughnessFactor = mix( roughnessFactor, max( 0.06, roughnessFactor * 0.3 ), wetMask ); roughnessFactor = mix( roughnessFactor, 0.03, wetPuddle );\n#include <lights_physical_fragment>', 'wet physical');
 }
 // contact.js is shared with the live pass. Validate its replacement sites before invoking its baked hook.
 function checkedContact(sh, baked, sun = true) {
@@ -83,56 +88,13 @@ function wetten(c, cls, wet) {
   else if (cls === 'plant') c.roughness = mix(c.roughness, Math.max(0.12, c.roughness * 0.45), wet);
   else { c.color.multiplyScalar(mix(1, 0.85, wet)); c.roughness = mix(c.roughness, Math.max(0.08, c.roughness * 0.55), wet); }
 }
-const PUDDLE_GLSL = `
-varying vec3 vWetWorld;
-uniform float uWet;
-${insideGLSL('outsideHouse')}
-float wetGround( vec3 nWorld ) { return uWet * outsideHouse( vec2( vWetWorld.x, -vWetWorld.z ) ) * smoothstep( 0.8, 0.95, nWorld.y ) * ( 1.0 - smoothstep( 0.3, 0.6, vWetWorld.y ) ); }
-float wetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
-float wetNoise( vec2 p ) { vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
-  return mix( mix( wetHash( i ), wetHash( i + vec2( 1, 0 ) ), f.x ), mix( wetHash( i + vec2( 0, 1 ) ), wetHash( i + vec2( 1, 1 ) ), f.x ), f.y ); }
-float puddle() { vec2 p = vWetWorld.xz * 0.35; float n = 0.55 * wetNoise( p ) + 0.3 * wetNoise( p * 2.1 + 5.2 ) + 0.15 * wetNoise( p * 4.3 + 9.1 );
-  return smoothstep( 0.56, 0.6, n ); }
-`;
 
 // ---- Soft sun shadows (PCSS), as Blender's sun has a size: the penumbra grows with the distance to whatever blocks the
 // light, so leaves 20 m away cast wide soft dapples while a window frame stays crisp. three's shadow map only answers
 // "lit or not", so the sun's depth is rendered once more into a readable texture (alpha cut-outs kept) and filtered here.
 const SUN_RADIUS = THREE.MathUtils.degToRad(0.265);   // the real sun's angular radius (0.53 degrees across): crisp penumbrae like real sunlight
-const spiral = n => Array.from({ length: n }, (_, j) => { const r = Math.sqrt((j + 0.5) / n), a = j * 2.399963229728653; return `vec2(${(Math.cos(a) * r).toFixed(6)}, ${(Math.sin(a) * r).toFixed(6)})`; }).join(', ');
-// Taps per quality tier, [blocker search, filter]: hq keeps the full set; laptop and mobile trade a little more grain in
-// the penumbrae for fewer depth reads (PCSS was ~3.8 ms of a GPU-bound 4x-1440p living frame on the A6000 at 16/24).
-// The tier is a uniform, so J switches without recompiling. No early-out when every search tap finds a blocker: in
-// dappled light the sparse search misses the gaps the filter finds, and the pixel turned black.
-export const PCSS_TAPS = { hq: [16, 24], laptop: [12, 16], mobile: [8, 12] };
+export { PCSS_TAPS };
 const PCSS_TIER = { hq: 0, laptop: 1, mobile: 2 };
-const pcssTaps = (k, [s, f]) => `
-const vec2 SUN_SEARCH${k}[${s}] = vec2[${s}](${spiral(s)});
-const vec2 SUN_FILTER${k}[${f}] = vec2[${f}](${spiral(f)});
-float sunPCSS${k}(vec3 c, mat2 R, float search) {
-  float sum = 0.0, n = 0.0;
-  for (int i = 0; i < ${s}; i++) { float d = texture2D(uSunDepth, c.xy + R * SUN_SEARCH${k}[i] * search).r; if (d < c.z) { sum += d; n += 1.0; } }
-  if (n < 0.5) return 1.0;
-  float pen = max((c.z - sum / n) * uSunDepthRange * uSunTan / uSunWidth, 1.5 * uSunTexel);
-  float lit = 0.0;
-  for (int i = 0; i < ${f}; i++) lit += step(c.z, texture2D(uSunDepth, c.xy + R * SUN_FILTER${k}[i] * pen).r);
-  return lit / ${f}.0;
-}`;
-const PCSS_GLSL = `
-uniform sampler2D uSunDepth; uniform float uSunTexel; uniform float uSunDepthRange; uniform float uSunWidth; uniform float uSunTan; uniform float uSunFrame; uniform int uSunTaps;
-${pcssTaps(0, PCSS_TAPS.hq)}${pcssTaps(1, PCSS_TAPS.laptop)}${pcssTaps(2, PCSS_TAPS.mobile)}
-float sunPCSS(vec4 sc, float bias) {
-  vec3 c = sc.xyz / sc.w; c.z += bias;
-  if (c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z > 1.0) return 1.0;
-  // uSunFrame stays 0 unless TAA drives it (main.js): then the rotations change every frame and the noise integrates.
-  float a = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy + 5.588238 * uSunFrame, vec2(0.06711056, 0.00583715))));
-  mat2 R = mat2(cos(a), sin(a), -sin(a), cos(a));
-  float search = max(30.0 * uSunTan / uSunWidth, 2.0 * uSunTexel);
-  if (uSunTaps == 2) return sunPCSS2(c, R, search);
-  if (uSunTaps == 1) return sunPCSS1(c, R, search);
-  return sunPCSS0(c, R, search);
-}
-`;
 // Two depth targets: `base` holds every caster that holds still, `rt` (sampled) is base's depth plus the "hot" casters,
 // the ones moving now: a door in its swing, the garage door, a toggle, a carried chair (hot from its first change until
 // 2 s after its last), the pets and the visitor (always hot). A refresh while they move is a depth copy and a few
@@ -320,12 +282,11 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     if (dirty && (clock >= 0.05 || settled || (!moving && wasMoving))) refresh();
     wasMoving = moving;
   };
-  const lookup = 'getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] )';
   const patch = sh => {
     Object.assign(sh.uniforms, uniforms);
     sh.fragmentShader = rep(sh.fragmentShader, 'void main() {', PCSS_GLSL + '\nvoid main() {', 'PCSS main');
     if (sh.fragmentShader.includes('#include <lights_fragment_begin>')) sh.fragmentShader = rep(sh.fragmentShader, '#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin, 'PCSS lights');
-    sh.fragmentShader = rep(sh.fragmentShader, lookup, 'sunPCSS( vDirectionalShadowCoord[ i ], directionalLightShadow.shadowBias )', 'PCSS lookup');
+    sh.fragmentShader = rep(sh.fragmentShader, PCSS_LOOKUP, PCSS_CALL, 'PCSS lookup');
   };
   const invalidate = () => { classifyDirty = staticDirty = dirty = true; clock = 1; };
   // subtrees whose casters move (doors, toggles, movables, pets, the visitor): checked every frame
@@ -407,27 +368,7 @@ async function loadRGBM(url, rows, renderer, mips = true, track) {
 // linear-light mip chain (linearMips), decoded after; the blend between neighbouring texels then covers less than a
 // pixel. ?lmfilter=decode (always level 0, decoded first) / hw (always hardware) for A/B checks.
 const LM_FILTER = { decode: 1, hw: 2 }[new URLSearchParams(location.search).get('lmfilter')] ?? 0;
-const RGBM_DECODE = 'vec3 lmDecode( vec4 t, float K ) { vec3 c = t.rgb * t.a; return c * c * 8.0; }';
-const TONE_DECODE = `vec3 lmDecode( vec4 t, float K ) { vec3 y2 = t.rgb * t.rgb; return K * y2 / max( 1.0 - y2, vec3( 1.0 / 255.0 ) ); }`;
-const LM_SAMPLE = `
-#define LM_FILTER ${LM_FILTER}
-uniform vec2 uLmK;
-vec3 lmSample( sampler2D tex, vec2 uv, float K ) {
-  ivec2 size = textureSize( tex, 0 ), hi = size - 1;
-  vec2 tc = uv * vec2( size ), dx = dFdx( tc ), dy = dFdy( tc );
-#if LM_FILTER == 2
-  return lmDecode( texture( tex, uv ), K );
-#elif LM_FILTER == 0
-  if ( max( dot( dx, dx ), dot( dy, dy ) ) > 1.0 ) return lmDecode( texture( tex, uv ), K );
-#endif
-  vec2 p = tc - 0.5, f = fract( p ); ivec2 i = ivec2( floor( p ) );
-  vec3 a = lmDecode( texelFetch( tex, clamp( i, ivec2( 0 ), hi ), 0 ), K );
-  vec3 b = lmDecode( texelFetch( tex, clamp( i + ivec2( 1, 0 ), ivec2( 0 ), hi ), 0 ), K );
-  vec3 c = lmDecode( texelFetch( tex, clamp( i + ivec2( 0, 1 ), ivec2( 0 ), hi ), 0 ), K );
-  vec3 d = lmDecode( texelFetch( tex, clamp( i + ivec2( 1 ), ivec2( 0 ), hi ), 0 ), K );
-  return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
-}
-`;
+const LM_SAMPLE = lmSampleGLSL(LM_FILTER);
 
 // Mip levels in linear light for a tone-curved pair [slot, lamps] (GPU, once per upload): each level-k texel decodes
 // its 2x2 block of level k-1, averages it weighted by coverage (texels the bake wrote: level 0 has a non-black slot
@@ -1096,61 +1037,6 @@ function attachLampReflections(refl, lamps, groups, multi) {
     t.needsUpdate = true; day.dispose(); refl.uniforms.uReflTex.value = t;
   }
 }
-// With slots, the current and the next slot are two halves of one array (lightmap_slots.js): one sampler, the layer
-// offsets uReflBase / uReflNext pick the halves, and the second read happens only during a fade.
-// Mirrors need a small edge allowance without reaching through a bedroom partition.
-const reflGLSL = (n, slots = false, mirror = false, lamps = null) => `
-#define REFL_COUNT ${n}
-${slots ? 'uniform float uReflBlend; uniform float uReflBase; uniform float uReflNext;' : ''}
-${lamps ? `uniform vec2 uReflLamp[ REFL_COUNT ]; uniform vec4 uReflLampW[ ${Math.ceil(lamps.count / 4)} ]; uniform float uReflLampBase;` : ''}
-uniform highp sampler2DArray uReflTex; uniform vec3 uReflPos[ REFL_COUNT ]; uniform vec3 uReflMin[ REFL_COUNT ]; uniform vec3 uReflMax[ REFL_COUNT ]; uniform float uReflMips;
-vec3 reflProbe( vec3 P, vec3 R, float rough ) {
-  // the probe whose box holds the point (a small allowance for surfaces on its faces), then one whose box holds it with
-  // a wider margin, then the nearest: a margin alone let a probe reach through a partition into the next room
-  int best = 0; float bestScore = 1e9;
-  for ( int i = 0; i < REFL_COUNT; i ++ ) {
-    vec3 size = uReflMax[ i ] - uReflMin[ i ];
-    if ( min( size.x, size.z ) < 0.3 ) continue;   // wall slivers contain mostly black reflections
-    bool inBox = all( greaterThanEqual( P, uReflMin[ i ] - 0.03 ) ) && all( lessThanEqual( P, uReflMax[ i ] + 0.03 ) );
-    bool nearBox = all( greaterThanEqual( P, uReflMin[ i ] - ${mirror ? '0.03' : '0.25'} ) ) && all( lessThanEqual( P, uReflMax[ i ] + ${mirror ? '0.03' : '0.25'} ) );
-    float score = distance( P, uReflPos[ i ] ) + ( inBox ? 0.0 : nearBox ? 100.0 : 1000.0 );
-    if ( score < bestScore ) { bestScore = score; best = i; }
-  }
-  vec3 dir = R;
-  if ( bestScore < 1000.0 ) {
-    float nearT = -1e20, farT = 1e20; bool hit = true;
-    for ( int axis = 0; axis < 3; axis ++ ) {
-      float lo = uReflMin[ best ][ axis ], hi = uReflMax[ best ][ axis ];
-      if ( abs( R[ axis ] ) < 1e-7 ) {
-        if ( P[ axis ] < lo || P[ axis ] > hi ) hit = false;
-      } else {
-        float a = ( lo - P[ axis ] ) / R[ axis ], b = ( hi - P[ axis ] ) / R[ axis ];
-        nearT = max( nearT, min( a, b ) ); farT = min( farT, max( a, b ) );
-      }
-    }
-    if ( hit && farT >= max( nearT, 0.0 ) ) {
-      vec3 projected = P + R * farT - uReflPos[ best ];
-      if ( dot( projected, projected ) > 1e-12 ) dir = normalize( projected );
-    }
-  }
-  vec2 uv = vec2( atan( dir.z, dir.x ) * 0.15915494 + 0.5, asin( clamp( dir.y, -1.0, 1.0 ) ) * 0.31830989 + 0.5 );
-  float reflLod = clamp( rough, 0.0, 1.0 ) * uReflMips;
-  ${slots ? `vec3 refl = textureLod( uReflTex, vec3( uv, float( best ) + uReflBase ), reflLod ).rgb;
-  if ( uReflBlend > 0.0 ) refl = mix( refl, textureLod( uReflTex, vec3( uv, float( best ) + uReflNext ), reflLod ).rgb, uReflBlend );` : 'vec3 refl = textureLod( uReflTex, vec3( uv, float( best ) ), reflLod ).rgb;'}
-  ${lamps ? `// the probe's lamp layers, each at its groups' switch levels (skipped while they are off)
-  vec2 lampRange = uReflLamp[ best ];
-  for ( int k = 0; k < ${lamps.max}; k ++ ) {
-    if ( float( k ) >= lampRange.y ) break;
-    int l = int( lampRange.x ) + k; float w = uReflLampW[ l >> 2 ][ l & 3 ];
-    if ( w > 0.0 ) refl += w * textureLod( uReflTex, vec3( uv, uReflLampBase + float( l ) ), reflLod ).rgb;
-  }` : ''}
-  return refl;
-}
-`;
-// the reflection term for a patched material: world position varying + the lookup in place of three's sky map
-// three's clearcoat image-based light (lights_fragment_maps): unpatched, it adds the open sunrise sky to every clearcoated
-// surface indoors (the quartz counters read 0.57 linear with the lamps off, Cycles 0.009)
-const CLEARCOAT_IBL = 'clearcoatRadiance += getIBLRadiance( geometryViewDir, geometryClearcoatNormal, material.clearcoatRoughness );';
 // A mirror (manifest reflection 'mirror') shows the room's probe at full strength: the probe already holds the room's
 // light and occlusion, and the specular-occlusion guess (baked irradiance at the glass) would darken it to near black in
 // a dim bathroom.
@@ -1267,33 +1153,6 @@ function buildProbeVolume(P, groups = null, walls = []) {
   return { fill, uniforms, near, wts };
 }
 const toHalf = THREE.DataUtils.toHalfFloat;
-const PROBE_GLSL = `
-uniform highp sampler3D uProbeSH;
-uniform vec3 uProbeOrigin; uniform vec3 uProbeScale; uniform vec3 uProbeDims;
-varying vec3 vProbeWorld;
-// x and north as texture coordinates, height in slices clamped to the first and last slice centres (as clamp-to-edge
-// did for the separate textures), kept a hair inside so filtering never reaches the next colour's slices
-vec3 probeUVW( vec3 p ) {
-  vec3 g = ( p - uProbeOrigin ) * uProbeScale;              // grid units: x, height, z (north)
-  return vec3( ( g.x + 0.5 ) / uProbeDims.x, ( g.z + 0.5 ) / uProbeDims.z, clamp( g.y, 0.01, uProbeDims.y - 1.01 ) );
-}
-vec4 probeTex( highp sampler3D t, vec3 uvw, float ch ) { return texture( t, vec3( uvw.xy, ( uvw.z + ch * uProbeDims.y + 0.5 ) / ( 3.0 * uProbeDims.y ) ) ); }
-// colour ch (0 R, 1 G, 2 B) of the L1 SH; the slot runtime blends the next slot's volume in here
-vec4 probeSH( vec3 uvw, float ch ) { return probeTex( uProbeSH, uvw, ch ); }
-vec3 probeIrradiance( vec3 p, vec3 n ) {
-  vec3 uvw = probeUVW( p );
-  vec4 r = probeSH( uvw, 0.0 ), gg = probeSH( uvw, 1.0 ), b = probeSH( uvw, 2.0 );
-  vec4 basis = vec4( 0.886227, 1.023328 * n.y, 1.023328 * n.z, 1.023328 * n.x );
-  return max( vec3( dot( r, basis ), dot( gg, basis ), dot( b, basis ) ), 0.0 );
-}
-// The volume's cells are 0.5 m: one at a door, blind or curtain mixes the rooms (closet, garden) on both sides of it.
-// A face that moves there is lit from a little way out (side, m) on the side it looks at, half way towards the viewer:
-// a panel's bevels and a leaf's edges face along the doorway, and only the viewer says which room they are seen from.
-vec3 probeIrradiance( vec3 p, vec3 n, float side ) { return probeIrradiance( p + normalize( n + normalize( cameraPosition - p ) + 1e-4 ) * side, n ); }
-`;
-// the side argument of the lookup above, for probeLit's sided materials: a full cell (0.5 m) out, so both cells the
-// lookup blends lie on the face's side of the doorway (at 0.3 m a bath door took 14% from the sunlit bedroom behind it)
-const PROBE_SIDE = ', 0.5';
 function probeLit(material, volume, pcss, sided = false) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;

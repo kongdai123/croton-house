@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { shaderReplace as rep } from './foliage_bake.js';
 import * as proc from './proc.js';
 import { declare } from './lighting_roles.js';
+import { SHEER_PROBE_LINE, SHEER_VERTEX_PARS, SHEER_SPREAD, SHEER_DIRECT_LINE, SHEER_DIRECT, SHEER_EMISSION, SHEER_SHEEN, SHEER_PROBE, SHEER_COVERAGE, SHEER_PARS } from './shaders/sheer.glsl.js';
 
 const loader = new THREE.ImageLoader();
 const cache = new Map();
@@ -277,17 +278,16 @@ export function sheerProbePatch(sh, material) {
   const s = material.userData.sheer;
   material.sheerUniform ??= { value: new THREE.Vector2(s.reflect, s.transmit) };
   sh.uniforms.uSheer = material.sheerUniform;
-  const probe = 'irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) );';
-  sh.vertexShader = 'varying float vSheerSpread;\n' + rep(sh.vertexShader, '#include <project_vertex>', '#include <project_vertex>\n\tvSheerSpread = length( modelMatrix[ 0 ].xyz );', 'sheer spread');
-  const direct = 'reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution );\n}';
+  const probe = SHEER_PROBE_LINE;
+  sh.vertexShader = SHEER_VERTEX_PARS + rep(sh.vertexShader, '#include <project_vertex>', SHEER_SPREAD, 'sheer spread');
+  const direct = SHEER_DIRECT_LINE;
   let f = rep(sh.fragmentShader, '#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment, 'sheer physical pars');
-  f = rep(f, direct, 'vec2 sheerK = sheerResponse();\n\treflectedLight.directDiffuse += ( sheerK.x * irradiance + sheerK.y * saturate( - dot( geometryNormal, directLight.direction ) ) * directLight.color ) * BRDF_Lambert( material.diffuseContribution );\n}', 'sheer direct');
-  f = rep(f, 'vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = vec3( 0.0 );', 'sheer emission');
-  f = rep(f, '#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_SHEEN\n\tmaterial.sheenColor *= 0.3;\n#endif', 'sheer sheen');
-  f = rep(f, probe, `{ vec3 sheerN = inverseTransformDirection( geometryNormal, viewMatrix ); vec2 sheerK = sheerResponse();
-      irradiance += sheerK.x * probeIrradiance( vProbeWorld, sheerN ) + sheerK.y * probeIrradiance( vProbeWorld, - sheerN ); }`, 'sheer probe');
+  f = rep(f, direct, SHEER_DIRECT, 'sheer direct');
+  f = rep(f, 'vec3 totalEmissiveRadiance = emissive;', SHEER_EMISSION, 'sheer emission');
+  f = rep(f, '#include <lights_physical_fragment>', SHEER_SHEEN, 'sheer sheen');
+  f = rep(f, probe, SHEER_PROBE, 'sheer probe');
   // Fold overlap has optical depth: a narrow/bunched panel covers the background with many cloth layers. Apply after
   // the alpha map so even its weave holes close up in the stack. Same world spread drives the lighting occlusion.
-  f = rep(f, '#include <alphamap_fragment>', '#include <alphamap_fragment>\n diffuseColor.a = 1.0 - pow( max( 1.0 - diffuseColor.a, 0.0 ), max( 1.0, 0.7 / max( vSheerSpread, 0.02 ) ) );', 'sheer coverage');
-  sh.fragmentShader = 'uniform vec2 uSheer; varying float vSheerSpread;\nvec2 sheerResponse() { return uSheer * mix( 0.3, 1.0, smoothstep( 0.05, 0.7, vSheerSpread ) ); }\n' + f;
+  f = rep(f, '#include <alphamap_fragment>', SHEER_COVERAGE, 'sheer coverage');
+  sh.fragmentShader = SHEER_PARS + f;
 }

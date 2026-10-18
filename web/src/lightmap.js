@@ -760,14 +760,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     volume.fill(lampLevel); register(scene);
   }
   volumeRef = volume;
-  // every visible lit mesh left without a lightmap, by why: the manifest's reason (plant, glass, door, movable, dynamic:
+  // every visible lit mesh left without a lightmap, by why: the manifest's reason (plant, cutout, glass, door, movable, dynamic:
   // animated or toggled), sharedUV, skipped by unwrap.py (ground, far), unmatched (an id the sidecar does not know: the
   // bake is older than the scene), nobake (a sidecar without ids)
   const unlit = {}, skipped = header.skipped ?? {}, shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
   for (const o of meshes) {
     const ms = [].concat(o.material); if (!shown(o) || !ms.some(m => m?.isMeshStandardMaterial && !m.lightMap)) continue;
     const r = meshLighting(o), id = o.userData.lmId;
-    const why = r.why === 'plant/glass' ? (lightingOf(ms[0])?.foliage ? 'plant' : 'glass') : r.why ?? (sharedUV.has(o) ? 'sharedUV' : !id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
+    const L0 = lightingOf(ms[0]), why = r.why === 'plant/glass' ? (L0?.foliage ? 'plant' : L0?.alphaCutout ? 'cutout' : 'glass') : r.why ?? (sharedUV.has(o) ? 'sharedUV' : !id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
     unlit[why] = (unlit[why] ?? 0) + 1;
   }
   // main calls after layout.animate, garden wind and all interaction/parent transform updates.

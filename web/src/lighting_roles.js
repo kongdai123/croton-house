@@ -104,9 +104,9 @@ export function resolveMaterial(m) {
   if (!surface) surface = u.sheer ? 'sheer' : presentationLike(m) ? 'presentation' : glassLike(m) ? 'glass' : emits ? emits.kind : 'opaque';
   const alphaCutout = m.alphaTest > 0, preset = SURFACE_PRESETS[surface] ?? {};
   const pick = (k, dflt) => d[k] !== undefined ? d[k] : preset[k] !== undefined ? preset[k] : dflt;
-  // an alpha-tested card is treated as foliage, whatever it shows (today's rule)
-  let foliage = pick('foliage', null);
-  if (!foliage && alphaCutout) foliage = { groundOcclusion: true, bakedPerVertex: false };
+  // the plant treatment is a plant's (foliage, leaf cards), not an alpha mask's: a net, a lattice or a perforated panel
+  // is a cut-out surface lit like any other
+  const foliage = pick('foliage', null), leaf = surface === 'leafCard' || (!!foliage && alphaCutout);
   const glass = surface === 'glass' ? { overlay: u.daylightOpacity !== undefined || m.transmission > 0, export: u.daylightOpacity !== undefined ? 'pane' : 'keep', ...(d.glass ?? {}) } : null;
   const sheer = u.sheer ?? d.sheer ?? null;
   // what unwrap.py leaves out of the atlas (plant, glass): alpha masks, plants, and what the export turns into transmission
@@ -115,14 +115,17 @@ export function resolveMaterial(m) {
     declared: d, surface, alphaCutout,
     twoSided: pick('twoSided', false),
     foliage,
-    wet: d.wet ?? (preset.wet === 'dry' || alphaCutout ? 'dry' : 'auto'),
-    weather: d.weather ?? (preset.weather === 'plant' || alphaCutout ? 'plant' : 'auto'),
+    // leaves (leaf cards, a plant's cut-out leaves) stay dry and take the plant's after-rain sheen
+    wet: d.wet ?? (leaf ? 'dry' : 'auto'),
+    weather: d.weather ?? (leaf ? 'plant' : 'auto'),
     glass, sheer, emits,
     reflection: pick('reflection', 'probe'),
     clearcoat: d.clearcoat !== undefined ? d.clearcoat : m.clearcoat > 0 ? 'probe' : null,
     castsSun: d.castsSun ?? !glassLike(m),
+    // no lightmap for plants, leaf cards, glass and cloth, nor for cut-outs (a hole has no surface to bake)
     bake: d.bake ?? (alphaCutout || preset.bake === 'probe' && surface !== 'sheer' || unwrapGlass ? 'probe' : 'lightmap'),
-    contact: d.contact ?? !(foliage || m.transparent || m.transmission > 0 || m.isShaderMaterial),
+    // the contact-shadow depth pass draws solid depth: no plants (wind), nothing see-through, no cut-outs (no alpha there)
+    contact: d.contact ?? !(foliage || alphaCutout || m.transparent || m.transmission > 0 || m.isShaderMaterial),
     zone: d.zone !== undefined ? d.zone : null,
   };
   RECORDS.set(m, r);

@@ -13,7 +13,7 @@ export const QUOTED = [
   ['glass.unwrap', 'web/src/photo.js traceMaterial: what the export turns into KHR_materials_transmission', '!isShaderMaterial && (manifest sheer || glass.export pane || transmission > 0)'],
   ['mesh.sided', 'web/src/lightmap.js applyLightmaps sided (manifest probeSide face)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh whose record says probeSide face'],
   ['mesh.puddleTier', 'web/src/puddles.js sources tier (indoors() is called from the real module)', 'instanced || any material manifest foliage ? 1 : indoors(box) ? 2 : 0'],
-  ['mesh.lit', 'web/src/lightmap.js applyLightmaps stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "manifest why ('plant/glass' split by the first material's foliage) ?? (!lmId ? 'dynamic' : 'lightmap')"],
+  ['mesh.lit', 'web/src/lightmap.js applyLightmaps stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "manifest why ('plant/glass' split by the first material: plant, cutout, glass) ?? (!lmId ? 'dynamic' : 'lightmap')"],
   ['mesh.unwrapGroundFar', 'bake/scripts/unwrap.py ground/far (plan.json volumes.lightmap)', 'area > maxArea || centroid outside x0..x1, y0..y1 (plan y = -z), centroid = mean of world vertices'],
   ['mesh.batchable', 'web/src/batch.js:49 lmMesh / :68 mergeable', 'isMesh && !instanced && !skinned && position'],
 ];
@@ -96,7 +96,8 @@ export function captureClassify(w, ix) {
     }
     // lightmap.js:773-778, without the sidecar branches
     const why = R(o).why;
-    o2.lit = why === 'plant/glass' ? (first.userData && w.roles.lightingOf(first).foliage ? 'plant' : 'glass') : why ?? (!o.userData.lmId ? 'dynamic' : 'lightmap');
+    const L0 = first.userData && w.roles.lightingOf(first);
+    o2.lit = why === 'plant/glass' ? (L0?.foliage ? 'plant' : L0?.alphaCutout ? 'cutout' : 'glass') : why ?? (!o.userData.lmId ? 'dynamic' : 'lightmap');
     // contact.js depthOf: the manifest's contact flag
     o2.contactExcluded = ms.some(m => !w.roles.lightingOf(m).contact);
     meshes[key] = prune(o2);

@@ -24,7 +24,13 @@ else console.log('ok   validator: every visible mesh and material resolved');
 // PURPOSE (an inconsistency of docs/audit/lighting-roles.md fixed), the old rule stays here with the number of materials /
 // meshes whose answer changed and why: the count is checked, so a later change to either side shows up.
 //   [kind, decision, old rule (material or mesh), manifest's rule, expected changes, why]
+const L = roles.lightingOf, R = roles.meshLighting, plantSurface = m => ['foliage', 'leafCard'].includes(L(m).surface);
 const FIXES = [
+  // 1. an alpha mask is not a plant (audit section 3, item 1: alphaTest > 0 counted as foliage everywhere)
+  ['material', 'foliage', m => m.alphaTest > 0 || plantSurface(m), m => !!L(m).foliage, 14, 'non-plant cut-outs lose the plant treatment'],
+  ['material', 'wet', m => m.alphaTest > 0 || L(m).surface === 'leafCard' ? 'dry' : 'auto', m => L(m).wet, 14, 'non-plant cut-outs may take the wet-ground patch'],
+  ['material', 'weather', m => m.alphaTest > 0 || L(m).surface === 'leafCard' ? 'plant' : 'auto', m => L(m).weather, 14, 'non-plant cut-outs take the outdoor / ground after-rain rule'],
+  ['mesh', 'sunTrack', o => R(o).role === 'plant' || [].concat(o.material ?? []).some(m => m && (m.alphaTest > 0 || plantSurface(m))), o => R(o).sun.track === 'plant', 19, 'non-plant cut-outs may be promoted to the moving sun casters'],
 ];
 const items = { material: [], mesh: ix.meshes.map(({ key, node }) => [key, node]) };
 { const seen = new Set(); for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seen.has(m)) { seen.add(m); items.material.push([materialKey(m), m]); } }

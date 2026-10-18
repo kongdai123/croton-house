@@ -32,7 +32,8 @@ try {
       assert.ok(sh.fragmentShader.includes('sunPCSS')); assert.ok(sh.vertexShader.includes('vProbeWorld'));
       const source = sh.vertexShader + sh.fragmentShader;
       if (seen.has(key)) assert.equal(source, seen.get(key), key); else seen.set(key, source);
-      assert.equal(sh.fragmentShader.includes('float wetPuddle ='), wet > 0 && name !== 'garden-leaf' && !alphaTest);
+      // leaves stay dry: leaf cards, and a plant's cut-out leaves (an alpha mask alone is not a plant)
+      assert.equal(sh.fragmentShader.includes('float wetPuddle ='), wet > 0 && name !== 'garden-leaf' && !(name === 'plant-leaf' && alphaTest));
       assert.equal(sh.fragmentShader.includes('foliageScale'), fol);
     }
     const leaf = leafMat('wet-fixture', new T.Texture(), { soft: true, alpha: false });

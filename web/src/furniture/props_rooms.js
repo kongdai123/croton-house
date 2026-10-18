@@ -53,8 +53,9 @@ const L = {
   water: once(() => solid(0xc1d3cd, 0.08, { transparent: true, opacity: 0.14, depthWrite: false })),
   shade: once(() => new THREE.MeshPhysicalMaterial({ map: fabricMap(), color: 0xfff4df, roughness: 0.95,
     emissive: 0xffe1af, emissiveIntensity: 0.20, sheen: 0.6, side: THREE.DoubleSide, userData: { emits: 'lamp' } })),
+  // cut-out leaves of the decor greenery: plant foliage (lighting manifest), not baked per vertex like the modelled plants
   leaf: once(() => { const m = solid(0xffffff, 0.68, { map: leaf({ color: '#65794e', vein: '#9aa67a', w: 128, h: 256 }),
-    alphaTest: 0.5, side: THREE.DoubleSide }); m.allowOverride = false; return m; }),
+    alphaTest: 0.5, side: THREE.DoubleSide }); m.allowOverride = false; return declare(m, { surface: 'foliage', foliage: { groundOcclusion: true, bakedPerVertex: false } }); }),
   book: once(() => [0x74796d, 0xbcb29d, 0x46525a, 0xa28570, 0xddd6c5, 0x565548].map(c => solid(c, 0.9))),
 };
 function finish(root, id, name, zh, note) { return describe(root, { id: 'props-rooms-' + id, name, zh, note }); }
@@ -410,7 +411,7 @@ const figLeaf = once(() => {
     g.lineWidth = 1; for (let j = 0; j < 8; j++) for (const s of [-1, 1]) { const y = H * (.21 + j * .08);
       g.beginPath(); g.moveTo(W * .5, y + H * .08); g.quadraticCurveTo(W * (.5 + s * .14), y, W * (.5 + s * .29), y - H * .03); g.stroke(); }
   });
-  const m = solid(0xffffff, .76, { map, alphaTest: .5, side: THREE.DoubleSide }); m.allowOverride = false; return m;
+  const m = solid(0xffffff, .76, { map, alphaTest: .5, side: THREE.DoubleSide }); m.allowOverride = false; return declare(m, { surface: 'foliage', foliage: { groundOcclusion: true, bakedPerVertex: false } });   // a fig leaf: plant foliage
 });
 function fiddleFig(seed = 1) {
   const root = group(lathe([[0, 0], [.155, 0], [.169, .015], [.198, .31], [.20, .35], [.182, .35], [.18, .32], [0, .32]], L.ceramic(), { seg: 32 }));

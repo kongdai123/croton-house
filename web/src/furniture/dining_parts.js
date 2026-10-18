@@ -1,6 +1,6 @@
 // dining — shared helpers and local procedural textures (ash grain, Danish paper cord, lantern ribs, painting, books,
 // beach screen, fern frond). Everything is deterministic (seeded) and built once.
-import { THREE, M, shadow } from '../kit.js';
+import { THREE, M, shadow, declare } from '../kit.js';
 
 export const once = (fn) => { let v; return () => (v ??= fn()); };
 export function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
@@ -233,7 +233,8 @@ export const MAT = {
   canvasEdge: once(() => new THREE.MeshStandardMaterial({ color: 0xd94a2a, roughness: 0.85 })),
   beach: once(() => new THREE.MeshStandardMaterial({ map: beachTex(), emissive: 0xffffff, emissiveMap: beachTex(), emissiveIntensity: 0.75, roughness: 0.25, userData: { emits: 'screen' } })),
   books: once(() => new THREE.MeshStandardMaterial({ map: spineTex(), vertexColors: true, roughness: 0.75 })),
-  fern: once(() => new THREE.MeshStandardMaterial({ map: fernTex(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8 })),
+  // cut-out fern fronds: plant foliage (lighting manifest), not baked per vertex like the modelled plants
+  fern: once(() => declare(new THREE.MeshStandardMaterial({ map: fernTex(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8 }), { surface: 'foliage', foliage: { groundOcclusion: true, bakedPerVertex: false } })),
   dried: once(() => new THREE.MeshStandardMaterial({ color: 0xc9b48e, roughness: 1 })),
   plume: once(() => new THREE.MeshPhysicalMaterial({ color: 0xe9dcc4, roughness: 1, sheen: 1, sheenColor: new THREE.Color(0xfff6e6) })),
   silverPlastic: once(() => new THREE.MeshStandardMaterial({ color: 0xdcdcd8, roughness: 0.35, metalness: 0.4 })),

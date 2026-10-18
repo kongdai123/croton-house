@@ -82,3 +82,6 @@ test links them.
   from the plan).
 - The hall and the hall closet are their own spaces, each with its own lights and switch.
 - TAA: keep the code (wire it through the composed shader's flags rather than delete it).
+- Every closet and the laundry nook gets a ceiling light on its own switch (rule, enforced by the
+  rooms-have-switched-light invariant over every plan space), not added piecemeal.
+- The outline's porch-side face (garage block inner vs outer face) is corrected in the bake-affecting step.

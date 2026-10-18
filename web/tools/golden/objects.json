@@ -1,5 +1,5 @@
 {
- "meta": {"batch":{"after":1038,"before":8793,"lmIds":8223},"counts":{"lmSkip":364,"meshes":11265,"placed":917,"withLmId":8249},"note":"Golden snapshot of the headless scene (web/tools/harness/scene.mjs). Regenerate with UPDATE_GOLDEN=1 node web/tools/test_scene_golden.mjs."},
+ "meta": {"batch":{"after":1038,"before":8794,"lmIds":8223},"counts":{"lmSkip":364,"meshes":11265,"placed":917,"withLmId":8249},"note":"Golden snapshot of the headless scene (web/tools/harness/scene.mjs). Regenerate with UPDATE_GOLDEN=1 node web/tools/test_scene_golden.mjs."},
  "materials": {
   "laminate_floor_02#7609923c": {"alphaTest":0,"blending":1,"clearcoat":0,"color":"f3e7d4","depthWrite":true,"emissive":"000000","emissiveIntensity":1,"maps":"map,normalMap,roughnessMap,aoMap","metalness":0,"name":"laminate_floor_02","opacity":1,"roughness":0.7,"side":0,"transmission":0,"transparent":false,"type":"MeshStandardMaterial","user":{}},
   "MeshPhysicalMaterial#e3966e1e": {"alphaTest":0,"blending":1,"clearcoat":0.6,"color":"ffffff","depthWrite":true,"emissive":"000000","emissiveIntensity":1,"maps":"map","metalness":0,"name":"","opacity":1,"roughness":0.3,"side":0,"transmission":0,"transparent":false,"type":"MeshPhysicalMaterial","user":{}},
@@ -1577,7 +1577,7 @@
   "lm:80fab4b3907872a8": {"bbox":[-7.84,0,6,-7.75,2.22,6.025],"flags":{"batched":true},"materials":["MeshStandardMaterial#2d94b7c4"],"motion":"static","region":"house","shadow":"cr","visible":false},
   "lm:d45c9f432c324fa4": {"bbox":[-5.29,0,6,-5.2,2.22,6.025],"flags":{"batched":true},"materials":["MeshStandardMaterial#2d94b7c4"],"motion":"static","region":"house","shadow":"cr","visible":false},
   "lm:78349acf2704cd6c": {"bbox":[-7.84,2.13,6,-5.2,2.22,6.025],"flags":{"batched":true},"materials":["MeshStandardMaterial#2d94b7c4"],"motion":"static","region":"house","shadow":"cr","visible":false},
-  "lm:b8bc495f85d7d4e7": {"bbox":[-3.507,0,4.72,-3.393,2.44,5.85],"materials":["white_stucco#54cdb394"],"motion":"static","region":"house","shadow":"cr"},
+  "lm:b8bc495f85d7d4e7": {"bbox":[-3.507,0,4.72,-3.393,2.44,5.85],"flags":{"batched":true},"materials":["white_stucco#54cdb394"],"motion":"static","region":"house","shadow":"cr","visible":false},
   "lm:9c5fb35f68d277ef": {"bbox":[-3.393,0,4.72,-3.243,2.56,5.85],"flags":{"batched":true},"materials":["white_stucco#a25ea578"],"motion":"static","region":"house","shadow":"cr","visible":false},
   "lm:397aa187616c2c29": {"bbox":[-3.523,0,1.423,-3.507,2.44,5.735],"flags":{"batched":true},"materials":["white_stucco#54cdb394"],"motion":"static","region":"house","shadow":"cr","visible":false},
   "lm:537f21c776aa20eb": {"bbox":[-3.523,2.13,0.718,-3.507,2.44,1.423],"flags":{"batched":true},"materials":["white_stucco#54cdb394"],"motion":"static","region":"house","shadow":"cr","visible":false},
@@ -12157,7 +12157,7 @@
   "lm:3fab87d900337253": {"bbox":[-8.168,0,4.72,0.379,2.56,6],"flags":{"batch":true},"materials":["white_stucco#a25ea578"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
   "lm:e42dfc5c013836f4": {"bbox":[8.029,0,0.125,8.242,2.56,5.85],"flags":{"batch":true},"materials":["white_stucco#a25ea578"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
   "lm:a15142f42e028050": {"bbox":[3.349,0,-1.765,4.084,2.44,-0.69],"flags":{"batch":true},"materials":["MeshStandardMaterial#4b2f2276"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
-  "lm:efa37e02d7bb1228": {"bbox":[-8.018,0,-1.481,-3.507,2.44,5.85],"flags":{"batch":true},"materials":["white_stucco#54cdb394"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
+  "lm:0c0ab6d975b664c3": {"bbox":[-8.018,0,-1.481,-3.393,2.44,5.85],"flags":{"batch":true},"materials":["white_stucco#54cdb394"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
   "lm:b01d3db482bf3d3f": {"bbox":[-8.168,0,-1.481,-8.018,2.56,5.85],"flags":{"batch":true},"materials":["white_stucco#a25ea578"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
   "lm:72089ffe96dd0cf6": {"bbox":[-7.75,0,1.352,-0.502,2.13,6],"flags":{"batch":true},"materials":["MeshStandardMaterial#2d94b7c4"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},
   "lm:304fd7aa6bc69063": {"bbox":[-7.84,0,6,-5.2,2.22,6.025],"flags":{"batch":true},"materials":["MeshStandardMaterial#2d94b7c4"],"motion":"static","name":"batch","region":"batched","shadow":"cr"},

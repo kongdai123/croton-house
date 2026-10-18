@@ -1,11 +1,11 @@
 {
  "note": "Hand-authored part of the plan model: what the Zillow import (house.json) lacks. web/tools/build_plan.mjs merges it with house.json into plan.json. Plan frame: x east, y north, metres. Annex values come from the owner's full floor plan (g07) and the garage photos, as house.js had them. Room shapes are house.json's (owner decision 2026-10-17); entries here only name them, close open-plan seams and apply the fit-out patches.",
  "outline": {
-  "why": "outer faces of the whole building: Zillow footprint + the garage block (house.js EXT_FP). insideMargin: 'inside the house' = the outline grown by 10 cm, replacing the twelve typed -8.1..8.1 / -5.94|-4.82..5.62 rectangles (their margins were 7..15 cm per side, the east one 7 cm, so the east skin alone read as outdoors): the skin's centre line (7.5 cm out) is inside on every side. insideMarginEdges: the porch's two side walls are not grown, as in the typed rectangles: the porch is roofed outdoor space, and the garage block and bedroom 3's porch-side wall pieces are lit and batched as exterior. indoorRamp: lighting.js's indoor weight curve (-0.45..0.55 m from the interior faces) measured from the outline, whose interior faces are one wall (0.114) in; indoorFade: ramp above the ceiling.",
-  "polygon": [[-8.0176, 5.471], [8.0292, 5.471], [8.0292, -5.8503], [3.9699, -5.8503], [3.9699, -4.7203], [-3.507, -4.7203], [-3.507, -5.8503], [-8.0176, -5.8503]],
+  "why": "outer faces of the whole building: Zillow footprint + the garage block (house.js EXT_FP); on the porch side the garage block's outer face (its porch-side wall annex-porch, x1 = site.garageXE), not its inner face (2026-10-17 decision, applied in the rebake). insideMargin: 'inside the house' = the outline grown by 10 cm, replacing the twelve typed -8.1..8.1 / -5.94|-4.82..5.62 rectangles (their margins were 7..15 cm per side, the east one 7 cm, so the east skin alone read as outdoors): the skin's centre line (7.5 cm out) is inside on every side. insideMarginEdges: the porch's two side walls are not grown, as in the typed rectangles: the porch is roofed outdoor space, and the garage block and bedroom 3's porch-side wall pieces are lit and batched as exterior. indoorRamp: lighting.js's indoor weight curve (-0.45..0.55 m from the interior faces) measured from the outline, whose interior faces are one wall (0.114) in; indoorFade: ramp above the ceiling.",
+  "polygon": [[-8.0176, 5.471], [8.0292, 5.471], [8.0292, -5.8503], [3.9699, -5.8503], [3.9699, -4.7203], [-3.393, -4.7203], [-3.393, -5.8503], [-8.0176, -5.8503]],
   "skin": 0.15,
   "insideMargin": 0.1,
-  "insideMarginEdges": [{ "edge": [[-3.507, -5.8503], [-3.507, -4.7203]], "margin": 0 }, { "edge": [[3.9699, -4.7203], [3.9699, -5.8503]], "margin": 0 }],
+  "insideMarginEdges": [{ "edge": [[-3.393, -5.8503], [-3.393, -4.7203]], "margin": 0 }, { "edge": [[3.9699, -4.7203], [3.9699, -5.8503]], "margin": 0 }],
   "indoorRamp": [-0.336, 0.664],
   "indoorFade": 0.6
  },
@@ -49,7 +49,7 @@
   { "id": "linen", "kind": "closet", "zone": "interior", "label": { "en": "Closet", "zh": "壁橱" }, "rect": { "x0": -4.816, "x1": -3.507, "y0": -0.6, "y1": 0.656 },
     "why": "louvered bifold closet off the vestibule (g27/g28), door 0f9916c91a; its ceiling light on its own switch (the closet rule)" },
 
-  { "id": "porch", "kind": "outdoor", "zone": "exterior", "label": { "en": "Porch", "zh": "门廊" }, "rect": { "x0": -3.507, "x1": 3.97, "y0": -5.85, "y1": -4.72 }, "why": "recessed between the garage and bedroom 3, under the main roof" },
+  { "id": "porch", "kind": "outdoor", "zone": "exterior", "label": { "en": "Porch", "zh": "门廊" }, "rect": { "x0": -3.393, "x1": 3.97, "y0": -5.85, "y1": -4.72 }, "why": "recessed between the garage and bedroom 3, under the main roof; from the outer faces of the garage block's porch-side wall (site.garageXE) and of bedroom 3's wall" },
   { "id": "patio", "kind": "outdoor", "zone": "exterior", "label": { "en": "Patio", "zh": "露台" }, "rect": { "x0": -2.4, "x1": 4.2, "y0": 5.47, "y1": 10.2 } },
   { "id": "westCourt", "kind": "outdoor", "zone": "exterior", "label": { "en": "West courtyard", "zh": "西侧庭院" }, "rect": { "x0": -6.2, "x1": -2.4, "y0": 5.47, "y1": 8.6 } },
   { "id": "eastCourt", "kind": "outdoor", "zone": "exterior", "label": { "en": "East courtyard", "zh": "东侧庭院" }, "rect": { "x0": 4.2, "x1": 8.3, "y0": 5.47, "y1": 8.6 } },

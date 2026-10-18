@@ -1,11 +1,10 @@
 // garage — garage / laundry pieces for 2513 Croton Ave. Refs: source/zillow/gallery g49 (laundry nook, sink, black shelving,
 // leaning shutter, ping-pong table), g48 (wall rail, jug of dried flowers, concrete plinth under the washer), g04 (door open).
 // Units metres; origin on the floor at the footprint centre; +Z = front. Materials and small sub-assemblies: garage_parts.js.
-import { THREE, M, cyl, lathe, extrude, tube, plane, at, autoCollider, describe, sphere, torus, group } from '../kit.js';
+import { THREE, M, cyl, lathe, extrude, tube, plane, at, autoCollider, describe, sphere, torus, group, declare } from '../kit.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { animatedToggle, ss } from './outdoor_parts.js';
 import { addAABB, getColliders } from '../house.js';
-import { declare } from '../lighting_roles.js';
 import { G, PI, box, bake, rod, merged, retile, rng, rrect, sweepX, slotted, perforated, bat, batCase, can, bandsPile, crate, ballHeap, gypsophila } from './garage_parts.js';
 
 // ribbed PVC slip nut around a vertical pipe
@@ -331,7 +330,8 @@ function garageDoorOpen() {
     box(mw - 0.07, 0.09, 0.02, G.openerLens(), { r: 0.008, y: my0 + 0.06, z: mz - ml / 2 - 0.004 }),
     box(mw - 0.09, 0.008, 0.15, G.openerLens(), { r: 0.003, y: my0 - 0.002, z: mz - ml / 2 + 0.1 }),
   );
-  lamp.userData.lightFixture = { name: 'Garage opener lamp', zh: '车库开门机灯' }; root.add(lamp);
+  // the garage has almost no daylight (dark walls, one small window): its lights start on at every time of day
+  declare(lamp, { fixture: { kind: 'opener', label: { en: 'Garage opener lamp', zh: '车库开门机灯' }, defaultOn: ['sunrise', 'noon', 'golden', 'dusk'] } }); root.add(lamp);
   root.add(box(0.12, 0.07, 0.06, G.openerGrey(), { r: 0.012, y: yr - 0.012, z: mz + ml / 2 + 0.015 }));
   for (const s of [-1, 1]) for (let i = 0; i < 6; i++) root.add(box(0.003, 0.01, 0.13, G.rubber(), { x: s * (mw / 2 + 0.0005), y: my0 + 0.04 + i * 0.016, z: mz + 0.06 }));
   root.add(rod([0.12, my0, mz - 0.17], [0.125, my0 - 0.17, mz - 0.17], 0.0012, M.plasticWhite(), 4));
@@ -419,6 +419,7 @@ function shopLight() {
     root.add(cyl(0.0035, 0.0035, 0.002, M.steel(), { x: s * (Lf / 2 + 0.0005), y: top - 0.025, rz: PI / 2, seg: 10 }));
   }
   root.userData.light = { type: 'rect', w: 1.1, h: 0.08, intensity: 120, y: 2.4, color: 0xfff4e6, day: 2.5 };
+  declare(root, { fixture: { kind: 'strip', defaultOn: ['sunrise', 'noon', 'golden', 'dusk'] } });   // on all day, as the opener lamp
   return describe(root, { id: 'garage-shopLight', name: 'LED linear shop light 1.2 m', zh: 'LED 条形吸顶灯' });
 }
 

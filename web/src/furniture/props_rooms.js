@@ -2,7 +2,7 @@
 // Exact listing details: shelf books (g26–28), egg lamp (g27/g52), folded towels (g30/g36).
 // Other objects extend the same quiet wood/linen/stoneware palette into the sparsely staged side rooms.
 import { THREE, M, box, cyl, sphere, torus, lathe, tube, plane, group, describe,
-  setCollider, setMovable, shadow } from '../kit.js';
+  setCollider, setMovable, shadow , declare } from '../kit.js';
 import { weave, speckle, leaf } from '../proc.js';
 import { BED_CORNERS, BOOK_CONTACT } from './props_rooms_parts.js';
 
@@ -100,6 +100,7 @@ function linenLamp() {
   root.add(lathe([[0.114, 0.238], [0.115, 0.241], [0.086, 0.398], [0.083, 0.40]], L.shade(), { seg: 32 }));
   for (const [R, y] of [[0.114, 0.241], [0.084, 0.399]]) root.add(torus(R, 0.002, linen(), { y, rx: PI / 2, seg: 32, tube: 6 }));
   root.add(tube([[0.03, 0.011, -0.025], [0.07, 0.005, -0.04], [0.085, 0.003, -0.06]], 0.0018, L.dark(), { seg: 8, radial: 4 }));
+  declare(root, { fixture: { kind: 'lamp' } });
   return finish(root, 'linen-lamp', 'Stoneware lamp with glowing linen shade', '陶瓷亚麻台灯', 'Additional console styling, no scene light');
 }
 const lattice = once(() => {
@@ -117,6 +118,7 @@ function eggLamp() {
   for (let i = 0; i <= 20; i++) { const t = i / 20; profile.push([0.115 * Math.pow(Math.sin(PI * (0.07 + 0.86 * t)), 0.8), 0.027 + 0.32 * t]); }
   root.add(lathe(profile, lattice(), { seg: 32 }));
   root.add(sphere(0.03, L.shade(), { y: 0.15, seg: 16 }));
+  declare(root, { fixture: { kind: 'lamp' } });
   return finish(root, 'egg-lamp', 'Woven rattan egg lamp', '藤编蛋形台灯', 'g27/g52 carved side-table lamp');
 }
 

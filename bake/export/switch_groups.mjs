@@ -4,7 +4,8 @@ import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { extname, join } from 'path';
 // The house's light switches (web/src/furniture/light_switch.js) and what each one controls, for the per-switch lamp
-// bakes (scripts/lamp_groups.py): its live lights, its fixture's light spec (also where the layout's 16-light budget or
+// bakes (scripts/lamp_groups.py): its lamp group, plan space, exterior flag and default slots (the lighting manifest,
+// web/src/lighting_roles.js), its live lights, its fixture's light spec (also where the layout's 16-light budget or
 // placement light: false left it without a live light), and its glowing lamp surfaces, all in plan coordinates
 // (x east, y north, z up). The runtime matches switches to groups by `key` (lamp_groups.js switchKey).
 // usage: node switch_groups.mjs [site dir] > switches.json   (as lights.mjs: on a GPU node, or the dev server on :8780)
@@ -37,7 +38,8 @@ const out = await page.evaluate(() => {
     });
     return {
       i, key: `${id}@${plan(root.getWorldPosition(new V())).map(v => v.toFixed(2)).join(',')}`, id, name: toggle.label.en.replace(/^Turn on · /, ''),
-      root: plan(root.getWorldPosition(new V())), exterior: /porch|wall-light-black|outdoor-front-lamp/.test(id), on: toggle.on,
+      root: plan(root.getWorldPosition(new V())), group: toggle.lighting.group, space: toggle.lighting.space, exterior: toggle.lighting.exterior,
+      defaultOn: toggle.lighting.defaultOn, on: toggle.on,
       lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new V())), intensity: l.userData.base ?? l.userData.switchBase })),
       spec: spec ? { ...spec, p: plan(new V(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
       glows,

@@ -1,6 +1,6 @@
 // kitchen_parts — helpers, local materials and canvas textures for kitchen.js (2513 Croton Ave, 2025 remodel).
 // Shaker fronts, bar pulls, tile panels, world-scaled UVs, per-material mesh merging, appliance builders.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, declare } from '../kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // ---------- shared dimensions (metres) ----------
@@ -310,7 +310,7 @@ export function hood(cx, backZ, bm = M.blackAppliance()) {
   for (const s of [-1, 1]) g.add(box(0.3, 0.004, 0.36, M.steel(), { x: cx + s * 0.17, y: 1.648, z: backZ + 0.25 }));
   for (const s of [-1, 1]) {
     const lamp = cyl(0.022, 0.022, 0.004, L.ledSmall(), { seg: 16, x: cx + s * 0.25, y: 1.646, z: backZ + 0.45 });
-    lamp.userData.lightFixture = { name: `Range hood lamp ${s < 0 ? 1 : 2}`, zh: `抽油烟机灯 ${s < 0 ? 1 : 2}` }; g.add(lamp);
+    declare(lamp, { fixture: { kind: 'cabinet', label: { en: `Range hood lamp ${s < 0 ? 1 : 2}`, zh: `抽油烟机灯 ${s < 0 ? 1 : 2}` } } }); g.add(lamp);
     lamp.userData.keep = true;
   }
   g.add(box(0.12, 0.016, 0.003, L.stainlessBlack(), { x: cx, y: 1.68, z: backZ + d + 0.0015 }));

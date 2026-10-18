@@ -3,7 +3,7 @@
 // scroll columns, the perforated porch sconce, house number, and table-top accessories (vases, tray, bottles, books…).
 // Frame: origin on the floor at the footprint centre, +Z = front. Wall items keep their back face at -Z.
 import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, cushion,
-         autoCollider, describe, shadow } from '../kit.js';
+         autoCollider, describe, shadow , declare } from '../kit.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animatedToggle } from './outdoor_parts.js';
 
@@ -183,6 +183,8 @@ function trackLight() {
   const heads = [[-0.42, 0.55, 0.2, 0.4], [0.0, 0.42, -0.25, -0.2], [0.42, 0.62, 0.15, Math.PI - 0.5]];
   for (const [x, tx, tz, yaw] of heads) { const h = trackHead(tx, tz, yaw); h.position.set(x, CEIL - 0.035, 0); root.add(h); }
   root.userData.light = { type: 'spot', y: 2.38, intensity: 2.5, angle: 0.6, color: 0xfff1dc, distance: 6 };
+  // lighting manifest: one switch per head ("Track light 1".."3"), the track's spot on the first
+  declare(root, { fixture: { kind: 'track', heads: true, label: { en: 'Track light', zh: '轨道射灯' } } });
   return finish(root, { id: 'decor-track-light', name: 'Track light (3 heads)', zh: '轨道射灯' }, false);
 }
 
@@ -192,6 +194,7 @@ function recessedLight() {
   root.add(lathe([[0.036, CEIL - 0.004], [0.031, CEIL - 0.0015]], L.white(), { seg: 40 }));
   const disc = new THREE.Mesh(new THREE.CircleGeometry(0.032, 40), L.canDisc()); disc.rotation.x = Math.PI / 2; disc.position.y = CEIL - 0.0015; root.add(disc);
   root.userData.light = { type: 'point', y: 2.40, intensity: 0.9, color: 0xfff0d8, distance: 4 };
+  declare(root, { fixture: { kind: 'ceiling' } });
   return finish(root, { id: 'decor-recessed-light', name: 'Recessed can light', zh: '筒灯' }, false);
 }
 
@@ -372,6 +375,9 @@ function wallLightBlack() {
     const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.55), L.wash()); wash.position.set(0, y + s * (h / 2 + 0.26), zb + 0.0015); if (s < 0) wash.rotation.z = Math.PI; root.add(wash);
   }
   root.userData.light = { type: 'point', y: 2.05, intensity: 0.7, color: 0xffd9a0, distance: 4 };
+  // The porch's own warm source just in front of the sconce, made whether or not the layout's light budget reached it
+  // (lighting.js collectMaterials); exterior, so it follows dusk.
+  declare(root, { fixture: { kind: 'wall', extraLights: [{ name: 'Porch sconce source', type: 'point', color: 0xffd29b, intensity: 3, distance: 3.5, decay: 2, y: 2.05, z: 0.088, exterior: true }] } });
   return finish(root, { id: 'decor-wall-light-black', name: 'Porch wall sconce (black, perforated)', zh: '门廊壁灯' }, false);
 }
 

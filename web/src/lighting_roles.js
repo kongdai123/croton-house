@@ -308,6 +308,55 @@ export function validateLighting(root) {
   return errors;
 }
 
+// ---- fixtures ------------------------------------------------------------------------------------------------------------
+// A fixture is what a light switch controls: declared on the object as { fixture: { kind, ... } } where it is made, and
+// refined by its placement row (layout.js { lamp: { circuit, defaultOn, plate } }). Its lamp group follows from where
+// it hangs: the plan space at its lamp surfaces (plan.js spaceAt) gives the room part (the space's lampGroup, else its
+// id), the circuit the rest; every fixture in an exterior space is on the porch switch.
+//   kind:      what it is; sets the default circuit (FIXTURE_KINDS)
+//   circuit:   which switch of the room: main (the room's lights), lamps (table and bedside lamps), or a named one
+//   heads:     one switch per child group (track heads); owner: 'bulb' (the switch is the child holding userData.bulbY)
+//   label:     { en, zh } the switch's name (else the placement's name)
+//   defaultOn: the time slots the switch starts on (lighting_slots.js names; dusk: every lamp)
+//   plate:     [x, y, ry] the wall plate (plan metres, facing), on the switch nearest the placement's origin
+//   lights:    'spec' (the live light layout.js made from the fixture's light spec) or 'children' (lights inside it)
+//   extraLights: light specs created besides the spec's, outside the layout's light budget
+export const SLOTS = ['sunrise', 'noon', 'golden', 'dusk'];
+export const CIRCUITS = { main: '', lamps: 'Lamps', pendant: 'Pendant', cabinet: 'Cabinet', niche: 'Niche', center: 'Center' };
+export const FIXTURE_KINDS = { ceiling: 'main', track: 'main', pendant: 'main', wall: 'main', lantern: 'main', opener: 'main', strip: 'main', lamp: 'lamps', cabinet: 'cabinet', niche: 'niche' };
+export const EXTERIOR_GROUP = 'porch', ALWAYS_GROUP = 'always';
+const DEFAULT_ON = ['dusk'];
+
+export function fixtureOf(o) {
+  const d = declared(o).fixture; if (!d) return null;
+  let placed = null; for (let p = o; p; p = p.parent) if (p.userData.placement) { placed = p; break; }
+  const row = placed?.userData.placement.lamp ?? {}, kind = d.kind ?? 'ceiling';
+  const holder = o.userData.light ? o : placed?.userData.light ? placed : null;
+  return {
+    node: o, placed, kind, id: placed?.userData.id || o.userData.id || o.name,
+    circuit: row.circuit ?? d.circuit ?? FIXTURE_KINDS[kind] ?? 'main',
+    heads: !!d.heads, owner: d.owner ?? null, label: d.label ?? null,
+    defaultOn: row.defaultOn ?? d.defaultOn ?? DEFAULT_ON,
+    plate: row.plate ?? d.plate ?? null,
+    lights: d.lights ?? 'spec', extraLights: d.extraLights ?? [],
+    spec: holder?.userData.light ?? null, holder,
+    live: holder ? holder.userData.placement?.light !== false : false, bake: !!holder?.userData.placement?.bake,
+  };
+}
+// Every declared fixture below root, in scene order (the order of the light switches).
+export function fixturesIn(root) { const out = []; root.traverse(o => { if (declared(o).fixture) out.push(o); }); return out; }
+// The lamp group of a switch whose lamp surfaces centre on plan (x, y): { group, space, exterior }.
+export function lampGroupAt(fixture, x, y) {
+  const space = spaceAt(x, y, 0.3);
+  if (!space) return { group: null, space: null, exterior: false };
+  const exterior = space.zone === 'exterior';
+  return { group: exterior ? EXTERIOR_GROUP : (space.lampGroup ?? space.id) + (CIRCUITS[fixture.circuit] ?? ''), space: space.id, exterior };
+}
+// Live lights a fixture owns (layout.js addLight, lighting.js extra lights): registered here, not matched by position.
+const LIGHTS = new WeakMap();
+export function ownLight(holder, light) { if (!LIGHTS.has(holder)) LIGHTS.set(holder, []); LIGHTS.get(holder).push(light); }
+export const ownedLights = holder => LIGHTS.get(holder) ?? [];
+
 // ---- export --------------------------------------------------------------------------------------------------------------
 // The records as the bake reads them (glTF extras "lighting", a JSON string: Blender's importer keeps strings as they are).
 const MESH_KEYS = ['role', 'motion', 'bake', 'why', 'probeSide', 'sun', 'weather', 'zone', 'space', 'puddleMirror', 'fakeShadow'];

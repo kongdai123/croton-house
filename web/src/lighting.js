@@ -16,7 +16,7 @@ import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
 import { ReflectionPass, markReflective } from './reflections.js';
 import { indoorWeight as planIndoorWeight } from './plan.js';
-import { lightingOf, meshLighting } from './lighting_roles.js';
+import { fixtureOf, fixturesIn, lightingOf, meshLighting, ownLight } from './lighting_roles.js';
 
 // Tone curve: Khronos PBR Neutral (the daylight look, fitted to the listing photos), whose final step pulls bright
 // highlights toward white. uHuePreserve scales that step away, so at dusk warm lamps stay amber instead of bleaching.
@@ -260,10 +260,14 @@ export function createLighting(renderer, scene, camera, house, preset) {
   const indoorWeight = position => planIndoorWeight(position.x, -position.z, position.y);
 
   function collectMaterials(root) {
-    // Layout's light budget can be exhausted before the porch sconce is reached.
-    const sconce = new THREE.PointLight(0xffd29b, 0, 3.5, 2);
-    sconce.position.set(0.8, 2.05, 5.0); sconce.name = 'Porch sconce source';
-    sconce.userData.base = 3; sconce.userData.exterior = true; fixtures.add(sconce);
+    // Fixtures' extra lights (lighting manifest extraLights: the porch sconce's warm source), made here whatever the
+    // layout's light budget left: at the spec's point in the fixture's frame, off until the time of day sets it.
+    root.updateMatrixWorld(true);
+    for (const node of fixturesIn(root)) for (const spec of fixtureOf(node).extraLights) {
+      const l = new THREE.PointLight(spec.color, 0, spec.distance, spec.decay);
+      l.position.set(spec.x ?? 0, spec.y ?? 0, spec.z ?? 0).applyMatrix4(node.matrixWorld); l.name = spec.name;
+      l.userData.base = spec.intensity; if (spec.exterior) l.userData.exterior = true; fixtures.add(l); ownLight(node, l);
+    }
     lightSwitches = collectLightSwitches(root, fixtures);
     // A shared material may serve both a room and a garden bench. Split only those
     // uses, so looking through a window never gives the garden studio reflections. The mesh's side is its lighting

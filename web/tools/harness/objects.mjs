@@ -74,8 +74,6 @@ export function materialProps(m) {
 export const materialKey = m => { const p = materialProps(m); return `${p.name || p.type}#${hash8(JSON.stringify(p))}`; };
 
 // ---- objects.json ----------------------------------------------------------------------------------------------------
-const EXTERIOR_RE = /porch|wall-light-black|outdoor-front-lamp/;   // light_switch.js:138, duplicated in bake/export/switch_groups.mjs:40
-export const fixtureExterior = id => EXTERIOR_RE.test(id || '');
 
 export function captureObjects(world, ix) {
   const { T, layout, doors, scene } = world;
@@ -111,7 +109,7 @@ export function captureObjects(world, ix) {
     const fixture = (() => { for (let p = s.root; p; p = p.parent) if (p.userData.placement) return p; return s.root; })();
     const lights = s.toggle.lights.map(l => ({ type: l.type, name: l.name || undefined, pos: [l.position.x, l.position.y, l.position.z].map(r3), intensity: r4(l.intensity), base: l.userData.base !== undefined ? r4(l.userData.base) : undefined, switchBase: l.userData.switchBase !== undefined ? r4(l.userData.switchBase) : undefined }));
     const rec = { fixture: ix.placedKey.get(fixture) ?? ix.pathOf(fixture), fixtureId: fixture.userData.id || fixture.name, root: s.root === fixture ? '.' : ix.pathOf(s.root),
-      label: s.toggle.label.en, labelOn: s.toggle.labelOn.en, exterior: fixtureExterior(fixture.userData.id), plates: (plates.get(s.toggle) ?? []).sort(), lights,
+      label: s.toggle.label.en, labelOn: s.toggle.labelOn.en, exterior: s.lighting.exterior, plates: (plates.get(s.toggle) ?? []).sort(), lights,
       glows: s.toggle.glows.map(g => ({ base: r4(g.base), wash: !!g.wash, material: matRef(g.material) })), meshes: s.meshes.length };
     switchOf.set(s.root, rec);
   }
@@ -157,7 +155,8 @@ export function captureObjects(world, ix) {
     const glows = meshes.map(m => { const b = new T.Box3().setFromObject(m), c = b.getCenter(new T.Vector3()), sz = b.getSize(new T.Vector3()); return { c: plan(c), size: [+sz.x.toFixed(3), +sz.z.toFixed(3), +sz.y.toFixed(3)], mat: m.material.name || '', emissive: !!m.material.emissive }; });
     const wpos = root.getWorldPosition(new T.Vector3());
     let key = `${id}@${plan(wpos).map(v => v.toFixed(2)).join(',')}`; for (let n = 1; bakeSwitches[key]; n++) key = key.replace(/#\d+$/, '') + '#' + n;
-    bakeSwitches[key] = { i, key, id, name: toggle.label.en.replace(/^Turn on · /, ''), root: plan(wpos), exterior: fixtureExterior(id), on: toggle.on,
+    bakeSwitches[key] = { i, key, id, name: toggle.label.en.replace(/^Turn on · /, ''), root: plan(wpos), group: toggle.lighting.group, space: toggle.lighting.space,
+      exterior: toggle.lighting.exterior, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
       lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new T.Vector3())), intensity: l.userData.base !== undefined ? r4(l.userData.base) : l.userData.switchBase !== undefined ? r4(l.userData.switchBase) : undefined })),
       spec: spec ? { ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])), p: plan(new T.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null, glows };
   });

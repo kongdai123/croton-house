@@ -6,7 +6,7 @@ export const STYLING = [
   // Primary: preserve the g27/g28 dried-grass vase and magazines built into shelfWalnut.
   p('shelfBooks', -5.16, 1.755, 0.82, N, { seed: 2 }),
   p('bowl', -5.13, 1.76, 1.10, N),
-  p('eggLamp', -5.55, 2.95, 0.536), // g27/g52, recessed centre of carved table, not its raised rim
+  p('eggLamp', -5.55, 2.95, 0.536, 0, { lamp: { plate: [-3.21, 1.834, N] } }), // g27/g52, recessed centre of carved table, not its raised rim
   // g29 pine cubbies: shelf boards are centred at 0.74/1.08, thickness 0.018.
   p('foldedLinen', -6.055, 1.32, 0.749, 0, { seed: 1 }),
   p('foldedLinen', -5.675, 1.32, 1.089, 0, { seed: 2 }),

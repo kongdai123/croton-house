@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { M } from './materials.js';
 export { M };
+export { declare } from './lighting_roles.js';
 export { THREE };
 
 export function shadow(o) { o.traverse?.(n => { if (n.isMesh) { n.castShadow = true; n.receiveShadow = true; } }); if (o.isMesh) { o.castShadow = o.receiveShadow = true; } return o; }

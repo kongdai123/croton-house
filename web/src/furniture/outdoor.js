@@ -2,7 +2,7 @@
 // Sources: refs/outdoor g40/g41/g42 (fire sphere, wicker egg chairs + poufs, the owner's lumber table and slatted
 // cinder-block stools, navy market umbrella), g37/g38/g39/g44 (white moulded patio armchairs), g03/g05/g06 (front yard:
 // low lumber platform bench, white pots, porch sconce), g43 (white rendered planters), rednote dusk shots (white urn).
-import { THREE, M, box, cyl, tube, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow } from '../kit.js';
+import { THREE, M, box, cyl, tube, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow, declare } from '../kit.js';
 import { ss, rng, wickerResin, WEAVE_TILE, pitSteel, galvanized, powderBlack, lumberTop, soil, concreteGrey, cinder, vinylShade, ash, charEnd, lumberPT, barkDark, cushionCream, navyDeep, renderWhite,
   board, latheM, ringShell, strut, puffPillow, roundCushion, fireScreen, sconceAlpha, animatedToggle } from './outdoor_parts.js';
 
@@ -412,6 +412,7 @@ function frontLamp() {
   const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff4d9, emissive: 0xffdf9f, emissiveIntensity: 2.5, roughness: .3, userData: { emits: 'lamp' } });
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(.036, 16, 12), bulbMat); bulb.position.y = 1.72; g.add(bulb);
   g.userData.light = { type: 'point', y: 1.72, intensity: 0.6, color: 0xffdf9f, distance: 4 };
+  declare(g, { fixture: { kind: 'lantern' } });
   setCollider(g, { w: .16, d: .16, h: 2.03 });
   describe(g, { id: 'outdoor-front-lamp', name: 'White glass carriage lantern', zh: '白色花园灯柱' }); return g;
 }

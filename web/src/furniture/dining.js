@@ -2,7 +2,7 @@
 // the family room / office beyond it (whitewashed console with the red tree painting, cognac tub chair, black leather
 // sling chair, small white desk). Reference photos: refs/dining/g19–g24.
 import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, sphere, torus, shadow,
-  addSeat, setMovable, autoCollider, describe } from '../kit.js';
+  addSeat, setMovable, autoCollider, describe , declare } from '../kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { once, rng, wood, boxUV, sweep, ell, rod, ground, MAT } from './dining_parts.js';
 
@@ -114,6 +114,7 @@ function buildLantern() {
   root.add(cyl(0.0045, 0.0045, 2.42 - yTop - 0.015, wm, { y: yTop + 0.015, bottom: true, seg: 8 }));             // stem / cord
   root.add(lathe([[0, 2.415], [0.055, 2.415], [0.066, 2.421], [0.07, 2.432], [0.07, 2.44], [0, 2.44]], wm, { seg: 32 }));  // canopy
   root.userData.light = { type: 'point', y: cy, intensity: 4, color: 0xffe7c0, distance: 7 };
+  declare(root, { fixture: { kind: 'pendant', defaultOn: ['golden', 'dusk'] } });   // over the table in the evening
   return describe(root, { id: 'dining-pendant', name: 'Paper ball pendant', zh: '纸球吊灯', note: 'hangs from the 2.44 m ceiling; centre at 1.95 m' });
 }
 

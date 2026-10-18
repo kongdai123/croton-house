@@ -1,7 +1,7 @@
 // bedrooms — primary suite A (owner-built whitewashed pine platform bed), bedroom B (acacia bed), bedroom 3 (pine bed),
 // closet louvered bifolds, walnut bar/shelf cabinet, rugs, side tables. Refs: refs/bedrooms/ (g26-g35, rednote build photos).
 // Local frame: origin on the floor at the footprint centre, +Z = front (a bed's foot points to +Z, headboard at -Z).
-import { THREE, M, box, cyl, lathe, extrude, tube, group, at, repeat, legs, addSeat, setMovable, autoCollider, setCollider, describe, sphere } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, group, at, repeat, legs, addSeat, setMovable, autoCollider, setCollider, describe, sphere, declare } from '../kit.js';
 import { wood, wood as woodBase, merge, vc, pillowMesh, ruffle, drape, book, cup, mats, rng, projectUV } from './bedrooms_parts.js';
 
 const PI = Math.PI;
@@ -208,6 +208,7 @@ function nightstandPine() {
   const knob = lathe([[0, 0], [0.013, 0], [0.016, 0.006], [0.011, 0.014], [0.009, 0.02], [0.0005, 0.022]], P, { seg: 16 });
   knob.rotation.x = PI / 2; knob.position.set(0, 0.378, D / 2 - 0.011); root.add(knob);
   const lamp = eggLamp({ y: H, h: 0.30, r: 0.11 }); lamp.position.set(0.04, 0, -0.02); root.add(lamp);
+  declare(lamp, { fixture: { kind: 'lamp', label: { en: 'Rattan bedside lamp', zh: '藤编床头灯' } } });   // the lamp is the switch; its light is the nightstand's spec
   root.userData.light = { type: 'point', x: 0.04, y: lamp.userData.bulbY, z: -0.02, intensity: 0.8, color: 0xffd9a0, distance: 3 };
   describe(root, { id: 'nightstandPine', name: 'Pine nightstand with rattan egg lamp', zh: '松木床头柜 + 藤编台灯' });
   return autoCollider(root);

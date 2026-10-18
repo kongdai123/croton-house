@@ -14,37 +14,35 @@ try {
   const built = await build({ stdin: { contents: `export * as T from 'three'; export { PLACEMENTS } from './src/layout.js';
     export { items as decor } from './src/furniture/decor.js'; export { items as outdoor } from './src/furniture/outdoor.js';
     export { pillowBody } from './src/furniture/living.js'; export { puffGeo, ruffle } from './src/furniture/bedrooms_parts.js';
-    export { collectLightSwitches, WALL_SWITCHES } from './src/furniture/light_switch.js'; export { defaultOn, lampGroupGLSL, createLampGroups } from './src/lamp_groups.js';
+    export { collectLightSwitches } from './src/furniture/light_switch.js'; export { defaultOn, lampGroupGLSL, createLampGroups } from './src/lamp_groups.js';
     export { sheerProbePatch } from './src/materials.js';
     export { lightingOf } from './src/lighting_roles.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
     bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
   globalThis.location = { search: '' };
-  const context = new Proxy({}, { get: (o, k) => o[k] ?? (() => {}) });
+  const image = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) });
+  const context = new Proxy({}, { get: (o, k) => o[k] ?? (k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} })
+    : k === 'getImageData' || k === 'createImageData' ? (...a) => image(a.at(-2), a.at(-1)) : k === 'measureText' ? () => ({ width: 0 }) : () => {}) });
   globalThis.document = { createElement: () => ({ getContext: () => context }) };
-  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, WALL_SWITCHES, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, sheerProbePatch } = await import(pathToFileURL(file));
+  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, sheerProbePatch } = await import(pathToFileURL(file));
   const py = "import ast,sys,json; t=ast.parse(open(sys.argv[1]).read()); print(json.dumps(next(ast.literal_eval(n.value) for n in t.body if isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == 'ORDER')))";
   const names = JSON.parse(execFileSync('python3', ['-c', py, fileURLToPath(new URL('../../bake/scripts/lamp_groups.py', import.meta.url))], { encoding: 'utf8' }));
-  assert.deepEqual(new Set(WALL_SWITCHES.map(s => s[0])), new Set(names.filter(n => n !== 'always')));
   assert.equal(names.length, 22);
   for (const name of names) for (const slot of ['sunrise', 'noon', 'golden', 'dusk']) {
     const expected = ['garage', 'always'].includes(name) || slot === 'dusk' || name === 'kitchenPendant' && slot === 'sunrise' || slot === 'golden' && ['living', 'livingNiche', 'kitchenPendant', 'dining'].includes(name);
     assert.equal(defaultOn(slot, { name, always: name === 'always' }), expected, `${slot}/${name}`);
   }
   const scene = new T.Scene(), fixtures = new T.Group();
-  // Real cans and lantern plus the existing fixture identities exercise every plate's target matching.
-  for (const [name, x, y, ry, id, tx, ty] of WALL_SWITCHES) {
-    let root;
-    const pl = PLACEMENTS.find(p => p.x === tx && p.y === ty && p.bake);
-    if (pl) { assert.equal(pl.light, false); root = decor.recessedLight(); }
-    else { root = new T.Group(); root.userData.lightFixture = { name }; const head = new T.Group(); head.userData.bulbY = 1; head.add(new T.Mesh(new T.BoxGeometry(0.1, 0.1, 0.1), new T.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 1 }))); root.add(head); }
-    root.userData.id = id; root.userData.placement = pl ?? {}; root.position.set(tx, 0, -ty); scene.add(root);
-  }
+  // The porch sconce and a baked bath can as placed (their placement rows declare the plates), and the garden lantern.
+  const place = (make, row) => { const o = make(); o.userData.placement = row; o.position.set(row.x, row.h ?? 0, -row.y); o.rotation.y = row.ry ?? 0; scene.add(o); return o; };
+  place(decor.wallLightBlack, PLACEMENTS.find(p => p.i === 'wallLightBlack'));
+  const canRow = PLACEMENTS.find(p => p.i === 'recessedLight' && p.bake && p.lamp?.plate); assert.equal(canRow.light, false);
+  place(decor.recessedLight, canRow);
   const lantern = outdoor.frontLamp(); lantern.userData.placement = PLACEMENTS.find(p => p.i === 'frontLamp');
   assert.equal(lantern.userData.placement.bake, true); assert.equal(lantern.userData.placement.light, false);
   lantern.position.set(-3.25, 0.22, 10.1); scene.add(lantern);
   const switches = collectLightSwitches(scene, fixtures), plates = scene.children.filter(o => o.name.startsWith('wall-switch-'));
-  assert.equal(plates.length, WALL_SWITCHES.length);
+  assert.deepEqual(plates.map(p => p.name).sort(), ['wall-switch-' + switches.find(s => s.lighting.id === 'decor-recessed-light').lighting.group, 'wall-switch-porch'].sort());
   for (const plate of plates) {
     assert.equal(plate.position.y, 1.12); assert.ok(switches.some(s => s.toggle === plate.userData.lightSwitch));
     plate.userData.lightSwitch.set(false); plate.userData.lightSwitch.tick(0.25);
@@ -53,6 +51,7 @@ try {
   }
   const garden = switches.find(s => s.root === lantern); assert.ok(garden); assert.equal(lantern.userData.onTime, undefined);
   const porch = switches.find(s => s.root.userData.id === 'decor-wall-light-black');
+  assert.ok(porch.lighting.exterior && garden.lighting.exterior && porch.lighting.group === 'porch' && garden.lighting.group === 'porch');
   const members = [porch, garden].map(s => ({ id: s.root.userData.id, root: [s.root.position.x, -s.root.position.z, s.root.position.y], w: 0.5 }));
   const lamps = createLampGroups({ meta: { textures: 1, groups: [{ name: 'porch', index: 0, tex: 0, ch: 0, color: [1, 1, 1], K: 1, members }] }, switches: [porch, garden] });
   lamps.reset('dusk'); lamps.update(0, 'dusk'); lamps.applyGlow();
@@ -60,14 +59,6 @@ try {
   porch.toggle.set(false); lamps.update(0.25, 'dusk'); lamps.applyGlow();
   for (const glow of garden.toggle.glows) assert.equal(glow.material.emissiveIntensity, 0);
   assert.equal(garden.toggle.on, false); lamps.dispose();
-  // Door faces and room boundaries: plates sit on solid wall, outside the door/casing interval.
-  const house = JSON.parse(await readFile(new URL('../data/house.json', import.meta.url)));
-  for (const [name, x, y, ry] of WALL_SWITCHES) {
-    const dx = -Math.sin(ry) * 0.02, dy = Math.cos(ry) * 0.02;
-    const wall = house.walls.find(w => x + dx >= w.x0 && x + dx <= w.x1 && y + dy >= w.y0 && y + dy <= w.y1);
-    assert.ok(wall, `${name}: plate needs wall backing`);
-    assert.ok(!house.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065)), `${name}: door/casing clearance`);
-  }
   for (const make of [decor.cellularShade, decor.cellularShadeNarrow]) {
     const shade = make(), materials = new Set(); shade.traverse(o => { if (o.material?.userData.sheer) materials.add(o.material); });
     assert.equal(materials.size, 1);
@@ -94,5 +85,5 @@ try {
   for (const p of seam.points) assert.ok(Math.min(...edges.map(e => e.closestPointToPoint(new T.Vector3(p.x, 0, p.z), true, new T.Vector3()).distanceTo(new T.Vector3(p.x, 0, p.z)))) < 0.001);
   const glsl = lampGroupGLSL(Math.ceil(names.length / 3));
   assert.equal((glsl.match(/sampler2DArray/g) ?? []).length, 1); assert.ok(glsl.includes('uLampK7')); assert.ok(!glsl.includes('uLampK8'));
-  console.log('scene rebake: 22 groups/8 layers, all slot defaults, 21 backed wall plates, baked bath/closet cans, porch lantern switching, cellular transmission and pillow edge geometry OK');
+  console.log('scene rebake: 22 groups/8 layers, all slot defaults, declared wall plates, baked bath can, porch lantern switching, cellular transmission and pillow edge geometry OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

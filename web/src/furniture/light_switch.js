@@ -1,56 +1,26 @@
 import { THREE, box } from '../kit.js';
 import { meshId } from '../batch.js';
-import { declare } from '../lighting_roles.js';
+import { declare, fixtureOf, fixturesIn, lampGroupAt, ownedLights } from '../lighting_roles.js';
 
+// a fixture's lamp surfaces: whatever glows inside it (the switch turns them into switched emitters)
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
 const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 
-// Plan position + facing, then a fixture id and plan target. Plates reuse fixture toggles so export membership stays physical.
-export const WALL_SWITCHES = [
-  ['living', 0.62, -4.594, Math.PI, 'decor-track-light', 3, -2.35],
-  ['livingCenter', 0.73, -4.594, Math.PI, 'decor-track-light', 0.2, -0.2],
-  ['livingNiche', 3.958, 1.12, -Math.PI / 2, 'niche-recessed-can', 0, 0],
-  ['kitchenPendant', -0.75, -4.594, Math.PI, 'kitchen-pendant', -1.33, -1.28],
-  ['kitchen', -0.86, -4.594, Math.PI, 'decor-track-light', -1.33, -3],
-  ['kitchenCabinet', -0.97, -4.594, Math.PI, 'kitchen-west-run-b', -2.933, -3.022],
-  ['dining', 3.337, 2.02, -Math.PI / 2, 'dining-pendant', 1.85, 3.5],
-  ['family', -2.158, 2.02, Math.PI / 2, 'decor-track-light', -0.9, 3.2],
-  ['primary', -3.10, 1.834, Math.PI, 'decor-recessed-light', -4.3, 2.6],
-  ['primaryLamps', -3.21, 1.834, Math.PI, 'props-rooms-egg-lamp', -5.55, 2.95],
-  ['primaryBath', -6.021, 4.18, -Math.PI / 2, 'decor-recessed-light', -6.95, 4.4],
-  ['closet', -4.942, 0.72, -Math.PI / 2, 'decor-recessed-light', -5.59, 0.8755],
-  ['bedroomB', 4.096, 1.73, Math.PI / 2, 'decor-recessed-light', 6, 3.6],
-  ['bedroomBLamps', 4.096, 1.85, Math.PI / 2, 'nightstandPine', 7.64, 4.51],
-  ['bathB', 6.12, 1.825, 0, 'decor-recessed-light', 6.15, 1.12],
-  ['hallBath', 5.113, -0.40, Math.PI / 2, 'decor-recessed-light', 6.15, -0.72],
-  ['bedroom3', 5.25, -2.154, 0, 'decor-recessed-light', 6, -3.95],
-  ['bedroom3Lamps', 5.36, -2.154, 0, 'nightstandPine', 7.64, -2.88],
-  ['hall', 4.096, -1.65, Math.PI / 2, 'decor-recessed-light', 4.55, -0.2],
-  ['garage', -3.519, -0.45, -Math.PI / 2, 'garage-shopLight', -5.7, -1.6],
-  ['porch', 0.62, -4.732, 0, 'decor-wall-light-black', 0.8, -4.912],
-];
-
-function wallSwitches(scene, entries) {
-  const white = new THREE.MeshStandardMaterial({ color: 0xeeeae2, roughness: 0.45 });
-  const p = new THREE.Vector3();
-  for (const [name, x, y, ry, id, tx, ty] of WALL_SWITCHES) {
-    const entry = entries.find(({ root }) => {
-      let fixture = root; while (fixture && !fixture.userData.placement) fixture = fixture.parent;
-      root.getWorldPosition(p);
-      return (fixture?.userData.id || root.userData.id || root.name) === id && Math.hypot(p.x - tx, -p.z - ty) < 0.06;
-    });
-    if (!entry) continue;
-    const plate = new THREE.Group(); plate.name = 'wall-switch-' + name;
-    plate.position.set(x, 1.12, -y); plate.rotation.y = ry;
-    plate.userData.lightSwitch = entry.toggle;
-    plate.add(box(0.075, 0.12, 0.008, white, { r: 0.004 }));
-    const rocker = box(0.032, 0.064, 0.008, white, { z: 0.007, r: 0.002 }); plate.add(rocker);
-    rocker.onBeforeRender = () => { rocker.rotation.x = (entry.toggle.value - 0.5) * 0.22; };
-    plate.traverse(o => { o.userData.noBatch = o.userData.noHighlight = true; }); scene.add(plate);
-    // the face plate never moves: a lightmap id like every static mesh (batch.js), so the bake lights it; the rocker
-    // tilts with the switch and keeps the probe volume
-    plate.updateMatrixWorld(true); plate.children[0].userData.lmId = meshId(plate.children[0]);
-  }
+// Wall plates: a fixture whose declaration (or placement row) has plate: [x, y, ry] gets one, on its switch nearest the
+// placement's origin; the plate reuses that switch's toggle, so pressing it moves the lamp group. Named after the group.
+function wallPlate(scene, entry, [x, y, ry], white) {
+  const plate = new THREE.Group(); plate.name = 'wall-switch-' + entry.lighting.group;
+  plate.position.set(x, 1.12, -y); plate.rotation.y = ry;
+  plate.userData.lightSwitch = entry.toggle;
+  plate.add(box(0.075, 0.12, 0.008, white, { r: 0.004 }));
+  const rocker = box(0.032, 0.064, 0.008, white, { z: 0.007, r: 0.002 }); plate.add(rocker);
+  rocker.onBeforeRender = () => { rocker.rotation.x = (entry.toggle.value - 0.5) * 0.22; };
+  // the rocker tilts with the switch: lighting manifest motion 'moving' (probe-lit)
+  declare(rocker, { motion: 'moving' });
+  plate.traverse(o => { o.userData.noBatch = o.userData.noHighlight = true; }); scene.add(plate);
+  // the face plate never moves: a lightmap id like every static mesh (batch.js), so the bake lights it
+  plate.updateMatrixWorld(true); plate.children[0].userData.lmId = meshId(plate.children[0]);
+  return plate;
 }
 
 function switchLight(root, meshes, lights, { name, zh, exterior = false, always = false, day = false } = {}) {
@@ -119,40 +89,57 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
   return { root, toggle, meshes, proxy };
 }
 
+// Every declared fixture (lighting_roles.js fixtureOf) becomes a switch, or one per head for a track: its lamp surfaces
+// (any emissive or additive surface inside it), its live lights (the ones it owns: layout.js made them from its light
+// spec, lighting.js its extra lights; or the lights inside it), and its lamp group (lampGroupAt: the plan space at its
+// lamp surfaces and its circuit; exterior spaces are the porch's). entry.lighting / toggle.lighting carry that record.
 export function collectLightSwitches(scene, fixtures) {
-  const entries = [], candidates = [], assigned = new Set();
+  const entries = [], assigned = new Set(), plates = new Map();
   scene.updateMatrixWorld(true);
-  scene.traverse(o => {
-    if (o.userData.light || o.userData.lightFixture || /^props-rooms-(linen|egg)-lamp$/.test(o.userData.id || '') || o.name === 'niche-recessed-can') candidates.push(o);
-  });
-  const practicals = fixtures.children.filter(o => o.isLight);
-  for (const fixture of candidates) {
-    let owner = fixture, lights = [];
-    const spec = fixture.userData.light, niche = fixture.name === 'niche-recessed-can';
-    if (spec && fixture.userData.placement?.light !== false) {
-      const p = new THREE.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld);
-      lights = practicals.filter(l => !assigned.has(l) && l.position.distanceTo(p) < 0.01);
-    }
-    if (niche) fixture.traverse(o => { if (o.isLight) lights.push(o); });
-    if (fixture.userData.id === 'decor-wall-light-black') lights.push(...practicals.filter(l => l.name === 'Porch sconce source'));
+  const practicals = new Set(fixtures.children.filter(o => o.isLight));
+  const centre = meshes => {
+    const c = new THREE.Vector3(), b = new THREE.Box3(), v = new THREE.Vector3();
+    for (const m of meshes) c.add(b.setFromObject(m).getCenter(v));
+    return c.divideScalar(Math.max(1, meshes.length));
+  };
+  const add = (f, root, meshes, lights, label, required = true) => {
+    if (required && !meshes.length) return null;
+    const at = meshes.length ? centre(meshes) : root.getWorldPosition(new THREE.Vector3());
+    const record = { id: f.id, kind: f.kind, circuit: f.circuit, defaultOn: f.defaultOn, ...lampGroupAt(f, at.x, -at.z) };
+    const entry = switchLight(root, meshes, lights, { ...label, exterior: record.exterior, day: f.spec?.day !== undefined });
+    entry.lighting = entry.toggle.lighting = record;
+    entries.push(entry); return entry;
+  };
+  for (const node of fixturesIn(scene)) {
+    const f = fixtureOf(node);
+    const own = f.lights === 'children' ? [] : f.holder ? ownedLights(f.holder) : [];
+    const lights = [...own.filter(l => practicals.has(l) && !assigned.has(l))];
+    if (f.lights === 'children') node.traverse(o => { if (o.isLight) lights.push(o); });
     lights.forEach(l => assigned.add(l));
-    const exterior = /porch|wall-light-black|outdoor-front-lamp/.test(fixture.userData.id || '');
-    if (fixture.userData.id === 'nightstandPine') owner = fixture.children.find(o => o.userData.bulbY !== undefined);
-    if (fixture.userData.id === 'decor-track-light') {
-      const heads = fixture.children.filter(o => o.isGroup);
-      heads.forEach((head, i) => {
+    let made;
+    if (f.heads) {
+      made = node.children.filter(o => o.isGroup).map((head, i) => {
         const meshes = []; head.traverse(o => { if (glowing(o)) meshes.push(o); });
-        entries.push(switchLight(head, meshes, i ? [] : lights, { name: `Track light ${i + 1}`, zh: `轨道射灯 ${i + 1}` }));
+        return add(f, head, meshes, i ? [] : lights, { name: `${f.label.en} ${i + 1}`, zh: `${f.label.zh} ${i + 1}` }, false);
       });
-      continue;
+    } else {
+      const meshes = [];
+      node.traverse(o => { if (glowing(o) || o.material?.blending === THREE.AdditiveBlending) meshes.push(o); });
+      made = [add(f, node, meshes, lights, { name: f.label?.en, zh: f.label?.zh })];
     }
-    const meshes = [];
-    owner.traverse(o => { if (glowing(o) || o.material?.blending === THREE.AdditiveBlending) meshes.push(o); });
-    if (meshes.length) entries.push(switchLight(owner, meshes, lights, {
-      name: niche ? 'Alcove recessed can' : owner !== fixture ? 'Rattan bedside lamp' : fixture.userData.lightFixture?.name,
-      zh: niche ? '壁龛筒灯' : owner !== fixture ? '藤编床头灯' : fixture.userData.lightFixture?.zh, exterior, day: spec?.day !== undefined,
-    }));
+    // a placement row's plate serves every switch made under it (the range wall's two hood lamps), a fixture's own its own
+    if (f.plate) {
+      const owner = f.placed?.userData.placement.lamp?.plate ? f.placed : node;
+      if (!plates.has(owner)) plates.set(owner, { plate: f.plate, entries: [] });
+      plates.get(owner).entries.push(...made.filter(Boolean));
+    }
   }
-  wallSwitches(scene, entries);
+  // the switch nearest the owner's origin carries the plate
+  const white = new THREE.MeshStandardMaterial({ color: 0xeeeae2, roughness: 0.45 }), p = new THREE.Vector3();
+  for (const [owner, { plate, entries: made }] of plates) {
+    if (!made.length) continue;
+    const origin = owner.getWorldPosition(new THREE.Vector3()), d = e => e.root.getWorldPosition(p).distanceTo(origin);
+    wallPlate(scene, made.reduce((a, b) => d(b) < d(a) - 1e-9 ? b : a), plate, white);
+  }
   return entries;
 }

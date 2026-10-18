@@ -60,7 +60,7 @@ export async function buildRealScene() {
       export { buildHouse, getDoors, getColliders, CEIL, EXT_FP, pointInPoly } from './src/house.js';
       export * as houseConsts from './src/house.js';
       export { Layout, PLACEMENTS } from './src/layout.js';
-      export { collectLightSwitches, WALL_SWITCHES } from './src/furniture/light_switch.js';
+      export { collectLightSwitches } from './src/furniture/light_switch.js';
       export { batchStatic, meshId, stillParts } from './src/batch.js';
       export * as roles from './src/lighting_roles.js';
       export { createLighting } from './src/lighting.js';

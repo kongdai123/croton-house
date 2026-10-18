@@ -3,7 +3,7 @@
 // matte-black 0.10 m square tile + vertical finger tile behind the range, black appliances, waterfall island with an
 // oak V-groove board seating side, rush-seat teak counter stools, oak LED linear pendant.
 // Wall runs: BACK at local -Z against the wall, FRONT at +Z. Origins on the floor at the footprint centre.
-import { THREE, M, box, cyl, lathe, extrude, tube, sphere, torus, addSeat, setMovable, autoCollider, setCollider, describe } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, sphere, torus, addSeat, setMovable, autoCollider, setCollider, describe, declare } from '../kit.js';
 import { KITCHEN_WINDOW } from '../house.js';
 import { TOP, CT, KICK, DT, REV, UP_D, UP_Y0, UP_Y1, L, wuv, bake, rrect, fronts, tile, quartz, range, hood, dishwasher, barPull, shaker } from './kitchen_parts.js';
 
@@ -429,6 +429,8 @@ export const items = {
   westRun: () => done(buildWestRun(), { id: 'kitchen-west-run', name: 'Oven tower & counter', zh: '烤箱高柜与台面' }),
   island: () => done(buildIsland(), { id: 'kitchen-island', name: 'Waterfall island', zh: '瀑布岛台' }),
   stool: () => { const g = buildStool(); bake(g); describe(g, { id: 'kitchen-stool', name: 'Rush counter stool', zh: '藤编吧凳' }); setMovable(g, { mass: 6, radius: 0.26 }); addSeat(g, { y: 0.66, facing: 0, kind: 'stool', back: 0.9 }); return autoCollider(g); },
-  pendant: () => { const g = done(buildPendant(), { id: 'kitchen-pendant', name: 'Oak LED linear pendant', zh: '橡木线形吊灯' }, false); g.userData.light = { type: 'rect', w: 1.4, h: 0.06, y: 1.94, intensity: 6, color: 0xfff1dc }; return g; },
+  pendant: () => { const g = done(buildPendant(), { id: 'kitchen-pendant', name: 'Oak LED linear pendant', zh: '橡木线形吊灯' }, false); g.userData.light = { type: 'rect', w: 1.4, h: 0.06, y: 1.94, intensity: 6, color: 0xfff1dc };
+    // the island's own switch; on when someone is up at sunrise and through the evening
+    declare(g, { fixture: { kind: 'pendant', circuit: 'pendant', defaultOn: ['sunrise', 'golden', 'dusk'] } }); return g; },
   counterDecor: () => { const g = done(buildDecor(), { id: 'kitchen-counter-decor', name: 'Island decor', zh: '岛台摆件', note: 'stands on y=0; place on the island top (y=0.92)' }, false); g.userData.placeOn = { surface: 'island', y: TOP }; return g; },
 };

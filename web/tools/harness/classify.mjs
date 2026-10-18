@@ -4,7 +4,7 @@
 // with a file:line, and listed in QUOTED so the README can mark it "to be replaced": the golden then documents today's
 // behaviour and a refactor that replaces the expression must reproduce it.
 import { r3 } from './util.mjs';
-import { materialKey, fixtureExterior } from './objects.mjs';
+import { materialKey } from './objects.mjs';
 
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
 
@@ -21,7 +21,6 @@ export const QUOTED = [
   ['mesh.unwrapGroundFar', 'bake/scripts/unwrap.py:118', 'area > 300 || abs(cx) > 14 || -cz > 18 || -cz < -14, centroid = mean of world vertices, glTF frame (x, y, z) = scene frame'],
   ['mesh.unwrapSkip', 'bake/scripts/unwrap.py:73-78 over all materials', 'every material plant.unwrapSkip'],
   ['mesh.batchable', 'web/src/batch.js:49 lmMesh / :68 mergeable', 'isMesh && !instanced && !skinned && position'],
-  ['placed.exterior', 'web/src/furniture/light_switch.js:138 (duplicated bake/export/switch_groups.mjs:40)', '/porch|wall-light-black|outdoor-front-lamp/.test(fixture.userData.id)'],
 ];
 // Called from the real source (see scene.mjs INTERNALS): lightmap.js weatherClass / isMirror, plan.js isInside, photo.js presentation /
 // weatherClass, foliage_bake.js isPlant, puddles.js wetMaterial / indoors, light_switch.js glowing,
@@ -109,12 +108,15 @@ export function captureClassify(w, ix) {
     meshes[key] = prune(o2);
   }
 
+  // the switches' exterior flag (lighting manifest: the plan space of their lamp surfaces), by the placement they sit in
+  const exterior = new Map();
+  for (const s of w.switches) { let f = s.root; while (f && !f.userData.placement) f = f.parent; if (f) exterior.set(f, exterior.get(f) || s.lighting.exterior); }
   const placed = {};
   const wp = new T.Vector3();
   for (const { key, node: o } of ix.placed) {
     o.getWorldPosition(wp);
     placed[key] = prune({ area: w.areaOf(wp.x, wp.z), room: w.plan.roomName(wp.x, -wp.z).en, roomOutside: w.plan.roomName(wp.x, -wp.z).outside, isIndoor: w.isIndoor(wp.x, wp.z),
-      indoorWeight: r3(w.lighting.indoorWeight(wp.clone().setY(1.0))), exterior: o.userData.light || o.userData.lightFixture ? fixtureExterior(o.userData.id) : false, plantRoot: w.roles.roleOf(o) === 'plant',
+      indoorWeight: r3(w.lighting.indoorWeight(wp.clone().setY(1.0))), exterior: !!exterior.get(o), plantRoot: w.roles.roleOf(o) === 'plant',
       mirror: o.children.some(ch => ch.isReflector) });
   }
   return { meta: { note: 'Today\'s classifier answers. materials.* is keyed like objects.json materials; meshes.* and placed.* like its meshes / placed. Quoted (not callable) classifiers are listed in README.md.', quoted: QUOTED.map(q => q[0]), called: CALLED }, materials, meshes, placed };

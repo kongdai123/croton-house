@@ -65,7 +65,7 @@ try {
   // Five real fixture toggles share one pool, even with uneven energy weights; another group is independent.
   const scene = new T.Scene(), fixtures = new T.Group(), members = [];
   for (let i = 0; i < 6; i++) {
-    const root = new T.Group(); root.userData = { id: 'lamp' + i, placement: {}, lightFixture: { name: 'Lamp', zh: '灯' } };
+    const root = new T.Group(); root.userData = { id: 'lamp' + i, placement: {}, lighting: { fixture: { kind: 'lamp', label: { en: 'Lamp', zh: '灯' } } } };
     root.position.x = i; root.add(new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 1 })));
     scene.add(root); members.push({ id: root.userData.id, root: [i, 0, 0], w: (i + 1) / 15 });
   }

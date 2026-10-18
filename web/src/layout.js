@@ -8,6 +8,7 @@ import { STYLING as STYLING_ROOMS } from './styling_rooms.js';
 import { STYLING as STYLING_GARDEN } from './styling_garden.js';
 import { STYLING as STYLING_FLOWERS } from './styling_flowers.js';
 import { addAABB } from './house.js';
+import { ownLight } from './lighting_roles.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.js';
@@ -15,7 +16,9 @@ import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.j
 const S = 0, N = Math.PI, E = Math.PI / 2, W = -Math.PI / 2;
 const d2r = (d) => THREE.MathUtils.degToRad(d);
 
-// ---- The placement table. {m: module, i: item, x, y (plan), h (height offset), ry, n (name override), light: false to skip its light}
+// ---- The placement table. {m: module, i: item, x, y (plan), h (height offset), ry, n (name override), light: false to skip its light,
+// bake: true for a lamp that exists only in the bake, lamp: { plate: [x, y, ry], circuit, defaultOn } the fixture's switch
+// (lighting_roles.js: the plate is the room's wall switch for this fixture's lamp group)}
 export const PLACEMENTS = [
   // Living room (x -0.8..3.97, y -4.6..1.7): window seat on the front wall, sofa facing it, rug and round table between
   { m: 'living', i: 'windowSeat', x: 2.17, y: -4.28, ry: N, zh: '手工窗台座', n: 'Hand-built window seat' },
@@ -24,23 +27,23 @@ export const PLACEMENTS = [
   { m: 'living', i: 'coffeeTable', x: 2.52, y: -2.85, ry: 0, zh: '圆茶几', n: 'Round coffee table' },
   { m: 'living', i: 'sideBench', x: 3.78, y: -2.78, ry: W, zh: '松木长凳 · 红画', n: 'Pine console & red canvas' },
   { m: 'decor', i: 'cellularShade', x: 2.17, y: -4.54, h: -0.08, ry: N, sx: 0.93 },
-  { m: 'decor', i: 'trackLight', x: 3.0, y: -2.35, ry: E },
-  { m: 'decor', i: 'trackLight', x: 0.2, y: -0.2, ry: E, light: false },
+  { m: 'decor', i: 'trackLight', x: 3.0, y: -2.35, ry: E, lamp: { defaultOn: ['golden', 'dusk'], plate: [0.62, -4.594, N] } },
+  { m: 'decor', i: 'trackLight', x: 0.2, y: -0.2, ry: E, light: false, lamp: { circuit: 'center', plate: [0.73, -4.594, N] } },
   { m: 'decor', i: 'thermostat', x: 3.96, y: -0.3, ry: W },
   // Kitchen (g11-g18, pano ee4635b067): fridge beside the front door, sink + dishwasher under the window, range centred on
   // the west wall (south wall → wall stub), microwave/pantry tower north of the garage door with a bridge cabinet over it
   { m: 'kitchen', i: 'fridge', x: -1.03, y: -4.21, ry: N, zh: '黑色冰箱', n: 'Fridge' },
   { m: 'kitchen', i: 'southRunB', x: -2.449, y: -4.286, ry: N, zh: '水槽 · 洗碗机', n: 'Sink & dishwasher' },
-  { m: 'kitchen', i: 'westRunB', x: -3.073, y: -3.1135, ry: E, zh: '炉灶墙', n: 'Range wall' },
+  { m: 'kitchen', i: 'westRunB', x: -3.073, y: -3.1135, ry: E, zh: '炉灶墙', n: 'Range wall', lamp: { plate: [-0.97, -4.594, N] } },
   { m: 'kitchen', i: 'westRunC', x: -3.063, y: -0.38025, ry: E, zh: '微波炉高柜 · 微波炉上的黑板', n: 'Microwave & pantry tower' },
   { m: 'kitchen', i: 'island', x: -1.33, y: -1.28, ry: E, zh: '中岛', n: 'Island' },   // south end -2.88: seen edge-on from the g12 camera (y -2.886)
   { m: 'kitchen', i: 'stool', x: -0.45, y: -2.43, ry: W, zh: '吧台凳', n: 'Counter stool' },
   { m: 'kitchen', i: 'stool', x: -0.45, y: -1.66, ry: W, zh: '吧台凳', n: 'Counter stool' },
   { m: 'kitchen', i: 'stool', x: -0.45, y: -0.89, ry: W, zh: '吧台凳', n: 'Counter stool' },
   { m: 'kitchen', i: 'stool', x: -0.45, y: -0.12, ry: W, zh: '吧台凳', n: 'Counter stool' },
-  { m: 'kitchen', i: 'pendant', x: -1.33, y: -1.28, ry: E, zh: '橡木吊灯', n: 'Oak pendant' },
+  { m: 'kitchen', i: 'pendant', x: -1.33, y: -1.28, ry: E, zh: '橡木吊灯', n: 'Oak pendant', lamp: { plate: [-0.75, -4.594, N] } },
   { m: 'kitchen', i: 'counterDecor', x: -1.33, y: -0.18, h: 0.92, ry: E },
-  { m: 'decor', i: 'trackLight', x: -1.33, y: -3.0, ry: E, light: false },
+  { m: 'decor', i: 'trackLight', x: -1.33, y: -3.0, ry: E, light: false, lamp: { plate: [-0.86, -4.594, N] } },
   // Dining (x 0.42..3.35, y 1.82..5.36): ash table N-S, six Wishbone chairs, lantern, built-in bookcase bench on the east wall
   { m: 'dining', i: 'table', x: 1.85, y: 3.5, ry: E, zh: '白蜡木餐桌', n: 'Ash dining table' },
   { m: 'dining', i: 'wishboneChair', x: 1.12, y: 2.78, ry: E, zh: 'Y 椅', n: 'Wishbone chair' },
@@ -49,7 +52,7 @@ export const PLACEMENTS = [
   { m: 'dining', i: 'wishboneChair', x: 2.58, y: 2.78, ry: W, zh: 'Y 椅', n: 'Wishbone chair' },
   { m: 'dining', i: 'wishboneChair', x: 2.58, y: 3.5, ry: W, zh: 'Y 椅', n: 'Wishbone chair' },
   { m: 'dining', i: 'wishboneChair', x: 2.58, y: 4.22, ry: W, zh: 'Y 椅', n: 'Wishbone chair' },
-  { m: 'dining', i: 'lantern', x: 1.85, y: 3.5, zh: '纸灯笼', n: 'Paper lantern' },
+  { m: 'dining', i: 'lantern', x: 1.85, y: 3.5, zh: '纸灯笼', n: 'Paper lantern', lamp: { plate: [3.337, 2.02, W] } },
   { m: 'dining', i: 'bookcaseBench', x: 3.68, y: 4.66, ry: 0, sz: 0.86, zh: '书架坐凳', n: 'Built-in bookcase bench' },
   { m: 'decor', i: 'curtainSheer', x: 1.55, y: 5.2, ry: 0 },
   { m: 'decor', i: 'curtainSheer', x: 3.11, y: 5.2, ry: 0, sx: 0.25 },
@@ -59,7 +62,7 @@ export const PLACEMENTS = [
   { m: 'dining', i: 'slingChair', x: -0.08, y: 4.15, ry: d2r(-95), zh: '黑皮吊带椅', n: 'Sling chair' },
   { m: 'decor', i: 'curtainSheer', x: -1.90, y: 5.2, ry: 0, sx: 0.29 },
   { m: 'decor', i: 'curtainSheer', x: 0.3, y: 5.2, ry: 0, sx: 0.5 },
-  { m: 'decor', i: 'trackLight', x: -0.9, y: 3.2, ry: 0, light: false },
+  { m: 'decor', i: 'trackLight', x: -0.9, y: 3.2, ry: 0, light: false, lamp: { plate: [-2.158, 2.02, E] } },
   { m: 'dining', i: 'deskWhite', x: -1.05, y: 2.12, ry: N, zh: '白色书桌', n: 'White desk' },
     // Primary suite (x -5.9..-2.28, y 1.6..5.36): headboard on the east wall under the soffit, slider to the courtyard;
     // the walnut cabinet stands on the south wall beside the vestibule so the way in from the kitchen stays open
@@ -67,7 +70,7 @@ export const PLACEMENTS = [
   { m: 'bedrooms', i: 'rugWhite', x: -4.35, y: 3.55, ry: E },
   { m: 'bedrooms', i: 'sideTableCarved', x: -5.55, y: 2.95, zh: '雕花边几', n: 'Carved side table' },
   { m: 'bedrooms', i: 'shelfWalnut', x: -5.37, y: 1.78, ry: N, zh: '胡桃木小柜', n: 'Walnut shelf cabinet' },
-  { m: 'decor', i: 'recessedLight', x: -4.3, y: 2.6 }, { m: 'decor', i: 'recessedLight', x: -4.3, y: 4.5, light: false },
+  { m: 'decor', i: 'recessedLight', x: -4.3, y: 2.6, lamp: { plate: [-3.10, 1.834, N] } }, { m: 'decor', i: 'recessedLight', x: -4.3, y: 4.5, light: false },
   { m: 'decor', i: 'recessedLight', x: -2.85, y: 2.45, h: -0.23, light: false }, { m: 'decor', i: 'recessedLight', x: -2.85, y: 4.65, h: -0.23, light: false },
   { m: 'decor', i: 'recessedLight', x: -4.15, y: 1.2, light: false },
   { m: 'plants', i: 'potPlant', x: -2.74, y: 5.12 },
@@ -79,27 +82,27 @@ export const PLACEMENTS = [
   { m: 'bath', i: 'ladderRack', x: -6.31, y: 3.45, ry: W },
   // no live light (the raster walkthrough's light budget), but lamps in the baked lighting (bake/export/lights.mjs): with the
   // door shut and its one window in the WC, the primary bath has no other light at sunrise (g30 shows the cans on)
-  { m: 'decor', i: 'recessedLight', x: -6.95, y: 4.4, light: false, bake: true }, { m: 'decor', i: 'recessedLight', x: -6.95, y: 2.9, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: -6.95, y: 4.4, light: false, bake: true, lamp: { plate: [-6.021, 4.18, W] } }, { m: 'decor', i: 'recessedLight', x: -6.95, y: 2.9, light: false, bake: true },
   // Bedroom B (x 4.08..7.9, y 1.95..5.36): acacia bed on the east wall, nightstand under the window, dark console by the slider
   { m: 'bedrooms', i: 'bedAcacia', x: 6.69, y: 3.4, ry: W, zh: '相思木床', n: 'Acacia bed' },
-  { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: 4.55, ry: W, zh: '松木床头柜', n: 'Pine nightstand' },
+  { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: 4.55, ry: W, zh: '松木床头柜', n: 'Pine nightstand', lamp: { plate: [4.096, 1.85, E] } },
   { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: 2.25, ry: W, zh: '松木床头柜', n: 'Pine nightstand', light: false },
   { m: 'bedrooms', i: 'consoleDark', x: 4.32, y: 4.5, ry: E, zh: '深色书桌', n: 'Dark console' },
   { m: 'bedrooms', i: 'rugWhite', x: 5.7, y: 3.4, ry: E },
-  { m: 'decor', i: 'recessedLight', x: 6.0, y: 3.6 }, { m: 'decor', i: 'recessedLight', x: 6.0, y: 2.5, light: false },
+  { m: 'decor', i: 'recessedLight', x: 6.0, y: 3.6, lamp: { plate: [4.096, 1.73, E] } }, { m: 'decor', i: 'recessedLight', x: 6.0, y: 2.5, light: false },
   // Bath B (x 5.1..7.9, y 0.31..1.84) and the hall bath (y -1.27..0.2)
   { m: 'bath', i: 'vanity', x: 6.1, y: 0.64, ry: N, zh: '悬挂洗手台', n: 'Floating vanity' }, { m: 'bath', i: 'mirrorCabinet', x: 6.1, y: 0.4, h: 0.15, ry: N },
   { m: 'bath', i: 'toilet', x: 7.52, y: 0.62, ry: W }, { m: 'bath', i: 'showerWindowB', x: 7.28, y: 1.34, ry: W },
   { m: 'bath', i: 'vanitySmall', x: 6.0, y: -0.12, ry: S }, { m: 'bath', i: 'mirrorCabinetSmall', x: 6.0, y: 0.12, h: 0.15, ry: S },
   { m: 'bath', i: 'toilet', x: 7.52, y: -0.04, ry: W }, { m: 'bath', i: 'showerWindowHall', x: 7.28, y: -0.77, ry: W },
-  { m: 'decor', i: 'recessedLight', x: 6.15, y: 1.12, light: false, bake: true },
-  { m: 'decor', i: 'recessedLight', x: 6.15, y: -0.72, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: 6.15, y: 1.12, light: false, bake: true, lamp: { plate: [6.12, 1.825, S] } },
+  { m: 'decor', i: 'recessedLight', x: 6.15, y: -0.72, light: false, bake: true, lamp: { plate: [5.113, -0.40, E] } },
   // Bedroom 3 (x 4.08..7.9, y -5.74..-2.14): pine spindle bed on the east wall, nightstands, dark dresser on the front wall
   { m: 'bedrooms', i: 'bedPine', x: 6.72, y: -3.95, ry: W, zh: '松木床', n: 'Pine bed' },
-  { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -2.84, ry: W }, { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -5.06, ry: W, light: false },
+  { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -2.84, ry: W, lamp: { plate: [5.36, -2.154, S] } }, { m: 'bedrooms', i: 'nightstandPine', x: 7.62, y: -5.06, ry: W, light: false },
   { m: 'bedrooms', i: 'dresserDark', x: 4.6, y: -5.5, ry: N, zh: '炭黑五斗柜', n: 'Charcoal dresser' },
   { m: 'bedrooms', i: 'rugCheck', x: 5.8, y: -3.95, ry: E },
-  { m: 'decor', i: 'cellularShadeNarrow', x: 5.955, y: -5.68, h: -0.08, ry: N }, { m: 'decor', i: 'recessedLight', x: 6.0, y: -3.95 },
+  { m: 'decor', i: 'cellularShadeNarrow', x: 5.955, y: -5.68, h: -0.08, ry: N }, { m: 'decor', i: 'recessedLight', x: 6.0, y: -3.95, lamp: { plate: [5.25, -2.154, S] } },
   // Front bedroom reach-in closet: white shelf, guest wardrobe and floor storage, facing south.
   { m: 'closet', i: 'fitout', x: 6.51, y: -1.70 },
   { m: 'closet', i: 'hanging', x: 6.51, y: -1.70 },
@@ -108,10 +111,10 @@ export const PLACEMENTS = [
   { m: 'closet', i: 'shoes', x: 6.62, y: -1.79 },
   { m: 'closet', i: 'travel', x: 7.65, y: -1.63, ry: W },
   { m: 'closet', i: 'yoga', x: 5.74, y: -1.53 },
-  { m: 'decor', i: 'recessedLight', x: -5.59, y: 0.8755, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: -5.59, y: 0.8755, light: false, bake: true, lamp: { plate: [-4.942, 0.72, W] } },
   // Hallway + closets
   // windowless, between shut bath and closet doors: lamps in the baked lighting only (see the primary bath's cans)
-  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true, lamp: { plate: [4.096, -1.65, E] } }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true },
   // Laundry nook (x -7.9..-6.36, y 0.16..1.48, open to the garage) and garage (x -7.9..-3.51, y -5.74..0.16), g07 / g48 / g49
   { m: 'garage', i: 'laundryPlinth', x: -7.5, y: 1.07, ry: S },
   { m: 'bath', i: 'washerDryer', x: -7.5, y: 1.1, h: 0.10, ry: S, zh: '叠放洗烘机', n: 'Washer & dryer' },
@@ -127,10 +130,10 @@ export const PLACEMENTS = [
   { m: 'garage', i: 'metalShelving', x: -5.62, y: -0.1, ry: S, zh: '置物架', n: 'Steel shelving' },
   { m: 'garage', i: 'pingPongSlate', x: -5.6, y: -2.6, ry: E, zh: '乒乓球桌', n: 'Ping-pong table' },
   { m: 'garage', i: 'garageDoorOpen', x: -6.52, y: -5.8503, ry: S },
-  { m: 'garage', i: 'shopLight', x: -5.7, y: -1.6, ry: E }, { m: 'garage', i: 'shopLight', x: -4.4, y: -3.6, ry: E },
+  { m: 'garage', i: 'shopLight', x: -5.7, y: -1.6, ry: E, lamp: { plate: [-3.519, -0.45, W] } }, { m: 'garage', i: 'shopLight', x: -4.4, y: -3.6, ry: E },
   // Porch & front
   { m: 'decor', i: 'ironColumn', x: -1.15, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' }, { m: 'decor', i: 'ironColumnMirror', x: 1.2, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' },
-  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
+  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.732, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
   { m: 'decor', i: 'ironColumn', x: 4.98, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'decor', i: 'ironColumnMirror', x: 6.93, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'outdoor', i: 'frontPallet', x: -2.45, y: -9.45, h: .22, ry: S, zh: '前院木平台', n: 'Front garden pallet platform' },
@@ -456,6 +459,7 @@ export class Layout {
     else if (spec.type === 'rect') { l = new THREE.RectAreaLight(spec.color ?? 0xfff1dc, spec.intensity ?? 5, spec.w ?? 1, spec.h ?? 0.1); l.position.copy(wp); l.rotation.copy(obj.rotation); l.rotateX(-Math.PI / 2); }
     else { l = new THREE.PointLight(spec.color ?? 0xffe7c0, spec.intensity ?? 1, spec.distance ?? 6, 1.6); l.position.copy(wp); }
     l.userData.base = l.intensity; if (spec.day !== undefined) l.userData.day = spec.day; this.fixtures.add(l); this.lightCount++;
+    ownLight(obj, l);   // the fixture's live light (light_switch.js takes it by ownership, lighting_roles.js)
   }
   // One reflection per cabinet, preserving the door seams and round mirror outline.
   addMirrors(obj) {

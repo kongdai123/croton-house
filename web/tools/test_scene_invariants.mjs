@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { buildRealScene } from './harness/scene.mjs';
-import { indexScene, fixtureExterior } from './harness/objects.mjs';
+import { indexScene } from './harness/objects.mjs';
 
 const WEB = fileURLToPath(new URL('../', import.meta.url)), REPO = join(WEB, '..'), KNOWN = join(WEB, 'tools/golden/known_failures.json');
 const t0 = performance.now();
@@ -33,12 +33,28 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
     w.plan.spaces.filter(sp => sp.zone !== 'exterior' && !lit.has(sp.id)).map(sp => `${sp.id} (${sp.label.en})`));
 }
 
-// ---- 2. every switch plate maps to a fixture; every WALL_SWITCHES row got a plate ---------------------------------------------
+// ---- 2. wall plates: every plate drives a fixture, every declared plate was made, one plate per lamp group, on wall ----------
+// Plates are declared with their fixtures (layout.js placement rows lamp.plate, the niche can in house.js); a plate takes
+// the toggle of its fixture's switch and is named after the switch's lamp group (lighting_roles.js lampGroupAt).
 {
-  const off = [];
-  for (const p of plates) { const e = switches.find(s => s.toggle === p.userData.lightSwitch); if (!e || !(e.toggle.glows.length || e.toggle.lights.length)) off.push(`plate ${p.name}: no fixture`); }
-  for (const [name] of w.WALL_SWITCHES) if (!plates.some(p => p.name === 'wall-switch-' + name)) off.push(`row ${name}: no plate (no fixture within 0.06 m of its target)`);
-  invariant('switch-plates-map-to-fixtures', 'every wall switch plate maps to a fixture, and every WALL_SWITCHES row found its fixture', off);
+  const off = [], declaredPlates = new Set(), groups = new Map();
+  scene.traverse(o => { const f = w.roles.fixtureOf(o); if (f?.plate) declaredPlates.add(f.placed?.userData.placement.lamp?.plate ? f.placed : o); });
+  for (const p of plates) {
+    const e = switches.find(s => s.toggle === p.userData.lightSwitch);
+    if (!e || !(e.toggle.glows.length || e.toggle.lights.length)) { off.push(`plate ${p.name}: no fixture`); continue; }
+    if (p.name !== 'wall-switch-' + e.lighting.group) off.push(`plate ${p.name}: drives a switch of group ${e.lighting.group}`);
+    groups.set(e.lighting.group, (groups.get(e.lighting.group) ?? 0) + 1);
+  }
+  if (plates.length !== declaredPlates.size) off.push(`${declaredPlates.size} plates declared, ${plates.length} made`);
+  for (const [g, n] of groups) if (n > 1) off.push(`group ${g}: ${n} plates`);
+  // on solid wall (house.json walls), clear of every door and its casing on that wall
+  for (const p of plates) {
+    const ry = p.rotation.y, x = p.position.x, y = -p.position.z, dx = -Math.sin(ry) * 0.02, dy = Math.cos(ry) * 0.02;
+    const wall = w.house.walls.find(q => x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1);
+    if (!wall) { off.push(`plate ${p.name}: no wall behind it`); continue; }
+    if (w.house.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065))) off.push(`plate ${p.name}: in a door or its casing`);
+  }
+  invariant('switch-plates-map-to-fixtures', 'every wall plate drives a fixture of its own lamp group, every declared plate was made (one per group), on solid wall clear of doors', off);
 }
 
 // ---- 3. no static mesh is probe-lit without a reason category ----------------------------------------------------------------
@@ -85,7 +101,7 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
 {
   const off = [];
   for (const { node: o, key } of ix.placed) {
-    const spec = o.userData.light; if (!spec || fixtureExterior(o.userData.id)) continue;
+    const spec = o.userData.light; if (!spec || switches.some(s => s.lighting.exterior && fixtureOf(s.root) === o)) continue;
     const p = new T.Vector3(0, spec.y ?? 2.3, 0).applyMatrix4(o.matrixWorld);
     if (!w.plan.isInside(p.x, -p.z, 0)) off.push(`${key} light at plan (${p.x.toFixed(2)}, ${(-p.z).toFixed(2)})`);
   }

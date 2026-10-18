@@ -173,6 +173,8 @@ export function buildHouse(house, mods, opts = {}) {
   wash.name = 'niche-warm-wash'; wash.position.set(3.65, CEIL - 0.03, -1.254);
   wash.target.position.set(3.94, 1.72, -1.254); wash.castShadow = false;
   can.add(wash, wash.target); interior.add(can);
+  // lighting manifest: the alcove's own switch (plate on the alcove's south pier), its light the wash inside the can
+  declare(can, { fixture: { kind: 'niche', lights: 'children', label: { en: 'Alcove recessed can', zh: '壁龛筒灯' }, defaultOn: ['golden', 'dusk'], plate: [3.958, 1.12, -Math.PI / 2] } });
 
   // ---- Header beam at the living -> dining/office opening (dropped soffit, as in the photos) ----
   interior.add(box(3.35 - 0.42, CEIL - 2.13, 0.32, wallMat, { x: (0.42 + 3.35) / 2, y: (CEIL + 2.13) / 2, z: -1.765 }));

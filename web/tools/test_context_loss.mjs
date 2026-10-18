@@ -61,7 +61,7 @@ async function start({ stage = null, lossKind = 'wait', hdr = true, throwOnLost 
   Object.assign(fx, { lost: false, hdr, hdrFails: 0, loseOnLoad: false, loseOnConvolve: 0, convolves: 0, rooms: 0, throwOnLost });
   const { renderer, canvas, gl } = fakeRenderer();
   const logs = [], scene = new T.Scene(), camera = new T.PerspectiveCamera();
-  const guard = createGuard({ canvas, isLost: () => gl.isContextLost(), log: (...a) => logs.push(a.join(' ')), defer: fn => setTimeout(fn, 0) });
+  const guard = createGuard({ canvas, isLost: () => gl.isContextLost(), log: (...a) => logs.push(a.join(' ')), error: (...a) => logs.push(a.join(' ')), defer: fn => setTimeout(fn, 0) });
   const soft = guard.soft;
   // lossKind: 'wait' = restored while a waitForContext holds the start; 'late' = after the whole start; 'never-waited' = at the
   // moment the loss happens a restore is already queued behind the current step
@@ -163,7 +163,7 @@ for (const stage of ['create', 'sky', 'applyTime']) { await start({ stage, lossK
 // ---- 3. the guard itself ---------------------------------------------------------------------------------------------------
 {
   const canvas = new EventTarget(); let lostNow = false; const logs = [];
-  const g = createGuard({ canvas, isLost: () => lostNow, log: (...a) => logs.push(a.join(' ')), defer: fn => setTimeout(fn, 0) });
+  const g = createGuard({ canvas, isLost: () => lostNow, log: (...a) => logs.push(a.join(' ')), error: (...a) => logs.push(a.join(' ')), defer: fn => setTimeout(fn, 0) });
   assert.equal(g.soft('x', () => { throw new Error('boom'); }), undefined);
   g.soft('x', () => { throw new Error('boom'); });
   assert.equal(logs.length, 1, 'logged once per label');

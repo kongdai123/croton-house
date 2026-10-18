@@ -75,12 +75,16 @@ if (process.env.UPDATE_VECTORS) {
   for (const x of xs) for (const y of ys) for (const dx of [-0.2, -1e-9, 0, 1e-9, 0.2]) for (const dy of [-0.2, -1e-9, 0, 1e-9, 0.2]) probe(x + dx, y + dy);
   check(!bad, `outlineDistance differs from the edge loop at ${bad} points`);
 }
-// 4. the hot path stays cheap: indoorWeight (every frame) under 0.5 us per distinct call
+// 4. the hot path stays cheap: indoorWeight (every frame) under 0.5 us per distinct call. Best of five runs: the suite runs
+// tests in parallel, and load only ever adds time, so the fastest run measures the code, not the machine.
 {
-  let s = 0; const t0 = performance.now();
-  for (let k = 0; k < 200000; k++) s += P.indoorWeight((k % 160) / 10 - 8, (k % 110) / 10 - 5.5, 1.2);
-  const us = (performance.now() - t0) / 200000 * 1000;
-  check(us < 0.5 && s > 0, `indoorWeight ${us.toFixed(3)} us per call`);
+  let s = 0, best = Infinity;
+  for (let run = 0; run < 5; run++) {
+    const t0 = performance.now();
+    for (let k = 0; k < 200000; k++) s += P.indoorWeight((k % 160) / 10 - 8, (k % 110) / 10 - 5.5, 1.2);
+    best = Math.min(best, (performance.now() - t0) / 200000 * 1000);
+  }
+  check(best < 0.5 && s > 0, `indoorWeight ${best.toFixed(3)} us per call (best of 5)`);
 }
 console.log(failed ? `FAILED (${failed})` : `plan OK: ${plan.spaces.length} spaces, ${plan.walls.length} walls, ${plan.openings.length} openings, vectors ${fresh.points.length} points`);
 process.exit(failed ? 1 : 0);

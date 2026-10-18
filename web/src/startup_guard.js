@@ -5,13 +5,15 @@
 //  2. A step that failed while the context was lost is retried once after 'webglcontextrestored', so the resource it was
 //     building is "pending", not missing for good.
 // The canvas only needs addEventListener; isLost reads the context (gl.isContextLost()). Node tests drive both with fakes.
-export function createGuard({ canvas, isLost = () => false, log = (...a) => console.warn(...a), defer = fn => setTimeout(fn, 0) }) {
+// A failure with the context alive is a real bug, not a GPU reset: it goes to console.error so the gates (UI smoke) fail on it.
+export function createGuard({ canvas, isLost = () => false, log = (...a) => console.warn(...a), error = (...a) => console.error(...a), defer = fn => setTimeout(fn, 0) }) {
   const reported = new Set(), retry = new Map();
   let losses = 0;
   canvas?.addEventListener?.('webglcontextlost', () => { losses++; });
   const fail = (label, fn, err, startLosses) => {
-    if (!reported.has(label)) { reported.add(label); log(`[startup] ${label} failed, continuing:`, err?.message ?? err); }
-    if (isLost() || losses !== startLosses) retry.set(label, fn);   // lost before, during or after the step: try again once restored
+    const lost = isLost() || losses !== startLosses;                 // lost before, during or after the step
+    if (!reported.has(label)) { reported.add(label); (lost ? log : error)(`[startup] ${label} failed${lost ? ' (context lost), will retry' : ''}, continuing:`, err?.message ?? err); }
+    if (lost) retry.set(label, fn);                                   // try again once restored
   };
   // Runs fn; a throw (or a rejected promise) is logged once per label and swallowed. Returns fn's result, or undefined on failure.
   function soft(label, fn) {

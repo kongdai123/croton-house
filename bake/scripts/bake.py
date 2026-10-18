@@ -1,7 +1,8 @@
 # Bake one lightmap layer for one group of objects into a full-size atlas (charts of other groups stay empty).
 # usage: blender -b scene/scene_lm.blend -P scripts/bake.py -- '<json>'
 #   {"layer": "sky"|"sunind"|"lamps", "group": g, "groups": G, "out": path.exr, "samples": n, "size": 4096,
-#    "sun": {"az", "el", "strength", "color"}, "sky": strength, "dust": d, "clouds": [lo, hi], "lampK": k}
+#    "sun": {"az", "el", "strength", "color"}, "sky": strength, "dust": d, "clouds": [lo, hi], "lampK": k,
+#    "only": [lightmap ids] (optional: a targeted test of those units alone, "group"/"groups" then ignored)}
 # Layers (summed at run time): sky = sky light direct + all its bounces; sunind = only the sun's bounces (its direct
 # light is drawn live); lamps = the house's lamps, direct + bounces, at unit level. Bakes the DIFFUSE light without
 # colour, i.e. what three.js multiplies by albedo (lightMapIntensity = PI converts it to irradiance).
@@ -28,6 +29,10 @@ areas = [(uv_area(o), o) for o in objs]; areas.sort(key=lambda t: (-t[0], t[1].n
 G = cfg['groups']; load = [0.0] * G; members = [[] for _ in range(G)]
 for a, o in areas: k = min(range(G), key=lambda i: load[i]); load[k] += a; members[k].append(o)
 mine = members[cfg['group']]
+if cfg.get('only'):   # a targeted test bake: only the units with these lightmap ids (node extras "lm", unwrap.py), in one group
+    only = set(cfg['only']); mine = [o for a, o in areas if str(o.get('lm') or o.data.get('lm') or '') in only]
+    print(f'only: {len(only)} lightmap ids -> {len(mine)} objects ({len({str(o.get("lm") or o.data.get("lm")) for o in mine})} ids found)')
+    if not mine: raise SystemExit('only: no object carries those lightmap ids')
 print(f'layer {layer} group {cfg["group"]}/{G}: {len(mine)} objects, uv share {load[cfg["group"]]:.4f}, setup {time.time() - t0:.0f} s')
 # ---- bake target
 size = cfg.get('size', [4096, 4096]); size = size if isinstance(size, list) else [size, size]

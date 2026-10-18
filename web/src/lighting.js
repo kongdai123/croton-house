@@ -97,11 +97,31 @@ export function createLighting(renderer, scene, camera, house, preset) {
   renderer.toneMappingExposure = 1;
   RectAreaLightUniformsLib.init();
   let renderConfig = composerConfig(renderer, preset.msaa);
+  let requestedMsaa = preset.msaa, lastQuality = preset;
   let pmrem = new THREE.PMREMGenerator(renderer);
   pmrem.compileEquirectangularShader();
-  // Day and blue-hour room bounce are convolved only when that time of day is first needed.
+  // Context loss. While the context is lost every GPU call is a no-op or an error, so GPU-built resources (the sky and
+  // room PMREM targets, the blend target) are either valid or null = "pending": consumers treat null as "not yet" and
+  // restoreEnvironment (on 'webglcontextrestored') rebuilds everything that is missing. composerConfig is also re-read
+  // there: created while lost, it reports no float buffers and the composer would stay on the byte / direct path.
+  const lost = () => { try { return !!renderer.getContext?.()?.isContextLost?.(); } catch (_) { return true; } };
+  let warned = false;
+  const warnOnce = (what, err) => { if (!warned) { warned = true; console.warn(`lighting: ${what} deferred`, err?.message ?? err); } };
+  // A GPU resource built by `make`, or null when the context is lost before, during or after (then it is pending).
+  const gpu = (what, make) => {
+    if (lost()) return null;
+    let made = null;
+    try { made = make(); } catch (err) { warnOnce(what, err); return null; }
+    if (lost()) { made?.dispose?.(); return null; }
+    return made;
+  };
+  // Day and blue-hour room bounce are convolved only when that time of day is first needed. Null: no HDR path, or pending.
   const rooms = new Map();
-  const roomFor = isDusk => { if (!renderConfig.hdr) return null; if (!rooms.has(isDusk)) rooms.set(isDusk, bounceEnvironment(pmrem, isDusk)); return rooms.get(isDusk); };
+  const roomFor = isDusk => {
+    if (!renderConfig.hdr) return null;
+    if (!rooms.has(isDusk)) { const room = gpu('room bounce', () => bounceEnvironment(pmrem, isDusk)); if (!room) return null; rooms.set(isDusk, room); }
+    return rooms.get(isDusk);
+  };
   let blendTarget = null;
   const blendMaterial = new THREE.ShaderMaterial({
     depthTest: false, depthWrite: false,
@@ -247,10 +267,12 @@ export function createLighting(renderer, scene, camera, house, preset) {
           if (luminance > brightest) { brightest = luminance; pixel = i / 4; }
         }
         const longitude = ((pixel % hdr.image.width) / hdr.image.width - 0.5) * Math.PI * 2;
-        const sky = { background: hdr, target: renderConfig.hdr ? pmrem.fromEquirectangular(hdr) : null, longitude };
+        const sky = { background: hdr, target: renderConfig.hdr ? gpu('sky environment', () => pmrem.fromEquirectangular(hdr)) : null, longitude };
         readySkies.set(name, sky);
         return sky;
       });
+      // A failed download must not stay cached: the next call (a dusk toggle, a retry) loads it again.
+      pending.catch(() => { if (skies.get(name) === pending) skies.delete(name); });
       skies.set(name, pending);
     }
     return skies.get(name);
@@ -341,7 +363,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     scene.environmentIntensity = dusk ? 0.3 : 0.8;
     const room = roomFor(dusk);
     if (room && !blendTarget) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
-    blendMaterial.uniforms.room.value = room?.texture ?? null;
+    blendMaterial.uniforms.room.value = room?.texture ?? blendMaterial.uniforms.room.value;   // pending room: keep the last valid one
     blendMaterial.uniforms.sky.value = sky.target?.texture ?? null; lastSkyMix = -1;
     setLightingEnvironment(blendTarget?.texture ?? null, dusk ? 0.5 : 0.68, interiorMaterials);
     setLightingEnvironment(sky.target?.texture ?? null, dusk ? 0.3 : 0.8, exteriorMaterials);
@@ -403,7 +425,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     const intensity = dusk ? mix(0.5, 0.55, indoor) : mix(0.62, 0.68, indoor);
     for (const material of interiorMaterials) if (!material.userData.probeLit) material.envMapIntensity = intensity;
     const skyMix = (dusk ? 0.08 : 0.35) * (1 - indoor);
-    if (blendTarget && (lastSkyMix < 0 || Math.abs(skyMix - lastSkyMix) > 0.002)) {
+    if (blendTarget && blendMaterial.uniforms.room.value && blendMaterial.uniforms.sky.value && !lost() && (lastSkyMix < 0 || Math.abs(skyMix - lastSkyMix) > 0.002)) {
       blendMaterial.uniforms.skyMix.value = skyMix;
       const saved = renderer.getRenderTarget();
       renderer.setRenderTarget(blendTarget); blendQuad.render(renderer); renderer.setRenderTarget(saved);
@@ -420,6 +442,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
 
   function setQuality(next) {
+    lastQuality = next; requestedMsaa = next.msaa;
     hqEffects.setQuality(next); smaa.enabled = next.smaa; setMsaa(next.msaa); reflections.enabled = renderConfig.hdr && !!next.ssr;
     const size = shadowSize(next);
     if (sun.shadow.mapSize.x !== size) {
@@ -455,7 +478,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     place.in.value = indoorPet && !dusk ? 1 : 0;
     place.out.value = indoorPet ? 0 : 1;
     const sky = readySkies.get(dusk ? DUSK : DAY);
-    const map = indoorPet ? roomFor(dusk).texture : sky?.target.texture;
+    const map = indoorPet ? roomFor(dusk)?.texture : sky?.target?.texture;   // null: pending (no HDR path, or the context is lost); relit on the next pass
     if (!map) return;
     const intensity = indoorPet ? (dusk ? 0.55 : 0.66) : (dusk ? 0.3 : 0.75);
     if (material.envMap !== map) material.envMap = map;
@@ -464,20 +487,30 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
   // Runs the daylight ray tests collected by collectMaterials; main.js calls it under the shader compile.
   function runDaylightBake() { daylight?.bake(); }
-  renderer.domElement.addEventListener('webglcontextrestored', () => {
-    pmrem.dispose(); pmrem = new THREE.PMREMGenerator(renderer);
-    for (const sky of readySkies.values()) { sky.target?.dispose(); sky.target = renderConfig.hdr ? pmrem.fromEquirectangular(sky.background) : null; }
-    for (const room of rooms.values()) room.dispose(); rooms.clear();
-    blendTarget?.dispose(); blendTarget = null; lastSkyMix = -1;
-    const sky = readySkies.get(dusk ? DUSK : DAY), room = roomFor(dusk);
-    if (sky) {
-      scene.environment = sky.target?.texture ?? null;
-      if (room) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
-      blendMaterial.uniforms.room.value = room?.texture ?? null; blendMaterial.uniforms.sky.value = sky.target?.texture ?? null;
-      setLightingEnvironment(blendTarget?.texture ?? null, dusk ? 0.5 : 0.68, interiorMaterials);
-      setLightingEnvironment(sky.target?.texture ?? null, dusk ? 0.3 : 0.8, exteriorMaterials);
-    }
-    sun.shadow.needsUpdate = true; update(0, true);
-  });
+  // Rebuild every GPU-built resource after a context restore; whatever cannot be built (lost again) stays pending and the
+  // next restore retries. Never throws: a failed rebuild must not take the rest of the page down.
+  function restoreEnvironment() {
+    try {
+      const before = renderConfig;
+      pmrem.dispose(); pmrem = new THREE.PMREMGenerator(renderer);
+      if (!lost()) {
+        const config = composerConfig(renderer, requestedMsaa);
+        if (config.hdr !== before.hdr || config.samples !== before.samples || config.type !== before.type) setQuality(lastQuality);
+      }
+      for (const sky of readySkies.values()) { sky.target?.dispose(); sky.target = renderConfig.hdr ? gpu('sky environment', () => pmrem.fromEquirectangular(sky.background)) : null; }
+      for (const room of rooms.values()) room.dispose(); rooms.clear();
+      blendTarget?.dispose(); blendTarget = null; lastSkyMix = -1;
+      const sky = readySkies.get(dusk ? DUSK : DAY), room = roomFor(dusk);
+      if (sky) {
+        scene.environment = sky.target?.texture ?? null;
+        if (room) { blendTarget = room.clone(); blendTarget.depthBuffer = false; }
+        blendMaterial.uniforms.room.value = room?.texture ?? null; blendMaterial.uniforms.sky.value = sky.target?.texture ?? null;
+        setLightingEnvironment(blendTarget?.texture ?? null, dusk ? 0.5 : 0.68, interiorMaterials);
+        setLightingEnvironment(sky.target?.texture ?? null, dusk ? 0.3 : 0.8, exteriorMaterials);
+      }
+      sun.shadow.needsUpdate = true; update(0, true);
+    } catch (err) { console.warn('lighting: context restore incomplete', err?.message ?? err); }
+  }
+  renderer.domElement.addEventListener('webglcontextrestored', restoreEnvironment);
   return { get renderConfig() { return renderConfig; }, camera, indoorWeight, reflections, outputPass, tune, grade: grade.uniforms, fixtures, composer, gtao, hqEffects, loadSky, prepareTime, collectMaterials, bakeDaylight: runDaylightBake, applyTime, physicalEmission, update, setQuality, attachPet, syncPet, sun, windowLights, get daylight() { return daylight; }, get lightSwitches() { return lightSwitches; } };
 }

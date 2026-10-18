@@ -92,7 +92,7 @@ try {
 } finally { rmSync(root, { recursive: true, force: true }); rmSync(join(root, '..', 'smoke-outside.txt'), { force: true }); }
 
 // ---- the tests themselves are well formed
-assert.deepEqual(TESTS.map(t => t.name), ['load', 'tour', 'switches', 'doors', 'quality-and-slots', 'resize', 'keyboard', 'legacy']);
+assert.deepEqual(TESTS.map(t => t.name), ['load', 'tour', 'switches', 'doors', 'quality-and-slots', 'resize', 'keyboard', 'context-loss', 'legacy']);
 for (const t of TESTS) assert.ok(typeof t.run === 'function' && (t.timeoutS === undefined || t.timeoutS > 0), t.name);
 assert.equal(typeof installInPage, 'function');
 console.log('smoke helpers OK');

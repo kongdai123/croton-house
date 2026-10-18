@@ -87,28 +87,10 @@ try {
   }
   const localSource = await readFile(join(root, 'src/local_adapt.js'), 'utf8');
   assert.ok(localSource.includes('center.g / -ray.z')); assert.ok(!localSource.includes('center.a * 2.0'));
-  // Execute the real restoration callback with CPU PMREM/environment doubles.
+  // The lighting restore handler (environments, blend target, composer config) runs for real in test_context_loss.mjs.
   const lightingSource = await readFile(join(root, 'src/lighting.js'), 'utf8');
   const outputPass = new OutputPass();
   new Function('outputPass', lightingSource.match(/outputPass\.material\.fragmentShader = [^\n]+/)[0])(outputPass);
   assert.equal((outputPass.material.fragmentShader.match(/precision highp sampler2D;/g) ?? []).length, 1);
-  const restoreBody = lightingSource.match(/renderer\.domElement\.addEventListener\('webglcontextrestored', \(\) => \{([\s\S]*?)\n  \}\);/)[1];
-  let freed = 0, generated = 0, rebound = [], redraws = 0;
-  const envTarget = () => ({ texture: {}, depthBuffer: true, dispose() { freed++; }, clone() { return envTarget(); } });
-  const skies = new Map([['day', { background: {}, target: envTarget() }], ['dusk', { background: {}, target: envTarget() }]]);
-  const roomCache = new Map([[false, envTarget()], [true, envTarget()]]), restoreScene = {}, restoreSun = { shadow: {} };
-  const makeRestore = new Function('THREE', 'renderer', 'readySkies', 'rooms', 'scene', 'sun', 'roomFor', 'setLightingEnvironment', 'update', `
-    let pmrem = { dispose() { globalThis.fixturePMREMDisposed++; } }, blendTarget = { dispose() { globalThis.fixtureBlendDisposed++; } }, lastSkyMix = 0.5;
-    const renderConfig = { hdr: true }, dusk = false, DAY = 'day', DUSK = 'dusk';
-    const blendMaterial = { uniforms: { room: {}, sky: {} } }, interiorMaterials = 'inside', exteriorMaterials = 'outside';
-    return () => { ${restoreBody}; return { lastSkyMix, blendMaterial, blendTarget }; };`);
-  globalThis.fixturePMREMDisposed = globalThis.fixtureBlendDisposed = 0;
-  const restore = makeRestore({ PMREMGenerator: class { fromEquirectangular() { generated++; return envTarget(); } } }, {}, skies, roomCache, restoreScene, restoreSun,
-    () => { assert.equal(roomCache.size, 0); return envTarget(); }, (...args) => rebound.push(args), () => { redraws++; });
-  const restored = restore();
-  assert.equal(generated, 2); assert.equal(freed, 4); assert.equal(globalThis.fixturePMREMDisposed, 1); assert.equal(globalThis.fixtureBlendDisposed, 1);
-  assert.equal(restored.lastSkyMix, -1); assert.equal(redraws, 1); assert.equal(restoreSun.shadow.needsUpdate, true);
-  assert.equal(restoreScene.environment, skies.get('day').target.texture); assert.equal(rebound[0][0], restored.blendTarget.texture); assert.equal(rebound[1][0], restoreScene.environment);
-  delete globalThis.fixturePMREMDisposed; delete globalThis.fixtureBlendDisposed;
   console.log('device robustness: photo budgets/limits/close/save/float meter, RGBA16F samples/resolved validation/LDR/direct fallback, bounded unique warmup/yields/linking/state, linear-depth reprojection OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

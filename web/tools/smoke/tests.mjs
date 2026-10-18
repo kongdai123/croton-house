@@ -25,6 +25,28 @@ function installInPage() {
   };
 }
 
+
+// Runs in the page before its scripts (addInitScript): keeps the WebGL context of #gl reachable as window.__ctxLoss and, per
+// arg.when, loses it with WEBGL_lose_context and restores it arg.restoreMs later. when: 'early' = arg.afterMs after the context
+// exists (the house is still being built); 'ready' = the moment the Enter button enables, while the shaders compile and the
+// first frame is drawn; 'never' = only on demand (window.__ctxLoss.lose()).
+function hookContext(arg) {
+  const original = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+    const gl = original.call(this, type, ...rest);
+    if (gl && /webgl/.test(String(type)) && this.id === 'gl' && !window.__ctxLoss) {
+      const ext = gl.getExtension('WEBGL_lose_context');
+      const S = window.__ctxLoss = { gl, lost: 0, restored: 0, phases: [], lose: () => ext.loseContext(), restore: () => ext.restoreContext() };
+      const phase = () => (window.__app ? 'running' : document.getElementById('enter')?.disabled === false ? 'warm-up' : 'building');
+      this.addEventListener('webglcontextlost', () => { S.lost++; S.phases.push(phase()); setTimeout(() => { if (arg.restoreMs >= 0 && gl.isContextLost()) ext.restoreContext(); }, arg.restoreMs); });
+      this.addEventListener('webglcontextrestored', () => { S.restored++; });
+      if (arg.when === 'early') setTimeout(() => ext.loseContext(), arg.afterMs);
+      else if (arg.when === 'ready') { const t = setInterval(() => { if (document.getElementById('enter')?.disabled === false && !window.__app) { clearInterval(t); ext.loseContext(); } }, 20); }
+    }
+    return gl;
+  };
+}
+
 async function enterHouse(ctx, page = ctx.page) {
   await ctx.untilOn(page, () => !document.getElementById('enter').disabled, null, 120000, 'the Enter button to enable');
   // under SwiftShader entering compiles the house's programs on the main thread: the click is acknowledged only after
@@ -348,6 +370,53 @@ export const TESTS = [
       // Escape with nothing open: the menu (landing), and again: back in
       await key('Escape'); await ctx.until(() => !document.getElementById('title').classList.contains('hidden'), null, 5000, 'Escape to open the menu');
       await key('Escape'); await ctx.until(() => document.getElementById('title').classList.contains('hidden'), null, 5000, 'Escape to leave the menu');
+    },
+  },
+  {
+    // A context lost and restored (a GPU reset, a backgrounded phone tab) during the load and after entering must neither stop the
+    // start (window.__ready) nor leave the house unable to draw. Startup guard: web/src/startup_guard.js; postmortem row 20.
+    name: 'context-loss', timeoutS: 900,
+    async run(ctx) {
+      const readCanvas = () => { const c = document.getElementById('gl'), t = document.createElement('canvas'); t.width = t.height = 8; const x = t.getContext('2d', { willReadFrequently: true }); x.clearRect(0, 0, 8, 8); x.drawImage(c, 0, 0, 8, 8); return Array.from(x.getImageData(0, 0, 8, 8).data); };
+      const drawing = async (page, what) => {
+        const f0 = await page.evaluate(() => window.__app.renderer.info.render.frame);
+        await ctx.untilOn(page, f0 => window.__app.renderer.info.render.frame > f0 + 10 && !window.__ctxLoss.gl.isContextLost(), f0, 120000, `the house to keep drawing ${what}`);
+        const bg = parseColor(await page.evaluate(() => getComputedStyle(document.body).backgroundColor));
+        const px = await page.evaluate(readCanvas);
+        ctx.expect(!isBlank(sampleStats(px), (bg[0] + bg[1] + bg[2]) / 3), `the canvas is blank ${what}: ${fmt(sampleStats(px))}`);
+      };
+      const info = page => page.evaluate(() => { const S = window.__ctxLoss, a = window.__app; return { lost: S.lost, restored: S.restored, phases: S.phases, ready: window.__ready === true, hdr: a.lighting.renderConfig.hdr, baked: a.state.baked }; });
+      const loads = [['during the build', { when: 'early', afterMs: 2500, restoreMs: 1500 }, 'building'], ['during the shader warm-up', { when: 'ready', restoreMs: 1500 }, 'warm-up']];
+      const main = ctx.page;
+      let page = null, first = null;
+      for (const [what, arg, phase] of loads) {
+        const p = await ctx.session.newPage('', { init: hookContext, initArg: arg });   // resolves only when window.__ready is true
+        const s = await info(p); first ??= s;
+        ctx.log(`loss ${what}: lost ${s.lost}, restored ${s.restored}, at ${s.phases}, ready ${s.ready}, hdr ${s.hdr}, baked ${s.baked}`);
+        ctx.expect(s.lost >= 1, `no context loss happened ${what}: the load finished before it (phases: ${s.phases}); the test checked nothing`);
+        await ctx.untilOn(p, () => window.__ctxLoss.restored >= window.__ctxLoss.lost, null, 30000, `the context to be restored ${what}`);
+        ctx.expect(s.ready, `window.__ready never became true after a loss ${what}`);
+        ctx.expect(s.phases.includes(phase) || arg.when === 'early', `the loss did not hit the ${phase} phase (${s.phases})`);
+        await enterHouse(ctx, p);
+        await drawing(p, `after a loss ${what}`);
+        await p.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });   // the step that threw: time of day + pet relight
+        if (page) await page.context().close().catch(() => {}); page = p;
+      }
+      // lost and restored again once the visitor is in: the house, the pets and a time change all still work
+      ctx.page = page;   // the helpers (ctx.until, ctx.frames) act on ctx.page; the shared page comes back at the end
+      for (const restoreMs of [1500, 100]) {
+        const n = (await info(page)).lost;
+        await page.evaluate(() => { window.__ctxLoss.lose(); });
+        await ctx.untilOn(page, n => window.__ctxLoss.lost > n, n, 10000, 'the context to be lost');
+        await sleep(restoreMs);
+        await page.evaluate(() => { if (window.__ctxLoss.gl.isContextLost()) window.__ctxLoss.restore(); });
+        await ctx.untilOn(page, n => window.__ctxLoss.restored > n, n, 30000, 'the context to be restored');
+        await drawing(page, `after losing the context in the house (restored after ${restoreMs} ms)`);
+        await page.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });
+      }
+      const end = await info(page);
+      ctx.expect(end.ready && end.hdr === first.hdr, `the lighting configuration changed across the losses (hdr ${first.hdr} -> ${end.hdr})`);
+      ctx.page = main;
     },
   },
   {

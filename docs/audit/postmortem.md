@@ -24,6 +24,7 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
 | 17 | Slot switch failed | Reflection layout differed between slots (26 vs 27 probes) | B |
 | 18 | Lantern dark at dusk | Lightmapped copies driven by a startup value, original by onTime | D |
 | 19 | Closed front door's inside face dark with reddish vertical bands at noon (the streaks of row 5 before region-aware sampling) | Probe light evaluated as plain L1 SH, max(0, L0 + L1·n) per colour, which goes negative opposite a strong source. The probes just inside the door (baked with it open) are dominated by the sunlit porch: \|L1\| ≈ 1.1 L0, so for the room-facing leaf -0.09 / -0.12 / -0.18, clamped black, blue (sky) first, red left over, banded by probe column. 120 probe-lit objects collapse this way (details below) | J: a light reconstruction that is not positive by construction, with no check against the bake's own data |
+| 20 | Site stuck on the loading screen forever (UI smoke run on a GPU node): `window.__ready` never true | The WebGL context was lost and restored during startup. `lighting.syncPet` read `roomFor(dusk).texture` and `sky.target.texture` as if both always existed; `roomFor` is null on the no-HDR path and for anything built on a lost context (`composerConfig` reads no float buffers, so `renderConfig.hdr` stayed false for good), and `loadSky` stored whatever PMREM returned on a lost context. The TypeError left `Pets.relight`, through `applyTime`, through main.js's top-level `await`s, so the start aborted; nothing in the start was allowed to fail (a thrown relight, puddles or contact setup was as fatal as the sky) | K: GPU-built state that is neither valid nor explicitly pending after a context loss, and a start in which every step is fatal |
 
 ## Classes
 
@@ -43,6 +44,13 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
 - **J. Reconstructions that are not positive by construction.** The probe volume's plain L1 evaluation rings below zero
   opposite any strong source (a doorway, a window, a lamp), per colour, so a face collapses to black or to one hue.
   → a non-negative reconstruction, checked face by face against the bake's own higher-order data.
+
+- **K. Context loss leaves null or dead GPU state, and the start has no non-essential steps.** A lost context makes every
+  GPU build return nothing or garbage, and the restore handlers rebuilt only some of it; consumers assumed the state
+  exists, and any throw in the start (even pet relighting) aborted the whole load. → every GPU-built resource is valid or
+  null = pending (`lighting.js`: `gpu()`, `roomFor`, `restoreEnvironment`; `lightmap.js` / `lightmap_slots.js` build the new
+  environment before dropping the old); consumers treat null as "not yet"; the start waits for a live context where it
+  needs one and runs non-essential steps through `startup_guard.js` (log once, continue, retry once after the restore).
 
 ## Row 19 in detail (2026-10-18)
 
@@ -84,6 +92,25 @@ lookup), the leaf closed, 100 points over its inside face (plan y -4.638) seen f
 - **Left.** Doors take the probe volume in every pose, but the probes next to a doorway hold the bake pose's light (the
   front door open). The outdoor probe seen through an opening still weighs a little in the cells just inside. Neither is
   visible after the fix; both need the bake (closed-door probes) to remove.
+
+## Row 20 in detail (2026-10-18)
+
+- **Where.** `web/src/lighting.js` `syncPet` (`roomFor(dusk).texture`, `sky?.target.texture`); the restore handler assumed
+  `roomFor` and the PMREM targets always build; `loadSky` cached a rejected download for good; `update()` rendered the
+  blend target with null samplers. `web/src/main.js` ran `applyTime`, `pets.relight`, the contact / puddle setup, the idle
+  sky preparation (an unhandled rejection) and each frame's updates bare, so one throw ended the start (a throw inside
+  `frame` also stopped the 12-frame count that sets `__ready`). `lightmap_slots.js` disposed the old environment before
+  building the new one; `lightmap.js` `setEnv` dereferenced a null `envTarget` after a failed rebuild and its restore handler
+  could throw out of the event.
+- **Fix (the class).** Resources are valid or pending: `gpu()` returns null if the context is lost before, during or after
+  a build; consumers skip null; the restore handler re-reads `composerConfig` (a context created lost reports no float
+  buffers), rebuilds every sky and room, and never throws. The start waits for a live context before the capability probe,
+  the lighting set-up, the shader compile and the first draw, and routes non-essential steps through `startup_guard.js`.
+- **Check.** `web/tools/test_context_loss.mjs` (in `npm test`): the real `createLighting` and `Pets` on the real house
+  against a fake GPU that can be lost between any two calls; loss at every start step x restored while waiting / late /
+  queued, a throwing PMREM, no HDR path, a restore that finds the context lost again. It fails on the old `lighting.js` with the
+  exact TypeError. The `context-loss` UI smoke test (`web/tools/smoke/tests.mjs`) does it in a browser with
+  `WEBGL_lose_context` during the build, the shader warm-up and inside the house.
 
 ## Rules from here
 

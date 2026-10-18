@@ -639,6 +639,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (object === scene) pcss.invalidate(); else pcss.track(object, true);   // pets, the visitor: always-hot casters
   };
   const setEnv = m => {
+    if (!envTarget) return;   // pending: rebuilt by the next afterTime (context restore)
     if (!envs.has(m)) envs.set(m, { map: m.envMap, intensity: m.envMapIntensity, rotation: m.envMapRotation?.clone() });
     if (m.envMap !== envTarget.texture) m.needsUpdate = true;
     m.envMap = envTarget.texture; m.envMapIntensity = 1; m.envMapRotation?.set(0, 0, 0);
@@ -703,7 +704,12 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (skyBg) {
       scene.background = skyBg; scene.backgroundIntensity = 1; scene.backgroundRotation.set(0, 0, 0);
       // reflections of the bake's sunrise sky (dimmed per pixel by the baked light that reaches it), not the midday map
-      if (!envTarget) { const pmrem = new THREE.PMREMGenerator(renderer); try { envTarget = pmrem.fromEquirectangular(skyBg); slots?.setEnvironment(envTarget); } finally { pmrem.dispose(); } }
+      if (!envTarget) {
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        try { envTarget = pmrem.fromEquirectangular(skyBg); slots?.setEnvironment(envTarget); }
+        catch (err) { envTarget = null; console.warn('baked environment deferred', err?.message ?? err); }   // lost context: the restore retries
+        finally { pmrem.dispose(); }
+      }
       scene.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m?.isMeshStandardMaterial && (m.lightMap || m.userData.probeLit)) setEnv(m); });
     }
     if (skyBg && !windows) { windows = addWindowReflections(scene, skyBg, refl); stats.windowPanes = windows.count; stats.reflectionProbes = refl?.count ?? 0; }
@@ -746,12 +752,18 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let puddleRefl = null;
   const setFeatures = name => {
     tier = name;
-    if (TIERS[name].puddles && !puddleRefl) { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet, furniture: [...movables, ...dynamic], ground: puddleScan?.ground ?? null }); api.puddleRefl = puddleRefl; }
+    // Puddles are decoration: if their GPU targets cannot be made (a lost context), the feature stays off and is retried by
+    // the next setFeatures / the context restore, never thrown through the load.
+    if (TIERS[name].puddles && !puddleRefl) {
+      try { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet, furniture: [...movables, ...dynamic], ground: puddleScan?.ground ?? null }); api.puddleRefl = puddleRefl; }
+      catch (err) { console.warn('puddles deferred', err?.message ?? err); }
+    }
     puddleRefl?.setEnabled(TIERS[name].puddles && (!multi || slots.params.wet > 0));
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
   const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
-  const restore = () => {
+  const restore = () => { try { restoreBaked(); } catch (err) { console.warn('baked restore incomplete', err?.message ?? err); } };
+  const restoreBaked = () => {
     if (disposed) return;
     if (slots) slots.restore();
     else for (const t of layers) t.userData.restore?.();
@@ -759,6 +771,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     groups?.restore();
     pcss.invalidate(); lighting.sun.shadow.needsUpdate = true;
     if (!slots) { envTarget?.dispose(); envTarget = null; }
+    if (!puddleRefl && TIERS[tier]) setFeatures(tier);   // puddles that failed while the context was lost
     afterTime(); };
   renderer.domElement?.addEventListener('webglcontextrestored', restore);
   const dispose = () => {

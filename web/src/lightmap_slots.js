@@ -146,8 +146,12 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
       for (const data of [current, previous, fading?.data].filter(Boolean)) {
         data.layers.forEach(t => t.userData.restore?.()); data.remip?.();
         data.volume.uniforms.uProbeSH.value.needsUpdate = true;
-        data.env?.dispose();
-        const pmrem = new THREE.PMREMGenerator(renderer); try { data.env = pmrem.fromEquirectangular(data.sky); } finally { pmrem.dispose(); }
+        // Build the new environment before dropping the old one: a failure (lost again) leaves the old one in place and the
+        // next restore rebuilds it, never a disposed target that later code samples.
+        let env = null;
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        try { env = pmrem.fromEquirectangular(data.sky); } catch (err) { console.warn('slot environment deferred', err?.message ?? err); } finally { pmrem.dispose(); }
+        if (env) { data.env?.dispose(); data.env = env; }
       }
       refl.clearLayerUpdates(); refl.needsUpdate = true;   // both halves, from the CPU copy
       commit(current);

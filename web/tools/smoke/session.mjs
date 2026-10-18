@@ -26,7 +26,8 @@ export class Session {
   since(c) {
     return [...this.pageErrors.slice(c.e).map(m => `page error: ${m}`), ...this.consoleErrors.slice(c.c).map(m => `console.error: ${m}`), ...this.patchWarnings.slice(c.p).map(m => `shader patch warning: ${m}`)];
   }
-  async newPage(extraQuery = '') {
+  // init (optional): a function run in the page before any of its scripts, with initArg (e.g. to hook the WebGL context)
+  async newPage(extraQuery = '', { init = null, initArg = null } = {}) {
     const context = await this.browser.newContext({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1, acceptDownloads: false });
     await context.addInitScript(() => {
       try { localStorage.setItem('croton-music', '0'); localStorage.setItem('croton-lang', 'en'); } catch { /* storage blocked */ }
@@ -34,6 +35,7 @@ export class Session {
       Element.prototype.requestPointerLock = function () { return Promise.resolve(); };
       addEventListener('unhandledrejection', e => console.error('unhandled rejection: ' + (e.reason?.stack || e.reason)));
     });
+    if (init) await context.addInitScript(init, initArg);
     const page = await context.newPage();
     page.setDefaultTimeout(30000 * this.slow);   // clicks and key presses wait for the page's main thread too
     const tag = `[page ${this.pages.length}]`;

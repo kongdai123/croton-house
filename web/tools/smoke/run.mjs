@@ -28,6 +28,7 @@ const server = args.url ? null : await startServer({ root: web });
 const base = args.url ?? server.url;
 console.log(`smoke: ${base}${args.gpu ? ' (machine GPU)' : ' (SwiftShader)'}, artifacts in ${out}`);
 
+const STANDALONE = ['legacy', 'context-loss'];   // open their own pages; need neither the shared one nor 'load'
 const results = [];
 let browser = null, session = null;
 const withTimeout = (p, s, name) => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`test '${name}' timed out after ${s}s`)), s * 1000); })]).finally(() => clearTimeout(t)); };
@@ -35,15 +36,15 @@ try {
   browser = await launch({ headed: args.headed, gpu: args.gpu });
   session = new Session({ browser, base, slow: args.gpu ? 1 : 10 });   // SwiftShader: every wait 10x
   const ctx = makeContext(session, m => console.log(m));
-  // the tests share the page that 'load' opens, so a selection of anything but 'legacy' brings 'load' along
-  const needLoad = args.only.some(n => n !== 'legacy');
+  // the tests share the page that 'load' opens, so a selection of anything but the standalone ones brings 'load' along
+  const needLoad = args.only.some(n => !STANDALONE.includes(n));
   const todo = TESTS.filter(t => !args.only.length || args.only.includes(t.name) || (needLoad && t.name === 'load'));
   let loadFailed = false;
   for (const test of todo) {
     const t0 = Date.now(), c0 = session.counts();
     let error = null;
-    if (loadFailed && test.name !== 'legacy' && test.name !== 'load') error = new Error('skipped: the load test failed');
-    else if (!ctx.page && test.name !== 'load' && test.name !== 'legacy') error = new Error("the page is not loaded (run 'load' first)");
+    if (loadFailed && !STANDALONE.includes(test.name) && test.name !== 'load') error = new Error('skipped: the load test failed');
+    else if (!ctx.page && test.name !== 'load' && !STANDALONE.includes(test.name)) error = new Error("the page is not loaded (run 'load' first)");
     else {
       try {
         await withTimeout(test.run(ctx), Math.max(test.timeoutS ?? 0, args.timeoutS), test.name);

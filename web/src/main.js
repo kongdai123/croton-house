@@ -27,6 +27,7 @@ import { PhotoUI } from './photo_ui.js';
 import { applyLightmaps } from './lightmap.js';
 import { createContact } from './contact.js';
 import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
+import { createGuard } from './startup_guard.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -44,6 +45,12 @@ const pixelRatio = p => {
 };
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: detected.tier === 'hq', powerPreference: 'high-performance', preserveDrawingBuffer: true });
+// The context can be lost at any point of the load (startup_guard.js): non-essential steps fail soft and are retried after the
+// restore, and the steps that need a live context wait for it. Everything below that touches the GPU is written for that.
+const gl0 = renderer.getContext();
+const guard = createGuard({ canvas, isLost: () => gl0.isContextLost() });
+const soft = guard.soft;
+await guard.waitForContext();   // the capability probe below reads extensions, which a lost context reports as missing
 const bakedWanted = bakedRequested(location.search);
 let bakedUnavailable = bakedWanted ? bakedCapabilityError(renderer) : null;
 renderer.setPixelRatio(pixelRatio(preset));
@@ -88,16 +95,17 @@ const daylightFile = Q.get('daylight') === 'live' ? Promise.resolve(null) : fetc
 const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json() : []).catch(() => []);
 
 // ---- Lighting: daylight openings, practical fixtures and separate room / sky reflections.
+await guard.waitForContext();
 const lighting = createLighting(renderer, scene, camera, house, preset);
 if (bakedWanted && !lighting.renderConfig.hdr) bakedUnavailable = 'HDR framebuffer unavailable';
 const { fixtures, composer, gtao } = lighting;
 post = composer; fitView();
 async function applyTime() {
   if (baked) state.dusk = baked.slotName === 'dusk';
-  await lighting.applyTime(baked ? false : state.dusk);   // baked slots own their sky, sun and physical lamp level
-  for (const o of layout.placed) o.userData.onTime?.(state.dusk, !state.ready);
-  pets?.relight();
-  if (baked) { try { await baked.warmDepth(); baked.afterTime(); } catch (err) { await fallbackLegacy(err); } }
+  await soft('lighting.applyTime', () => lighting.applyTime(baked ? false : state.dusk));   // baked slots own their sky, sun and physical lamp level
+  for (const o of layout.placed) soft('onTime', () => o.userData.onTime?.(state.dusk, !state.ready));
+  soft('pets relight', () => pets?.relight());
+  if (baked) { try { await baked.warmDepth(); baked.afterTime(); } catch (err) { if (gl0.isContextLost()) soft('baked.afterTime', async () => { await baked?.warmDepth(); baked?.afterTime(); }); else await fallbackLegacy(err); } }
   ui.syncLegends();
 }
 
@@ -114,7 +122,7 @@ async function during(from, to, msg, work) {
 }
 ui.progress(0.05, 'sky');
 // Only the sky the scene opens in; the other one is convolved after the bar reaches 100%.
-await lighting.loadSky(state.dusk);
+await soft('sky', () => lighting.loadSky(state.dusk));   // not fatal: applyTime asks for it again
 ui.progress(0.15, 'house');
 const houseRoot = buildHouse(house);
 scene.add(houseRoot);
@@ -159,9 +167,9 @@ if (pets) for (const a of pets.agents) baked?.register(a.root);
 interact.pets = pets;
 function applyFeatures(p) {
   if (!baked) return;
-  if (p.contact && !scene.userData.contact) createContact({ scene, camera, lighting, movables: layout.movables, pets, player, human });
-  scene.userData.contact?.setEnabled(p.contact);
-  baked.setFeatures(p.name);
+  if (p.contact && !scene.userData.contact) soft('contact shadows', () => createContact({ scene, camera, lighting, movables: layout.movables, pets, player, human }));
+  soft('contact shadows', () => scene.userData.contact?.setEnabled(p.contact));
+  soft('baked features', () => baked.setFeatures(p.name));
 }
 applyFeatures(Q.has('fast') ? TIERS.mobile : preset);
 const minimap = new Minimap(player, layout, points, tour, posts, ui, (target) => goTo(target));
@@ -176,6 +184,7 @@ if (Q.get('pins') === '0') Object.assign(markers.enabled, { rn: false, pano: fal
 minimap.setPlan(house); minimap.markers = markers; minimap.targets = viewpoints.targets;
 minimap.setExtra(rednote.blips());
 function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kind && p.target.id === target.id); if (pin) markers.activate({ pin }); else viewpoints.goTo(target); }
+canvas.addEventListener('webglcontextrestored', () => soft('pets relight', () => pets?.relight()));   // after lighting rebuilt its environments (its own listener ran first)
 ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
 
 // ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA, per tier preset. J toggles quality.
@@ -280,7 +289,9 @@ lapStart = lap('yield2', lapStart);
 // Compile with the composer's buffer bound: three bakes "render target or screen" into each program (tone mapping,
 // output colour space), so compiling for the screen here would compile every material twice.
 const warmScene = () => warmPrograms(renderer, scene, camera, lighting.renderConfig.direct ? null : composer.readBuffer);
+await guard.waitForContext();   // compiling on a lost context links nothing and may never answer
 const compiling = warmScene().then(() => baked?.checkPatches()).catch(async err => {
+  if (gl0.isContextLost()) { await guard.waitForContext(); return warmScene(); }   // not the bake's fault: compile again once restored
   if (!baked) throw err;
   await fallbackLegacy(err); await warmScene();
 }).catch(err => console.warn('shader warmup', err));   // never reject: the load awaits this below
@@ -316,6 +327,7 @@ if (!warming.classList.contains('hidden')) {
   await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 lapStart = lap('compile', lapStart);
+await guard.waitForContext();
 try {
   layout.updateMirrors(camera, mirrorsOn(), renderer);
   composer.render();
@@ -338,7 +350,7 @@ const titleShown = () => !document.getElementById('title').classList.contains('h
 const quietMoment = () => titleShown() || (performance.now() - (state.enteredAt ?? 0) > 8000 && player.keys.size === 0 && !tourCtl.active && !viewpoints.fly);
 // The download starts right away; each heavy step waits for whenQuiet() (or for a dusk toggle, which needs it now).
 const whenQuiet = () => new Promise(resolve => { const check = () => (skyUrgent || quietMoment() ? idle(resolve) : setTimeout(check, 500)); check(); });
-if (!baked) idle(() => { const other = !state.dusk, t0 = performance.now(); lighting.prepareTime(other, whenQuiet).then(() => { state.otherSkyMs = performance.now() - t0; }); });
+if (!baked) idle(() => { const other = !state.dusk, t0 = performance.now(); soft('other sky', () => lighting.prepareTime(other, whenQuiet).then(() => { state.otherSkyMs = performance.now() - t0; })); });
 if (Q.has('x') || Q.has('auto')) { document.getElementById('title').classList.add('hidden'); fitView(); }
 document.getElementById('enter').addEventListener('click', fitView);
 
@@ -358,16 +370,17 @@ function frame(dt) {
   viewpoints.update(dt);
   player.update(dt);
   human.update(dt);
-  pets?.update(dt);
+  // Non-essential per-frame steps fail soft (logged once), so one of them cannot stop the draw or the ready count below.
+  soft('pets.update', () => pets?.update(dt));
   interact.update(dt);
   markers.update(dt);
   updateSwayLod(batch.lod, camera.position);
   updateRoomVisibility(batch.rooms, camera.position);
-  layout.animate(simT); if (!viewpoints.panoOpaque) layout.updateMirrors(camera, mirrorsOn(), renderer);
+  layout.animate(simT); if (!viewpoints.panoOpaque) soft('mirrors', () => layout.updateMirrors(camera, mirrorsOn(), renderer));
   garden.update(simT);
   minimap.draw();
-  lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1));
-  try { baked?.updateMovables(dt); } catch (err) { fallbackLegacy(err); }
+  soft('lighting.update', () => lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1)));
+  try { baked?.updateMovables(dt); } catch (err) { if (!gl0.isContextLost()) fallbackLegacy(err); }   // a lost context is not the bake's fault
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
@@ -416,6 +429,6 @@ const loop = (now) => {
   if (CAPTURE && readyFrames >= 12) return;
   // The cap is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo at 30 fps judders.
   if (framePeriod && !viewpoints.panoOpaque) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
-  const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) frame(dt); if (++readyFrames === 12) window.__ready = true;
+  const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) soft('frame', () => frame(dt)); if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

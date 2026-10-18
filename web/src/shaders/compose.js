@@ -45,9 +45,9 @@ function probeMaps(f) {
   const at = n => f.sided ? `probeFetch( probeSidePoint( vBakedWorld, ${n}, ${PROBE_SIDE} ) )` : 'bakedProbe';
   const fetch = `BakedProbe bakedProbe = ${f.sided ? `probeFetch( probeSidePoint( vBakedWorld, ${N_GEOMETRY}, ${PROBE_SIDE} ) )` : 'probeFetch( vBakedWorld )'};\n`;
   const occl = f.groundOcclusion ? ' * mix( 0.45, 1.0, smoothstep( 0.0, 1.2, vBakedWorld.y ) )' : '';
-  // sheer cloth keeps its own two-sided irradiance (and, as before, no contact AO)
-  const ao = f.contactAO && !f.sheer ? `contactAO( vBakedWorld, ${N_GEOMETRY} ) * ` : '';
-  const irradiance = f.sheer ? sheerIrradiance('bakedProbe')
+  // the moving contact AO scales the baked light, sheer cloth's two-sided light too
+  const ao = f.contactAO ? `contactAO( vBakedWorld, ${N_GEOMETRY} ) * ` : '';
+  const irradiance = f.sheer ? sheerIrradiance('bakedProbe', ao)
     : `irradiance += ${ao}${fol}probeEval( bakedProbe, inverseTransformDirection( geometryNormal${f.leafSide ? ' * faceDirection' : ''}, viewMatrix ) )${occl};`;
   const occlusion = (probe, n, bias) => `clamp( dot( ${fol}probeEval( ${probe}, ${n} ), ${LUM} ) / 0.95${bias}, 0.0, 1.0 )`;
   return { fetch, irradiance,
@@ -127,14 +127,13 @@ export function compose(f) {
   const begin = (f.foliageBake ? foliageVertexGLSL(f.multi) : '') + (f.surface ? SURFACE_VERTEX : '');
   if (begin) vertex.push({ site: '#include <begin_vertex>', text: '$&' + begin });
 
-  const aoUsed = f.contactAO && !(probe && f.sheer);
   const fpars = [world && WORLD_VARYING,
     !probe && lightmapPars({ encoding: f.lmEncoding, filter: f.lmFilter, lampGroups: f.lampGroups, multi: f.multi, fade: f.slotFade }),
     probe && PROBE_VOLUME + probeSHGLSL(f.slotFade) + PROBE_FETCH + (f.sided ? PROBE_SIDE_POINT : ''),
     f.wet && WET_PARS,
     f.refl && reflGLSL(f.refl.count, f.refl.slots, f.mirror, f.refl.lamps),
     PCSS_GLSL,
-    f.contactSun && contactSunGLSL(f.contactSteps), aoUsed && contactAOGLSL(f.contactMax),
+    f.contactSun && contactSunGLSL(f.contactSteps), f.contactAO && contactAOGLSL(f.contactMax),
     f.foliageBake && FOLIAGE_PARS,
     f.planarPuddle && PLANAR_PUDDLE_GLSL,
     f.surface && SURFACE_PARS,

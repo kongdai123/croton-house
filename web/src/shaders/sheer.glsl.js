@@ -22,6 +22,6 @@ export const SHEER_SHEEN_TAIL = '\n#ifdef USE_SHEEN\n\tmaterial.sheenColor *= 0.
 // Fold overlap has optical depth: a narrow/bunched panel covers the background with many cloth layers. After the alpha
 // map, so even its weave holes close up in the stack. The same world spread drives the lighting occlusion.
 export const SHEER_COVERAGE_LINE = '\n diffuseColor.a = 1.0 - pow( max( 1.0 - diffuseColor.a, 0.0 ), max( 1.0, 0.7 / max( vSheerSpread, 0.02 ) ) );';
-// both faces from the pixel's probe fetch: the room side reflected, the window side transmitted
+// both faces from the pixel's probe fetch: the room side reflected, the window side transmitted; ao: the contact AO factor
 export const sheerIrradiance = (probe, ao = '') => `{ vec3 sheerN = inverseTransformDirection( geometryNormal, viewMatrix ); vec2 sheerK = sheerResponse();
       irradiance += ${ao ? ao + '( ' : ''}sheerK.x * probeEval( ${probe}, sheerN ) + sheerK.y * probeEval( ${probe}, - sheerN )${ao ? ' )' : ''}; }`;

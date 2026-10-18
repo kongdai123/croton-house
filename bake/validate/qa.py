@@ -176,13 +176,14 @@ class Objects:
     def mesh(self, lm_id): return self.meshes.get('lm:' + lm_id) if lm_id else None
 
     def material_albedo(self, name):
-        """Linear luminance of the material's base colour (1 when it has a map: unknown pattern), emissive/transparent -> None."""
+        """Linear luminance of the material's diffuse albedo, base colour x (1 - metalness): what the lightmap's light is
+        multiplied by (a metal has no diffuse lobe, so Cycles' DIFFUSE bake of it is black by design); emissive/transparent -> None."""
         m = self.materials.get(name)
         if not m: return None
         if m.get('transparent') or m.get('transmission', 0) > 0 or m.get('emissive', '000000') != '000000': return None
         c = m.get('color', 'ffffff'); rgb = [int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)]
         lin = [(v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4) for v in rgb]
-        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+        return (0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]) * (1 - min(max(float(m.get('metalness', 0) or 0), 0.0), 1.0))
 
     def albedo(self, lm_id):
         """The brightest opaque albedo among the unit's materials (None when unknown or all emissive/transparent)."""

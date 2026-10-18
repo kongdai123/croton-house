@@ -3,9 +3,9 @@
 # Plan coordinates map straight onto Blender's: x east, y north, z up (the glTF importer turns three's -z into +y).
 import bpy, sys, json, math, os
 from mathutils import Vector
-# plan.py: in the repo next door (bake/scripts), on the cluster the shared scripts/ copy (run from the bake root)
+# lighting.py: in the repo next door (bake/scripts), on the cluster the shared scripts/ copy (run from the bake root)
 sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts'), 'scripts']
-import plan as planlib
+import lighting   # the lighting manifest: every object's and material's record (glTF extras, kept as custom properties)
 
 DRY = '--dry' in sys.argv
 GLB, LIGHTS, OUT = sys.argv[sys.argv.index('--') + 1:][:3]
@@ -16,43 +16,28 @@ for ob in [o for o in scene.objects if o.type == 'LIGHT']:
     bpy.data.objects.remove(ob, do_unlink=True)
 
 
-PLAN = planlib.load()
-def inside(x, y):   # under the roof: the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
-    return PLAN.is_inside(x, y)
-
-
 def bsdf_of(mat):
     if not mat or not mat.use_nodes:
         return None
     return next((n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None)
 
 
-# ---- classify materials by where their meshes sit
+# ---- classify materials by their meshes' after-rain class (the lighting manifest's weather: ground, plant or outdoor
+# outdoors, none under the roof; the same rule as the site's baked and path-traced lighting) and window glass
 ground, plants, outdoor, glass = set(), set(), set(), set()
+WEATHER = {'ground': ground, 'plant': plants, 'outdoor': outdoor}
 for ob in scene.objects:
     if ob.type != 'MESH':
         continue
-    c = [ob.matrix_world @ Vector(v) for v in ob.bound_box]
-    cx, cy = sum(v.x for v in c) / 8, sum(v.y for v in c) / 8
-    zmax = max(v.z for v in c)
-    span = max(max(v.x for v in c) - min(v.x for v in c), max(v.y for v in c) - min(v.y for v in c))
-    out = not inside(cx, cy) and span < 40
+    rec = lighting.mesh(ob)
     for slot in ob.material_slots:
         m = slot.material
-        b = bsdf_of(m)
-        if not b:
+        if not bsdf_of(m):
             continue
-        if b.inputs['Transmission Weight'].default_value > 0.5 and 'sheer' not in m.keys():
+        if lighting.clear_glass(lighting.material(m)):
             glass.add(m)
-            continue
-        if not out:
-            continue
-        if b.inputs['Alpha'].is_linked or b.inputs['Alpha'].default_value < 0.99 or m.name.startswith('garden-'):
-            plants.add(m)
-        elif zmax < 0.35:
-            ground.add(m)
-        else:
-            outdoor.add(m)
+        elif rec['weather']:
+            WEATHER[rec['weather']].add(m)
 print('materials: ground', len(ground), 'plants', len(plants), 'outdoor', len(outdoor), 'glass', len(glass))
 
 
@@ -133,19 +118,17 @@ for m in glass:
     nt.links.new(mx.outputs[0], mix.inputs[0]); nt.links.new(b.outputs[0], mix.inputs[1]); nt.links.new(tr.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], outp.inputs['Surface'])
 
-# ---- translucent cloth (web: decor.js sheers and cellular shades, userData.sheer -> glTF extras).
+# ---- translucent cloth (web: decor.js sheers and cellular shades: the lighting manifest's sheer { reflect, transmit }).
 # Coverage (the alpha map: gaps between threads) mixes in a Transparent BSDF; the fibres reflect diffusely and scatter
-# `transmit` of the light from behind through a Translucent BSDF, so daylight passes softly into the room. Older exports
-# (no extras) are recognised by sheen + alpha; their walkthrough emission (a raster daytime glow) is dropped.
-def is_sheer(m, b):
-    return 'sheer' in m.keys() or (b.inputs['Sheen Weight'].default_value > 0.2 and (b.inputs['Alpha'].is_linked or b.inputs['Alpha'].default_value < 0.99)
-                                   and b.inputs['Transmission Weight'].default_value <= 0.5)
+# `transmit` of the light from behind through a Translucent BSDF, so daylight passes softly into the room; the
+# walkthrough's emission (a raster daytime glow) is dropped.
 for m in bpy.data.materials:
     b = bsdf_of(m)
-    if not b or not is_sheer(m, b):
+    rec = lighting.material(m, required=False) if b else None
+    if not rec or not lighting.sheer(rec):
         continue
     nt = m.node_tree; outp = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
-    s = m.get('sheer'); transmit = float(s['transmit']) if s and 'transmit' in s else 0.7
+    transmit = float(lighting.sheer(rec)['transmit'])
     b.inputs['Emission Strength'].default_value = 0; b.inputs['Transmission Weight'].default_value = 0
     b.inputs['Sheen Weight'].default_value = min(b.inputs['Sheen Weight'].default_value, 0.3); b.inputs['Roughness'].default_value = 1.0
     alpha = b.inputs['Alpha']; cover = alpha.links[0].from_socket if alpha.is_linked else None; cover_value = alpha.default_value
@@ -188,24 +171,21 @@ for i, L in enumerate(data['lights']):
         d = Vector(L['t']) - Vector((x, y, z)); ob.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     elif L['type'] == 'RectAreaLight':
         ob.rotation_euler = (0, 0, 0)  # ceiling panels face down
-# ---- emission: only real light sources (web: materials.js emitsLight, exported as material extras lightGlow = a lamp
-# surface of a switched fixture, emits = lamp / screen / indicator / fire). The walkthrough's daytime glow on everything
-# else (cellular shades, sheers: lighting.js lifts them to 0.12, a raster stand-in for light through the cloth) would
-# light the rooms (about half the light on the living-room walls came from the curtains), so it is dropped. The lamp
-# surfaces glow gently (x2.5). Older exports without the markers keep the old rule: every warm emissive x2.5.
-def source(m):
-    return 'lightGlow' in m.keys() or 'emits' in m.keys()
-marked = any(source(m) for m in bpy.data.materials)
-if not marked: print('WARNING: no emission markers in the export: every emissive material glows')
+# ---- emission: only real light sources (the lighting manifest's emits: a lamp surface of a switched fixture, a lamp,
+# screen, indicator or fire marked where it is made). The walkthrough's daytime glow on everything else (cellular
+# shades, sheers: lighting.js lifts them to 0.12, a raster stand-in for light through the cloth) would light the rooms
+# (about half the light on the living-room walls came from the curtains), so it is dropped. The lamp surfaces glow
+# gently (x2.5).
 dropped, lamps = [], []
 for m in bpy.data.materials:
     b = bsdf_of(m)
     if not b or b.inputs['Emission Strength'].default_value <= 0: continue
-    if marked and not source(m):
+    rec = lighting.material(m, required=False)
+    if not rec or not lighting.emitter(rec):
         if any(c > 0 for c in b.inputs['Emission Color'].default_value[:3]) or b.inputs['Emission Color'].is_linked: dropped.append(m.name)
         b.inputs['Emission Strength'].default_value = 0
         continue
-    if any(c > 0.3 for c in b.inputs['Emission Color'].default_value[:3]) and (not marked or 'lightGlow' in m.keys() or m.get('emits') == 'lamp'):
+    if any(c > 0.3 for c in b.inputs['Emission Color'].default_value[:3]) and lighting.lamp_surface(rec):
         b.inputs['Emission Strength'].default_value = min(4.0, b.inputs['Emission Strength'].default_value * 2.5); lamps.append(m.name)
 print('emission: lamp surfaces', len(lamps), 'dropped (not a light source)', len(dropped), dropped[:12])
 

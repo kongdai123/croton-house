@@ -1,9 +1,10 @@
 // The composed baked shader: one generation per feature-flag set (features.js), from the chunk modules (*.glsl.js),
 // replacing the stacked string patches each feature used to apply in turn. compose(flags) is pure and memoised by
 // flagsKey(flags); it returns the edits that turn three's standard / physical template (after the material's own hook,
-// which may only keep-include edit it) into the baked one: each edit names one site of the template, which must occur
-// exactly once (applyComposed asserts it, transactionally through shaderPatch), and what replaces it. Ordering between
-// features is a property of this file (the order the pieces are written below), not of call order.
+// which keeps the includes these edit; a leaf hook's expanded normal chunk has its own site) into the baked one: each edit
+// names one site of the template, which must occur exactly once (applyComposed asserts it, transactionally through
+// shaderPatch), and what replaces it. Ordering between features is a property of this file (the order the pieces are
+// written below), not of call order.
 //
 // Sites, vertex: void main() (declarations), project_vertex (the world position, the sheer spread), begin_vertex
 // (foliage, surface attributes). Fragment: void main() (declarations, in a fixed order), normal_fragment_begin (wet

@@ -81,6 +81,7 @@ def chart_downscale(rgb, cov, factor, ids, ids_t):
 
 def unit_rasters(units_path, W, H):
     # {(W, H): raster} at full size and both tier sizes (atlas_units.py, as bake QA rasterises them)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # Blender's -P does not put the script's folder on the path
     from atlas_units import read_units, rasterize
     units = read_units(units_path)['units']
     return {s: rasterize(units, *s) for s in ((W, H), (math.ceil(W / 2), math.ceil(H / 2)), (math.ceil(W / 4), math.ceil(H / 4)))}

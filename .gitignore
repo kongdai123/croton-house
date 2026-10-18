@@ -17,3 +17,6 @@ bake/cluster/
 bake/work/
 # the shader link test's page bundle and report (web/tools/shader_link_test.mjs)
 web/tools/out/
+# bake QA output (bake/validate/qa.py writes qa.json and qa.txt into the working directory by default)
+/qa.json
+/qa.txt

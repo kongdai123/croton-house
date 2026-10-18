@@ -1,0 +1,10 @@
+{
+ "files": {"maxBytes": 15000000},
+ "units": {"minTexels": 1, "minCoverage": 0.1, "coverageLevel": "fail", "blackFloor": 0.0005, "blackFraction": 0.85, "minAlbedo": 0.08,
+   "holeFraction": 0.25, "outlierZ": 4.5, "outlierRatio": 6, "outlierMinTexels": 16, "outlierMinUnits": 8, "outlierFloor": 0.0005, "outlierMinSigma": 0.35},
+ "tiers": {"minFullTexels": 64, "minTierTexels": {"half": 16, "quarter": 8}, "relTol": {"half": 0.5, "quarter": 0.75}, "absTol": 0.01, "chromaTol": 0.15, "lumFloor": 0.003, "maxZeroForLuminance": 0.1, "chromaMinSum": 0.01},
+ "groups": {"minEnergy": 0.001, "leakFraction": 0.35, "bigUnit": 6},
+ "probes": {"maxInvalidFraction": 0.5, "c0Epsilon": 0.001, "ratioMinL0": 0.001, "maxL1Ratio": 1.8},
+ "refl": {"pointTol": 0.01, "boxTol": 0.05, "wallClearance": 0.3, "boxOverTol": 0.25, "blackLevel": 0.0001, "maxBlackFraction": 0.5, "minStd": 0.0001},
+ "baseline": {"relTol": 0.05, "absTol": 0.0001, "relTolByPrefix": {"tiers.": 0.5, "refl.": 0.1, "probes.": 0.1, "group.": 0.1}}
+}

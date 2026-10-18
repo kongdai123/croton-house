@@ -19,6 +19,9 @@ const U = { uContactDepth: { value: white }, uContactCoverage: { value: white },
 // The shaders read flat copies of the two arrays: three re-uploads a material's uniforms on every material switch and
 // copies an array of vectors element by element each time, while a typed array goes to WebGL as it is.
 const FLAT = { uContactPos: { value: new Float32Array(MAX * 4) }, uContactShape: { value: new Float32Array(MAX * 4) } };
+// What the composed baked shader (shaders/compose.js) binds and compiles in: the shared uniforms (flat arrays), the
+// march's taps and the AO's capacity.
+export const CONTACT_SHADER = { uniforms: { ...U, ...FLAT }, steps: STEPS, max: MAX };
 const SUN_GLSL = contactSunGLSL(STEPS), AO_GLSL = contactAOGLSL(MAX);
 
 // Called last, after PCSS/probes/wetness/reflections. Only the directional light matching the sun gets contact.

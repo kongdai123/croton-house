@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 const dir = await mkdtemp(join(tmpdir(), 'croton-tiers-'));
 const log = console.info, warn = console.warn;
 try {
-  const contact = { name: 'contact-stub', setup(b) { b.onResolve({ filter: /\/contact\.js$/ }, () => ({ path: 'contact', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const CONTACT = false; export function contactPatch() {}' })); } };
+  const contact = { name: 'contact-stub', setup(b) { b.onResolve({ filter: /\/contact\.js$/ }, () => ({ path: 'contact', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const CONTACT = false; export const CONTACT_SHADER = { uniforms: {}, steps: 8, max: 16 }; export function contactPatch() {}' })); } };
   const lifecycle = { name: 'lifecycle-stubs', setup(b) {
     b.onLoad({ filter: /\/HDRLoader\.js$/ }, () => ({ contents: `import { Texture } from 'three';
       export class HDRLoader { setDataType() { return this; } async loadAsync(url) { return new Texture({ width: 2, height: 1, data: new Uint16Array(8) }); } }`, loader: 'js' }));
@@ -156,7 +156,7 @@ try {
   console.warn = (...a) => warnings.push(a.join(' '));
   const fitted = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
   try { late4.material.onBeforeCompile(fitted, tight); } finally { console.warn = warn; }
-  assert.ok(!fitted.fragmentShader.includes('uProbeNextSH') && fitted.fragmentShader.includes('probeIrradiance('));
+  assert.ok(!fitted.fragmentShader.includes('uProbeNextSH') && fitted.fragmentShader.includes('probeEval( bakedProbe,'));
   assert.equal(fitted.samplerCount, 3); assert.equal(warnings.length, 1); assert.match(warnings[0], /4 fragment samplers > 3 texture units; dropped slot crossfade$/);
   assert.equal(multiShader.uniforms.uSlotBlend, probeShader.uniforms.uProbeBlend);
   const pump = async promise => { let done = false; promise.finally(() => { done = true; }); for (let i = 0; i < 40 && !done; i++) { await new Promise(setImmediate); baked4.updateMovables(0.25); } assert.ok(done, 'transition must complete'); await promise; };

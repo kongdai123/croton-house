@@ -15,11 +15,11 @@
 import * as THREE from 'three';
 import { warmPrograms, shaderYield } from './shader_warmup.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
-import { CONTACT, contactPatch } from './contact.js';
+import { CONTACT, CONTACT_SHADER, contactPatch } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
 import { createPuddles } from './puddles.js';
-import { bakeFoliage, loadFoliage, shaderReplace as rep, shaderPatch, shaderKey, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
+import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderReplace as rep, shaderPatch, shaderKey, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
@@ -27,14 +27,14 @@ import { createLampGroups, lampGroupGLSL, lampGroupsWanted, loadGroupProbes, val
 import { createSlotProgress } from './slot_progress.js';
 import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
-import { sheerProbePatch } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
 import { pieces as planPieces, plan } from './plan.js';
 import { WET_GLSL } from './shaders/wet.glsl.js';
 import { PCSS_TAPS, PCSS_GLSL, PCSS_LOOKUP, PCSS_CALL } from './shaders/pcss.glsl.js';
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
 import { reflGLSL, CLEARCOAT_IBL } from './shaders/reflection.glsl.js';
-import { PROBE_GLSL, PROBE_SIDE } from './shaders/probe.glsl.js';
+import { bakedFeatures } from './shaders/features.js';
+import { installBaked, fitComposed } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -1123,7 +1123,7 @@ function buildProbeVolume(P, groups = null, walls = []) {
     for (let k = 0; k < 4; k++) wts[c + k] /= sum;
   }
   // One texture for the three colours: R, G and B stacked along its depth (3 x NY slices), one sampler per slot instead
-  // of three (Apple GPUs allow 16 per fragment shader). PROBE_GLSL clamps the depth inside each colour's slices.
+  // of three (Apple GPUs allow 16 per fragment shader). probe.glsl.js clamps the depth inside each colour's slices.
   // Half floats: linearly filtered in every WebGL2 (iOS has no OES_texture_float_linear), ample range for irradiance SH.
   const tex = new THREE.Data3DTexture(new Uint16Array(NX * NZ * NY * 3 * 4), NX, NZ, NY * 3);
   Object.assign(tex, { format: THREE.RGBAFormat, type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.ClampToEdgeWrapping, wrapT: THREE.ClampToEdgeWrapping, wrapR: THREE.ClampToEdgeWrapping, unpackAlignment: 1 });
@@ -1156,44 +1156,22 @@ const toHalf = THREE.DataUtils.toHalfFloat;
 function probeLit(material, volume, pcss, sided = false) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
-  // the material's manifest record (lighting_roles.js): leaf cards, the plant treatment, wet ground, sheer cloth, mirrors
-  const L = lightingOf(material);
-  const leafSide = L.twoSided === 'faceDirection' ? ' * faceDirection' : '';
-  const occl = L.foliage?.groundOcclusion && !material.foliageBake ? ' * mix( 0.45, 1.0, smoothstep( 0.0, 1.2, vProbeWorld.y ) )' : '';
-  const wet = (volume.multi || volume.wet > 0) && L.wet === 'auto';
-  const refl = volume.refl, sheer = !!L.sheer, fol = material.foliageBake, mirror = L.reflection === 'mirror';
-  const side = sided && !sheer && !fol && !leafSide ? PROBE_SIDE : '';   // doors and toggles: lit from the side they face
-  const prev = material.bakedHooks?.compile ?? material.onBeforeCompile, prevKey = material.bakedHooks?.key ?? shaderKey(material);
-  material.bakedHooks = { compile: prev, key: prevKey };
-  material.onBeforeCompile = function (sh, renderer) { shaderPatch(sh, 'probe ' + prevKey, s => {
-    prev?.call(this, s, renderer);
-    Object.assign(s.uniforms, volume.uniforms);
-    s.vertexShader = 'varying vec3 vProbeWorld;\n' + rep(s.vertexShader, '#include <project_vertex>', `#include <project_vertex>
-      vec4 probePosition = vec4( transformed, 1.0 );
-      #ifdef USE_BATCHING
-        probePosition = batchingMatrix * probePosition;
-      #endif
-      #ifdef USE_INSTANCING
-        probePosition = instanceMatrix * probePosition;
-      #endif
-      vProbeWorld = ( modelMatrix * probePosition ).xyz;`, 'probe vertex');
-    let maps = rep(THREE.ShaderChunk.lights_fragment_maps, 'iblIrradiance += getIBLIrradiance( geometryNormal );',
-      `irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal${leafSide}, viewMatrix )${side} )${occl};`, 'probe irradiance');
-    maps = rep(maps, 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
-      `radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix )${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 ) * smoothstep( -0.05, 0.35, inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix ).y );`, 'probe specular');
-    maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ` * clamp( dot( probeIrradiance( vProbeWorld, inverseTransformDirection( geometryClearcoatNormal, viewMatrix )${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );`, 'probe clearcoat');
-    s.fragmentShader = PROBE_GLSL + rep(s.fragmentShader, '#include <lights_fragment_maps>', maps, 'probe maps');
-    if (wet) { wetPatch(s, volume.wet); if (volume.slots) s.uniforms.uWet = volume.slots.wet; }
-    if (refl) reflPatch(s, refl, mirror ? '1.0' : `clamp( dot( probeIrradiance( vProbeWorld, nW${side} ), vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )`, mirror);
-    pcss.patch(s);
-    if (sheer) sheerProbePatch(s, material);
-    // last resort, the next slot's probe volume (its fade then jumps at the end)
-    const drop = fitBaked(s, renderer, this ?? material, { name: 'slot crossfade', cost: volume.slots ? 1 : 0 });
-    if (CONTACT) checkedContact(s, false, !drop.has('contact sun'));
-    fol?.patch(s, !!refl);
-    if (volume.slots) { if (fol) volume.slots.patchFoliage(s); if (!drop.has('slot crossfade')) volume.slots.patchProbe(s); }
-  }); };
-  material.customProgramCacheKey = function () { return prevKey + '|probe-v3:' + [leafSide, occl, wet, refl?.key ?? refl?.count ?? 0, CONTACT, sheer, !!fol, !!volume.multi, mirror, side, (this ?? material).userData.samplerCut ?? 0].join(':'); };
+  const own = { compile: material.bakedHooks?.compile ?? material.onBeforeCompile, key: material.bakedHooks?.key ?? shaderKey(material) };
+  material.bakedHooks = own;
+  // the material's manifest record (lighting_roles.js): leaf cards, the plant treatment, wet ground, sheer cloth, mirrors;
+  // the slot runtime joins the volume after registration, so the flags are read when compiled
+  const L = lightingOf(material), refl = volume.refl, fol = material.foliageBake;
+  const features = () => bakedFeatures(L, { probeSide: sided ? 'face' : 'none' }, { path: 'probe', multi: !!volume.slots, wet: volume.multi ? 1 : volume.wet,
+    refl, contact: CONTACT ? CONTACT_SHADER : null, foliageBake: !!fol });
+  const bind = (s, f) => {
+    Object.assign(s.uniforms, volume.uniforms, pcss.uniforms);
+    if (f.wet) s.uniforms.uWet = volume.slots ? volume.slots.wet : { value: volume.wet };
+    if (f.refl) Object.assign(s.uniforms, refl.uniforms);
+    if (f.contactSun || f.contactAO) { Object.assign(s.uniforms, CONTACT_SHADER.uniforms); s.uniforms.uContactCaster = { value: 0 }; }
+    if (f.sheer) s.uniforms.uSheer = material.sheerUniform ??= { value: new THREE.Vector2(L.sheer.reflect, L.sheer.transmit) };
+    if (f.foliageBake) Object.assign(s.uniforms, FOLIAGE_UNIFORMS, f.multi ? volume.slots.uniforms : {});
+  };
+  installBaked(material, { name: 'probe', tag: 'probe-v4', own, features, bind, fit: fitComposed });
   material.needsUpdate = true;
 }
 

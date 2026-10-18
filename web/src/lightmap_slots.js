@@ -1,7 +1,6 @@
 // GPU-facing slot transitions. Fetch/decode/validate every destination before changing shared uniforms.
 import * as THREE from 'three';
 import { SLOTS, blendSlot, slotRequests } from './lighting_slots.js';
-import { SLOT_PROBE_TAP, SLOT_PROBE_PARS, SLOT_PROBE_BLEND, SLOT_FOLIAGE_PARS, SLOT_FOLIAGE_END, SLOT_FOLIAGE_BLEND } from './shaders/slots.glsl.js';
 
 const copyUniforms = uniforms => Object.fromEntries(Object.entries(uniforms).map(([k, u]) => [k, { value: u.value }]));
 // Reflection probes of the current and the next slot share ONE array texture (one sampler instead of two: Apple GPUs
@@ -123,20 +122,6 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
     combine(level) {
       current.lamps = level; params = { ...params, lamps: level }; lampA.value = level; current.volume.fill(level);
       if (!fading) lampB.value = level;
-    },
-    patchProbe(sh) {
-      Object.assign(sh.uniforms, primary.volume);
-      const tap = SLOT_PROBE_TAP;
-      if (!sh.fragmentShader.includes(tap)) throw Error('Probe slot shader marker changed');
-      sh.fragmentShader = SLOT_PROBE_PARS + sh.fragmentShader.replace(tap,
-        SLOT_PROBE_BLEND);
-    },
-    patchFoliage(sh) {
-      Object.assign(sh.uniforms, uniforms);
-      sh.vertexShader = SLOT_FOLIAGE_PARS + sh.vertexShader;
-      const end = SLOT_FOLIAGE_END;
-      if (!sh.vertexShader.includes(end)) throw Error('Foliage slot shader marker changed');
-      sh.vertexShader = sh.vertexShader.replace(end, SLOT_FOLIAGE_BLEND);
     },
     update(dt) {
       if (disposed || !fading) return;

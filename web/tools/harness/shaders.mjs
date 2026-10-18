@@ -22,6 +22,36 @@ export function resolveIncludes(T, src, missing = new Set()) {
   });
 }
 
+// Names used before they are declared (GLSL needs the declaration first): every uniform, varying, attribute, #define,
+// struct and function the text declares that three's stock text does not, against its first use (comments stripped).
+export function usedBeforeDeclared(src, stock = new Set()) {
+  const s = src.replace(/\/\/[^\n]*/g, ''), out = [], seen = new Set();
+  const decl = /(?:^|[;{}\n])\s*(?:(?:uniform|varying|attribute)\s+(?:(?:highp|mediump|lowp)\s+)?\w+\s+(\w+)|#define\s+(\w+)|struct\s+(\w+)|(?:const\s+)?\w+\s+(\w+)\s*\([^;{}()]*(?:\([^()]*\)[^;{}()]*)*\)\s*\{)/g;
+  for (const m of s.matchAll(decl)) {
+    const name = m[1] ?? m[2] ?? m[3] ?? m[4];
+    if (!name || seen.has(name) || stock.has(name) || ['main', 'if', 'for', 'while', 'return', 'else'].includes(name)) continue;
+    seen.add(name);
+    // the first use outside preprocessor lines (a macro is tested or expands to a name before either is defined)
+    const re = new RegExp(`\\b${name}\\b`, 'g'); let first = -1;
+    for (const u of s.matchAll(re)) if (u.index >= m.index || !/^\s*#/.test(s.slice(s.lastIndexOf('\n', u.index) + 1, u.index))) { first = u.index; break; }
+    if (first >= 0 && first < m.index) out.push(name);
+  }
+  return out;
+}
+// what three's own templates declare (resolved), per stage
+const STOCK = new Map();
+export function stockNames(T, stage) {
+  if (!STOCK.has(stage)) {
+    const names = new Set();
+    for (const lib of ['standard', 'physical', 'depth']) {
+      const src = resolveIncludes(T, T.ShaderLib[lib][stage + 'Shader']).replace(/\/\/[^\n]*/g, '');
+      for (const m of src.matchAll(/\b(\w+)\b/g)) names.add(m[1]);
+    }
+    STOCK.set(stage, names);
+  }
+  return STOCK.get(stage);
+}
+
 // The parameters three hands onBeforeCompile for this material (the parts the hooks and the sampler budget read).
 export function programParams(T, m, { envMap = true } = {}) {
   const lib = m.isMeshDepthMaterial ? T.ShaderLib.depth : m.isMeshPhysicalMaterial ? T.ShaderLib.physical : T.ShaderLib.standard;
@@ -84,6 +114,9 @@ export async function captureShaders({ variants = VARIANTS } = {}) {
         c.materials++; c.samplers = Math.max(c.samplers, samplers);
         if (c.vertex !== vh || c.fragment !== fh) (c.variants ??= []).includes(fh) || c.variants.push(fh);   // one class, several texts (own hooks)
         if (missing.size) c.missing = [...missing].sort();
+        const [rv, rf] = resolved.split('\n//--\n');
+        const early = usedBeforeDeclared(rf, stockNames(T, 'fragment')).concat(usedBeforeDeclared(rv, stockNames(T, 'vertex')));
+        if (early.length) c.usedBeforeDeclared = early.sort();
         (keyOf[name] ??= new Set()).add(`${v.name}:${key}`);
         // one key (with the parameters three adds to it) must never stand for two texts
         const program = v.name + key + MAPS.map(k => +!!sh[k]).join('') + sh.shaderID + !!sh.transmission;

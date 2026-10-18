@@ -14,16 +14,17 @@ try {
     export { items as decor } from './src/furniture/decor.js'; export { items as outdoor } from './src/furniture/outdoor.js';
     export { pillowBody } from './src/furniture/living.js'; export { puffGeo, ruffle } from './src/furniture/bedrooms_parts.js';
     export { collectLightSwitches } from './src/furniture/light_switch.js'; export { defaultOn, lampGroupGLSL, createLampGroups } from './src/lamp_groups.js';
-    export { sheerProbePatch } from './src/materials.js';
+    export { probeLit } from './src/lightmap.js';
     export { lightingOf } from './src/lighting_roles.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
     bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
   globalThis.location = { search: '' };
+  Object.defineProperty(globalThis, 'localStorage', { value: { getItem: () => null, setItem() {} }, configurable: true });
   const image = (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(0, w * h * 4)) });
   const context = new Proxy({}, { get: (o, k) => o[k] ?? (k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} })
     : k === 'getImageData' || k === 'createImageData' ? (...a) => image(a.at(-2), a.at(-1)) : k === 'measureText' ? () => ({ width: 0 }) : () => {}) });
   globalThis.document = { createElement: () => ({ getContext: () => context }) };
-  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, sheerProbePatch } = await import(pathToFileURL(file));
+  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, probeLit } = await import(pathToFileURL(file));
   // default slots are the groups' (lighting manifest); the always group is always on
   for (const slot of ['sunrise', 'noon', 'golden', 'dusk']) {
     assert.equal(defaultOn(slot, { always: true }), true); assert.equal(defaultOn(slot, { defaultOn: ['dusk'] }), slot === 'dusk');
@@ -60,8 +61,10 @@ try {
     assert.equal(materials.size, 1);
     for (const m of materials) {
       assert.deepEqual(m.userData.sheer, { reflect: 0.65, transmit: 0.35 }); assert.equal(!!lightingOf(m).emits, false); assert.equal(m.emissiveIntensity * m.emissive.getHex(), 0);
-      const sh = { uniforms: {}, vertexShader: T.ShaderLib.physical.vertexShader, fragmentShader: T.ShaderLib.physical.fragmentShader.replace('#include <lights_fragment_maps>', 'irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) );') };
-      sheerProbePatch(sh, m); assert.equal(sh.uniforms.uSheer.value.y, 0.35); assert.ok(sh.fragmentShader.includes('- sheerN'));
+      // the composed probe shader reads the cloth from both faces, at the manifest's reflect / transmit split
+      const sh = { uniforms: {}, vertexShader: T.ShaderLib.physical.vertexShader, fragmentShader: T.ShaderLib.physical.fragmentShader };
+      probeLit(m, { uniforms: {}, wet: 0 }, { uniforms: {} }); m.onBeforeCompile(sh, {});
+      assert.equal(sh.uniforms.uSheer.value.y, 0.35); assert.ok(sh.fragmentShader.includes('probeEval( bakedProbe, - sheerN )'));
     }
   }
   const pillow = pillowBody(0.4, 0.12, true), body = pillow.children[0].geometry.attributes.position;

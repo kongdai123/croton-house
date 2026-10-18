@@ -13,26 +13,9 @@
 // caught.
 import * as THREE from 'three';
 import { lightingOf } from './lighting_roles.js';
-import { FOLIAGE_VERTEX_PARS, FOLIAGE_VERTEX, FOLIAGE_MAIN } from './shaders/foliage.glsl.js';
 
-// Baked shader edits are transactional: a three chunk changing must never leave half a patch installed.
-const warned = new Set(), failures = [];
-export const shaderPatchCount = () => failures.length;
-export function assertShaderPatches(since) {
-  if (failures.length > since) throw new Error('Baked shader patch failed: ' + failures.slice(since).map(f => f.name + ': ' + f.message).join('; '));
-}
-export function shaderReplace(src, from, to, name, count = 1) {
-  const n = typeof from === 'string' ? src.split(from).length - 1 : [...src.matchAll(new RegExp(from.source, from.flags.includes('g') ? from.flags : from.flags + 'g'))].length;
-  if (n !== count) throw new Error(`${name}: expected ${count} matches, got ${n}`);
-  return typeof from === 'string' ? src.replaceAll(from, to) : src.replace(new RegExp(from.source, from.flags.includes('g') ? from.flags : from.flags + 'g'), to);
-}
-export function shaderPatch(sh, name, patch) {
-  const next = { ...sh, uniforms: { ...sh.uniforms } };
-  try { patch(next); Object.assign(sh, next); return true; }
-  catch (err) { failures.push({ name, message: err.message }); if (!warned.has(name)) { warned.add(name); console.warn(`baked shader ${name}: left unpatched`, err.message); } return false; }
-}
-// Freeze before wrapping: three's default key reads this.onBeforeCompile, which would otherwise read the new hook.
-export const shaderKey = m => m.customProgramCacheKey();
+export { shaderPatchCount, assertShaderPatches, shaderReplace, shaderPatch, shaderKey } from './shaders/patch.js';
+import { shaderKey } from './shaders/patch.js';
 
 export async function loadFoliage(url, track = work => work()) {
   let buf = await track(async () => {
@@ -69,19 +52,10 @@ function find(units, o, tol = 0.08) {
 }
 
 const uniforms = { uFolK: { value: new THREE.Vector2(1, 1) }, uFolLamps: { value: 0.25 } };
-// probeLit (lightmap.js) calls this last on a covered material: every probe lookup in main() is scaled to the baked
-// level (irradiance, specular occlusion, reflection occlusion)
-export const FOLIAGE = {
-  patch(sh, reflections) {
-    Object.assign(sh.uniforms, uniforms);
-    sh.vertexShader = FOLIAGE_VERTEX_PARS + shaderReplace(sh.vertexShader, '#include <begin_vertex>', FOLIAGE_VERTEX, 'foliage vertex');
-    const marker = 'void main() {';
-    sh.fragmentShader = shaderReplace(sh.fragmentShader, marker, FOLIAGE_MAIN, 'foliage main');
-    sh.fragmentShader = shaderReplace(sh.fragmentShader, 'probeIrradiance( vProbeWorld, ', 'foliageScale( vProbeWorld ) * probeIrradiance( vProbeWorld, ', 'foliage irradiance', 3);
-    if (reflections) sh.fragmentShader = shaderReplace(sh.fragmentShader, 'vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25,', 'vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95,', 'foliage reflection', 2);
-    sh.fragmentShader = shaderReplace(sh.fragmentShader, 'sunPCSS( vDirectionalShadowCoord[ i ], directionalLightShadow.shadowBias )', 'min( sunPCSS( vDirectionalShadowCoord[ i ], directionalLightShadow.shadowBias ), vFoliage.z )', 'foliage sun');
-  },
-};
+export { uniforms as FOLIAGE_UNIFORMS };
+// The marker of a material copy the foliage bake covers (probeLit composes its shader with the foliageBake flag, the
+// covered mesh carries the `foliage` attribute).
+export const FOLIAGE = Object.freeze({ bakedPerVertex: true });
 
 function matchFoliage(scene, header) {
   const units = new Map(); for (const u of header.units) { const k = u.m + '|' + u.vc; if (!units.has(k)) units.set(k, []); units.get(k).push(u); }

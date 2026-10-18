@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 const dir = await mkdtemp(join(tmpdir(), 'croton-runtime-'));
 try {
   const internals = { name: 'runtime-fixtures', setup(b) {
-    b.onLoad({ filter: /\/contact\.js$/ }, () => ({ contents: 'export const CONTACT = false; export function contactPatch() {}', loader: 'js' }));
+    b.onLoad({ filter: /\/contact\.js$/ }, () => ({ contents: 'export const CONTACT = false; export const CONTACT_SHADER = { uniforms: {}, steps: 8, max: 16 }; export function contactPatch() {}', loader: 'js' }));
     b.onLoad({ filter: /\/pets\/roam\.js$/ }, () => ({ contents: 'export const groundY = () => 0;', loader: 'js' }));
   } };
   const built = await build({ stdin: { contents: `export * as THREE from 'three'; export * from './src/tour.js';

@@ -1,10 +1,8 @@
 // Material library: scanned PBR sets from Poly Haven (CC0) in assets/tex/<set>, plus procedural canvas textures (proc.js).
 // Every material is created once and shared. Units are metres; `repeat` = texture tiles per metre.
 import * as THREE from 'three';
-import { shaderReplace as rep } from './foliage_bake.js';
 import * as proc from './proc.js';
 import { declare } from './lighting_roles.js';
-import { SHEER_PROBE_LINE, SHEER_VERTEX_PARS, SHEER_SPREAD, SHEER_DIRECT_LINE, SHEER_DIRECT, SHEER_EMISSION, SHEER_SHEEN, SHEER_PROBE, SHEER_COVERAGE, SHEER_PARS } from './shaders/sheer.glsl.js';
 
 const loader = new THREE.ImageLoader();
 const cache = new Map();
@@ -263,31 +261,3 @@ Object.assign(M, {
 });
 
 
-// Sheer voile under the baked light (lightmap.js calls this from probeLit for materials with userData.sheer = { reflect,
-// transmit }). Real voile shows two things: the room-side light its fibres reflect, and the window-side light they
-// scatter through (diffuse transmission: soft, with no image of what is behind), so the cloth is read from the probe
-// volume on both sides. The probes sample open air, but a ripplefold panel drawn back into its stack (or a narrow panel,
-// whose 12 folds share less width) shades itself fold by fold: both terms carry that occlusion, from 0.3 for a tight
-// stack to 1 for a panel drawn across, by how far the panel's folds are spread (its world x scale). The reflect /
-// transmit split is decor.js's, shared with photo mode and Cycles (setup.py), where a bunched stack reads ~0.8x the wall
-// above it.
-// The walkthrough's daytime glow (lighting.js lifts every emissive material to 0.12) has no place here: the cloth only
-// returns light it receives. The sun reaching the back of the cloth is transmitted by the same fraction, and the sheen
-// is kept soft.
-export function sheerProbePatch(sh, material) {
-  const s = material.userData.sheer;
-  material.sheerUniform ??= { value: new THREE.Vector2(s.reflect, s.transmit) };
-  sh.uniforms.uSheer = material.sheerUniform;
-  const probe = SHEER_PROBE_LINE;
-  sh.vertexShader = SHEER_VERTEX_PARS + rep(sh.vertexShader, '#include <project_vertex>', SHEER_SPREAD, 'sheer spread');
-  const direct = SHEER_DIRECT_LINE;
-  let f = rep(sh.fragmentShader, '#include <lights_physical_pars_fragment>', THREE.ShaderChunk.lights_physical_pars_fragment, 'sheer physical pars');
-  f = rep(f, direct, SHEER_DIRECT, 'sheer direct');
-  f = rep(f, 'vec3 totalEmissiveRadiance = emissive;', SHEER_EMISSION, 'sheer emission');
-  f = rep(f, '#include <lights_physical_fragment>', SHEER_SHEEN, 'sheer sheen');
-  f = rep(f, probe, SHEER_PROBE, 'sheer probe');
-  // Fold overlap has optical depth: a narrow/bunched panel covers the background with many cloth layers. Apply after
-  // the alpha map so even its weave holes close up in the stack. Same world spread drives the lighting occlusion.
-  f = rep(f, '#include <alphamap_fragment>', SHEER_COVERAGE, 'sheer coverage');
-  sh.fragmentShader = SHEER_PARS + f;
-}

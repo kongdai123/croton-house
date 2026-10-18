@@ -27,3 +27,16 @@ vec3 puddleRadiance( vec3 fallback, vec3 p, vec3 n ) {
   return mix( fallback, planar.rgb, height * edge * clamp( planar.a, 0.0, 1.0 ) );
 }
 `;
+// ---- composed (compose.js): before the physical material, the puddle's rippled normal; after the lights, its
+// reflection replaces the indirect specular (radiance stays the probe or sky reflection, with its baked occlusion)
+export const PUDDLE_NORMAL = `
+      vec3 puddleNW = vec3( 0.0, 1.0, 0.0 );
+      if ( wetPuddle > 0.001 ) { puddleNW = puddleNormal( vBakedWorld ); normal = normalize( mix( normal, mat3( viewMatrix ) * puddleNW, wetPuddle ) ); }
+      `;
+export const PUDDLE_REFLECTION = `
+      if ( wetPuddle > 0.001 ) {
+        vec3 puddleN = puddleNW;
+        float puddleNV = clamp( dot( puddleN, normalize( cameraPosition - vBakedWorld ) ), 0.0, 1.0 );
+        float puddleF = 0.02037 + 0.97963 * pow( 1.0 - puddleNV, 5.0 ); // water IOR 1.333, Schlick Fresnel
+        reflectedLight.indirectSpecular = mix( reflectedLight.indirectSpecular, puddleRadiance( radiance, vBakedWorld, puddleN ) * puddleF, wetPuddle );
+      }`;

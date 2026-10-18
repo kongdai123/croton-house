@@ -66,7 +66,7 @@ export function fitSamplers(sh, renderer, material, features) {
 // Linked baked programs: the most fragment samplers any of them uses, and any that failed to link (with the log).
 const SAMPLER_TYPES = new Set([0x8B5E, 0x8B5F, 0x8B60, 0x8B62, 0x8DC1, 0x8DC4, 0x8DC5, 0x8DCA, 0x8DCB, 0x8DCC, 0x8DCF, 0x8DD2, 0x8DD3, 0x8DD4, 0x8DD7]);
 const audited = new WeakMap();
-export function auditPrograms(renderer, match = s => s.includes('|baked-v3') || s.includes('|probe-v3')) {
+export function auditPrograms(renderer, match = s => /\|(baked|probe)-v\d+:/.test(s)) {
   const gl = renderer.getContext(), out = { max: 0, limit: renderer.capabilities.maxTextures, worst: '', programs: 0, failed: [] };
   for (const p of renderer.info.programs ?? []) {
     if (!p.program || !match(p.cacheKey ?? '')) continue;

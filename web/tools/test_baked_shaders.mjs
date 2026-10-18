@@ -29,7 +29,7 @@ try {
       probeLit(m, { uniforms: {}, wet, refl }, pcss);
       const key = m.customProgramCacheKey(), sh = shader(); m.onBeforeCompile(sh, renderer);
       assert.ok(key.startsWith(original)); assert.equal(m.customProgramCacheKey(), key);
-      assert.ok(sh.fragmentShader.includes('sunPCSS')); assert.ok(sh.vertexShader.includes('vProbeWorld'));
+      assert.ok(sh.fragmentShader.includes('sunPCSS')); assert.ok(sh.vertexShader.includes('vBakedWorld'));
       const source = sh.vertexShader + sh.fragmentShader;
       if (seen.has(key)) assert.equal(source, seen.get(key), key); else seen.set(key, source);
       // leaves stay dry: leaf cards, and a plant's cut-out leaves (an alpha mask alone is not a plant)
@@ -49,7 +49,7 @@ try {
     const m = new T.MeshStandardMaterial(); let deformation = 0;
     m.bakedHooks = { compile(s) { deformation++; s.vertexShader = '// deformation\n' + s.vertexShader; }, key: 'fur' };
     m.onBeforeCompile = () => { throw new Error('legacy GI ran'); };
-    probeLit(m, { uniforms: {}, wet: 0 }, pcss); const f = shader(); m.onBeforeCompile(f, renderer); assert.equal(deformation, 1); assert.ok(f.vertexShader.startsWith('varying vec3 vProbeWorld;\n// deformation'));
+    probeLit(m, { uniforms: {}, wet: 0 }, pcss); const f = shader(); m.onBeforeCompile(f, renderer); assert.equal(deformation, 1); assert.ok(f.vertexShader.startsWith('// deformation\n') && f.vertexShader.includes('varying vec3 vBakedWorld;\nvoid main() {'));
     assert.deepEqual(warnings, []);
     // Missing or duplicated replacements leave both strings and uniforms untouched, warn once per patch.
     const bad = shader(), original = structuredClone(bad);

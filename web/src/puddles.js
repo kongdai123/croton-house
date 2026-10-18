@@ -20,17 +20,19 @@ export function patchPuddleReflection(sh, uniforms, renderer = null, material = 
     if (n > limit) { warnDropped(material, n, limit, ['planar puddle']); return false; }
   }
   Object.assign(sh.uniforms, uniforms);
+  // the world position: the composed probe shader's shared varying, else the lightmapped wet patch's own
+  const world = sh.fragmentShader.includes('varying vec3 vBakedWorld') ? 'vBakedWorld' : 'vWetWorld';
   sh.fragmentShader = sh.fragmentShader.replace('void main() {', PLANAR_PUDDLE_GLSL + '\nvoid main() {')
     .replace('#include <lights_physical_fragment>', `
       vec3 puddleNW = vec3( 0.0, 1.0, 0.0 );
-      if ( wetPuddle > 0.001 ) { puddleNW = puddleNormal( vWetWorld ); normal = normalize( mix( normal, mat3( viewMatrix ) * puddleNW, wetPuddle ) ); }
+      if ( wetPuddle > 0.001 ) { puddleNW = puddleNormal( ${world} ); normal = normalize( mix( normal, mat3( viewMatrix ) * puddleNW, wetPuddle ) ); }
       #include <lights_physical_fragment>`)
     .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       if ( wetPuddle > 0.001 ) {
         vec3 puddleN = puddleNW;
-        float puddleNV = clamp( dot( puddleN, normalize( cameraPosition - vWetWorld ) ), 0.0, 1.0 );
+        float puddleNV = clamp( dot( puddleN, normalize( cameraPosition - ${world} ) ), 0.0, 1.0 );
         float puddleF = 0.02037 + 0.97963 * pow( 1.0 - puddleNV, 5.0 ); // water IOR 1.333, Schlick Fresnel
-        reflectedLight.indirectSpecular = mix( reflectedLight.indirectSpecular, puddleRadiance( radiance, vWetWorld, puddleN ) * puddleF, wetPuddle );
+        reflectedLight.indirectSpecular = mix( reflectedLight.indirectSpecular, puddleRadiance( radiance, ${world}, puddleN ) * puddleF, wetPuddle );
       }`);
   return true;
 }

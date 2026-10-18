@@ -93,10 +93,8 @@ try {
   const quality = runtime.setQuality('quarter'); await tick(); runtime.update(1.5); await quality;
   assert.equal(runtime.name, 'dusk'); assert.equal(disposed.filter(n => n === 'dusk/slot').length, 1); assert.equal(disposed.includes('noon/slot'), true);
   assert.equal(noonDisposed, false);
-  const shader = { uniforms: {}, fragmentShader: 'vec4 probeSH( vec3 uvw, float ch ) { return probeTex( uProbeSH, uvw, ch ); }', vertexShader: 'vFoliage = vec3( decoded, foliage.z ); }' };
-  runtime.patchProbe(shader); runtime.patchFoliage(shader);
-  assert.equal(shader.uniforms.uProbeBlend, runtime.uniforms.uSlotBlend);
-  assert.ok(shader.fragmentShader.includes('probeTex( uProbeNextSH, uvw, ch )')); assert.equal((shader.fragmentShader.match(/sampler3D/g) ?? []).length, 1); assert.ok(shader.vertexShader.includes('uSlotLampA * vFoliage.y'));
+  // the probe crossfade reads the slot blend through the volume's uniforms (the composed shader binds them)
+  assert.equal(initial.volume.uniforms.uProbeBlend, runtime.uniforms.uSlotBlend); assert.ok(initial.volume.uniforms.uProbeNextSH.value.isTexture);
   runtime.combine(0.6); assert.equal(runtime.uniforms.uSlotLampA.value, 0.6);
   runtime.dispose(); assert.equal(new Set(disposed).size, 15);   // dusk's names twice: both resolutions
   assert.equal(disposed.length, 20); // 5 textures per slot snapshot (one packed probe volume): sunrise, noon, dusk at half and quarter

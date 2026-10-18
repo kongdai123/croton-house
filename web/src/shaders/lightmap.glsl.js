@@ -50,3 +50,24 @@ vec3 lmSample3( vec2 uv, int layer, vec3 K ) {
   for (let t = 0; t < T; t++) s += `  if ( uLampLv${t}.x + uLampLv${t}.y + uLampLv${t}.z > 0.0 ) c += uLampC${t} * ( uLampLv${t} * lmSample3( uv, ${t}, uLampK${t} ) );\n`;
   return s + '  return c;\n}\n';
 }
+
+// ---- composed (compose.js): the atlas's declarations and the decoded irradiance, per lamp source and slot crossfade.
+// lampGroups: the lamp-group array's texture count (0: the shared lamps layer at the slot's level); multi: slots
+// loaded; fade: the next slot's atlases read during a fade (left out by the sampler plan: the base light then holds
+// until the fade ends, the shared lamps layer still blends its level).
+const S = 'lmSample( lightMap, vLightMapUv, uLmK.x )', L = 'lmSample( uLmLamps, vLightMapUv, uLmK.y )';
+const NEXT = 'lmSample( uSlotNext, vLightMapUv, uSlotNextK.x )', NEXT_LAMPS = 'lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y )';
+export function lightmapPars({ encoding, filter, lampGroups, multi, fade }) {
+  const groups = lampGroups > 0;
+  return (fade ? 'uniform sampler2D uSlotNext; ' + (groups ? '' : 'uniform sampler2D uSlotNextLamps; ') + 'uniform vec2 uSlotNextK; ' : '') +
+    (multi ? 'uniform float uSlotBlend; ' + (groups ? '' : 'uniform float uSlotLampA; uniform float uSlotLampB;') + '\n' : '') +
+    (groups ? '' : 'uniform sampler2D uLmLamps; ' + (multi ? '' : 'uniform float uLampLevel;') + '\n') +
+    (encoding === 'rgbm' ? RGBM_DECODE : TONE_DECODE) + lmSampleGLSL(filter) + (groups ? lampGroupGLSL(lampGroups) : '');
+}
+export function lightmapIrradiance({ lampGroups, multi, fade }) {
+  const next = fade ? NEXT : S, nextLamps = fade ? NEXT_LAMPS : L;
+  const e = lampGroups > 0
+    ? (multi ? `( mix( ${S}, ${next}, uSlotBlend ) + lampGroups( vLightMapUv ) )` : `( ${S} + lampGroups( vLightMapUv ) )`)
+    : (multi ? `mix( ${S} + uSlotLampA * ${L}, ${next} + uSlotLampB * ${nextLamps}, uSlotBlend )` : `( ${S} + uLampLevel * ${L} )`);
+  return `vec3 lightMapIrradiance = ${e} * lightMapIntensity;`;
+}

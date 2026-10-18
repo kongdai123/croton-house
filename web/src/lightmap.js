@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { warmPrograms, shaderYield } from './shader_warmup.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
-import { CONTACT, CONTACT_SHADER, contactPatch } from './contact.js';
+import { CONTACT, CONTACT_SHADER } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
 import { createPuddles, PUDDLE_UNIFORMS } from './puddles.js';
@@ -23,16 +23,15 @@ import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderReplace as rep, shade
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
-import { createLampGroups, lampGroupGLSL, lampGroupsWanted, loadGroupProbes, validGroupEncoding } from './lamp_groups.js';
+import { createLampGroups, lampGroupsWanted, loadGroupProbes, validGroupEncoding } from './lamp_groups.js';
 import { createSlotProgress } from './slot_progress.js';
 import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
-import { auditPrograms, fitSamplers } from './sampler_budget.js';
+import { auditPrograms } from './sampler_budget.js';
 import { pieces as planPieces, plan } from './plan.js';
-import { WET_GLSL } from './shaders/wet.glsl.js';
-import { PCSS_TAPS, PCSS_GLSL, PCSS_LOOKUP, PCSS_CALL } from './shaders/pcss.glsl.js';
+import { PCSS_TAPS } from './shaders/pcss.glsl.js';
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
-import { reflGLSL, CLEARCOAT_IBL } from './shaders/reflection.glsl.js';
+import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
 import { installBaked } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
@@ -43,44 +42,6 @@ export { SLOTS } from './lighting_slots.js';
 // After rain, outdoors (the same rules as the Blender scene, scripts setup.py): ground darker and glossy with puddles
 // where a world-space noise dips, plants with a little sheen, outdoor furniture slightly darker and smoother. Each
 // mesh's class is its manifest record's weather (lighting_roles.js weatherOf).
-// per-pixel wet ground and puddles for any lit material (world position, up-facing, low, outside the house)
-function wetPatch(sh, wet) {
-  sh.uniforms.uWet = { value: wet };
-  sh.vertexShader = 'varying vec3 vWetWorld;\n' + rep(sh.vertexShader, '#include <project_vertex>', `#include <project_vertex>
-    vec4 wetPosition = vec4( transformed, 1.0 );
-    #ifdef USE_BATCHING
-      wetPosition = batchingMatrix * wetPosition;
-    #endif
-    #ifdef USE_INSTANCING
-      wetPosition = instanceMatrix * wetPosition;
-    #endif
-    vWetWorld = ( modelMatrix * wetPosition ).xyz;`, 'wet vertex');
-  const normal = sh.fragmentShader.includes('#include <normal_fragment_begin>') ? '#include <normal_fragment_begin>' : 'vec3 nonPerturbedNormal = normal;';
-  sh.fragmentShader = rep(sh.fragmentShader, normal, normal + '\nfloat wetMask = wetGround( inverseTransformDirection( normal, viewMatrix ) ); float wetPuddle = wetMask * puddle();', 'wet normal');
-  sh.fragmentShader = WET_GLSL + rep(sh.fragmentShader, '#include <lights_physical_fragment>', 'diffuseColor.rgb *= mix( 1.0, 0.62, wetMask ) * mix( 1.0, 0.55, wetPuddle ); roughnessFactor = mix( roughnessFactor, max( 0.06, roughnessFactor * 0.3 ), wetMask ); roughnessFactor = mix( roughnessFactor, 0.03, wetPuddle );\n#include <lights_physical_fragment>', 'wet physical');
-}
-// contact.js is shared with the live pass. Validate its replacement sites before invoking its baked hook.
-function checkedContact(sh, baked, sun = true) {
-  if (sh.uniforms.uContactDepth) return;
-  const check = (src, token, name) => rep(src, token, token, 'contact ' + name);
-  check(sh.fragmentShader, 'getDirectionalLightInfo( directionalLight, directLight );', 'sun');
-  if (baked) {
-    check(sh.vertexShader, '#include <project_vertex>', 'vertex');
-    check(sh.fragmentShader, 'irradiance += lightMapIrradiance;', 'irradiance');
-  } else if (sh.fragmentShader.includes('irradiance += probeIrradiance( vProbeWorld,')) check(sh.fragmentShader, 'irradiance += probeIrradiance( vProbeWorld,', 'probe');
-  contactPatch(sh, baked, sun);
-}
-// Optional features, in the order they are left out when a material would exceed the GPU's fragment texture units
-// (sampler_budget.js; 16 on Apple GPUs). puddles.js marks the materials it will give a planar puddle reflection.
-// The reflection probes' next-slot blend and the contact AO cost no sampler (one array, uniforms) and always stay.
-const planarPuddle = (s, m) => ({ name: 'planar puddle', cost: m.userData.planarPuddle && s.fragmentShader.includes('float wetPuddle =') ? 1 : 0 });
-const contactSun = s => ({ name: 'contact sun', cost: CONTACT && !s.uniforms.uContactDepth ? 2 : 0 });
-function fitBaked(s, renderer, m, crossfade) {
-  const drop = fitSamplers(s, renderer, m, [planarPuddle(s, m), contactSun(s), crossfade]);
-  if (drop.has('planar puddle')) s.noPlanarPuddle = true;
-  return drop;
-}
-
 function wetten(c, cls, wet) {
   if (!cls || !(wet > 0)) return;
   const mix = THREE.MathUtils.lerp;
@@ -282,12 +243,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     if (dirty && (clock >= 0.05 || settled || (!moving && wasMoving))) refresh();
     wasMoving = moving;
   };
-  const patch = sh => {
-    Object.assign(sh.uniforms, uniforms);
-    sh.fragmentShader = rep(sh.fragmentShader, 'void main() {', PCSS_GLSL + '\nvoid main() {', 'PCSS main');
-    if (sh.fragmentShader.includes('#include <lights_fragment_begin>')) sh.fragmentShader = rep(sh.fragmentShader, '#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin, 'PCSS lights');
-    sh.fragmentShader = rep(sh.fragmentShader, PCSS_LOOKUP, PCSS_CALL, 'PCSS lookup');
-  };
+
   const invalidate = () => { classifyDirty = staticDirty = dirty = true; clock = 1; };
   // subtrees whose casters move (doors, toggles, movables, pets, the visitor): checked every frame
   const track = (objects, hot = false) => { for (const o of [].concat(objects)) if (o) { roots.add(o); if (hot) always.add(o); } invalidate(); };
@@ -296,7 +252,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   const depthEntries = () => {
     const jobs = []; scene.traverse(o => { if (o.isMesh && o.castShadow) for (const m of [].concat(o.material)) jobs.push({ object: o, material: o.customDepthMaterial ?? depthOf(m) }); }); return jobs;
   };
-  return { uniforms, depthEntries, warm: () => warmPrograms(renderer, scene, sync(), base, depthEntries(), false), render: () => refresh(true), patch, update, invalidate, track, setSize, setTier, stats, matrix: sun.shadow.matrix, get version() { return version; },
+  return { uniforms, depthEntries, warm: () => warmPrograms(renderer, scene, sync(), base, depthEntries(), false), render: () => refresh(true), update, invalidate, track, setSize, setTier, stats, matrix: sun.shadow.matrix, get version() { return version; },
     dispose() { rt.dispose(); base.dispose(); for (const d of cache.values()) d.dispose(); cache.clear(); entries.clear(); swaps.length = 0; for (const o of dynamic) o.layers.disable(DYN_LAYER); roots.clear(); always.clear(); promoted.clear(); } };
 }
 
@@ -623,41 +579,24 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       if (multi) weather.set(c, { cls: cls === 'ground' ? null : cls, color: c.color.clone(), roughness: c.roughness });
       wetten(c, cls === 'ground' ? null : cls, SLOTS[slot].wet);   // ground wetness is per pixel
       if (!lightingOf(m).emits) c.emissiveIntensity = 0;   // a raster glow stand-in: the bake has the real light
-      const puddles = (multi || SLOTS[slot].wet > 0) && cls !== 'plant';   // the mask is per pixel: outdoors, facing up, near the ground
       c.lightMap = target.texture; c.lightMapIntensity = lightMapIntensity;
-      // reflections dimmed by the baked light reaching the spot (specular occlusion): a dim room reflects little of the
-      // bright sky environment, a sunlit terrace keeps it all. OPEN_SKY is the irradiance of open ground in the bake.
-      const prev = m.bakedHooks?.compile ?? m.onBeforeCompile, prevKey = m.bakedHooks?.key ?? shaderKey(m), mirror = lightingOf(m).reflection === 'mirror';
-      c.bakedHooks = { compile: prev, key: prevKey };
-      c.onBeforeCompile = (sh, renderer) => shaderPatch(sh, 'lightmap ' + prevKey, s => {
-        prev.call(c, s, renderer);
-        let maps = THREE.ShaderChunk.lights_fragment_maps;
-        if (v2) {
-          Object.assign(s.uniforms, lmUniforms, slots?.uniforms);
-          if (groups) Object.assign(s.uniforms, groups.uniforms);
-          s.fragmentShader = (multi ? 'uniform sampler2D uSlotNext; uniform sampler2D uSlotNextLamps; uniform vec2 uSlotNextK; uniform float uSlotBlend; uniform float uSlotLampA; uniform float uSlotLampB;\n' : '') + 'uniform sampler2D uLmLamps; uniform float uLampLevel;\n' + (enc ? TONE_DECODE : RGBM_DECODE) + LM_SAMPLE + (groups ? lampGroupGLSL(groupMeta.textures) : '') + s.fragmentShader;
-          // Remove even the unused encoded bilinear lookup, keeping all reads in decoded linear space.
-          maps = rep(maps, 'vec4 lightMapTexel = texture2D( lightMap, vLightMapUv );', '', 'lightmap texel');
-          maps = rep(maps, 'vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapIntensity;',
-            groups ? (multi ? 'vec3 lightMapIrradiance = ( mix( lmSample( lightMap, vLightMapUv, uLmK.x ), lmSample( uSlotNext, vLightMapUv, uSlotNextK.x ), uSlotBlend ) + lampGroups( vLightMapUv ) ) * lightMapIntensity;'
-              : 'vec3 lightMapIrradiance = ( lmSample( lightMap, vLightMapUv, uLmK.x ) + lampGroups( vLightMapUv ) ) * lightMapIntensity;') :
-            (multi ? 'vec3 lightMapIrradiance = mix( lmSample( lightMap, vLightMapUv, uLmK.x ) + uSlotLampA * lmSample( uLmLamps, vLightMapUv, uLmK.y ), lmSample( uSlotNext, vLightMapUv, uSlotNextK.x ) + uSlotLampB * lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y ), uSlotBlend ) * lightMapIntensity;' : 'vec3 lightMapIrradiance = ( lmSample( lightMap, vLightMapUv, uLmK.x ) + uLampLevel * lmSample( uLmLamps, vLightMapUv, uLmK.y ) ) * lightMapIntensity;'), 'lightmap decode');
-        }
-        maps = rep(maps, 'iblIrradiance += getIBLIrradiance( geometryNormal );', '', 'lightmap sky');
-        maps = rep(maps, 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );',
-          'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ) * clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 ) * smoothstep( -0.05, 0.35, inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix ).y );', 'lightmap specular');
-        maps = rep(maps, CLEARCOAT_IBL, CLEARCOAT_IBL.slice(0, -1) + ' * clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95, 0.0, 1.0 );', 'lightmap clearcoat');
-        s.fragmentShader = rep(s.fragmentShader, '#include <lights_fragment_maps>', maps, 'lightmap maps');
-        if (puddles) { wetPatch(s, SLOTS[slot].wet); if (slots) s.uniforms.uWet = slots.wet; }
-        if (refl) reflPatch(s, refl, mirror ? '1.0' : 'clamp( dot( lightMapIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) / 0.95 + 0.25, 0.0, 1.0 )', mirror);
-        pcss.patch(s);
-        // last resort, the next slot's atlases (its fade then jumps at the end): the samplers that dropping them frees
-        const next = ['lmSample( uSlotNext, vLightMapUv, uSlotNextK.x )', 'lmSample( uSlotNextLamps, vLightMapUv, uSlotNextK.y )'];
-        const drop = fitBaked(s, renderer, c, { name: 'slot crossfade', cost: next.filter(t => s.fragmentShader.includes(t)).length, pending: false });
-        if (drop.has('slot crossfade')) s.fragmentShader = s.fragmentShader.replace(next[0], 'lmSample( lightMap, vLightMapUv, uLmK.x )').replace(next[1], 'lmSample( uLmLamps, vLightMapUv, uLmK.y )');
-        if (CONTACT) checkedContact(s, true, !drop.has('contact sun'));
-      });
-      c.customProgramCacheKey = () => prevKey + '|baked-v3:' + [v2, !!enc, puddles, refl?.key ?? refl?.count ?? 0, CONTACT, LM_FILTER, multi, mirror, groups ? 'lg' + groupMeta.textures : '', c.userData.samplerCut ?? 0].join(':');
+      // the flags (shaders/features.js): wet ground where the mesh's after-rain class is not a plant's (the mask is per
+      // pixel: outdoors, facing up, near the ground), reflections dimmed by the baked light reaching the spot (specular
+      // occlusion: a dim room reflects little of the bright sky environment, a sunlit terrace keeps it all), the lamp
+      // groups, the slot crossfade; puddles.js marks the ground copies that show the planar puddle reflection
+      const own = { compile: m.bakedHooks?.compile ?? m.onBeforeCompile, key: m.bakedHooks?.key ?? shaderKey(m) }, L = lightingOf(m);
+      c.bakedHooks = own;
+      const features = self => bakedFeatures(L, { weather: cls }, { path: 'lightmap', multi, wet: multi ? 1 : SLOTS[slot].wet, refl,
+        contact: CONTACT ? CONTACT_SHADER : null, lmEncoding: enc ? 'tone' : 'rgbm', lmFilter: LM_FILTER, lampGroups: groups ? groupMeta.textures : 0,
+        planarPuddle: !!self.userData.planarPuddle });
+      const bind = (s, f) => {
+        Object.assign(s.uniforms, lmUniforms, slots?.uniforms, groups?.uniforms, pcss.uniforms);
+        if (f.wet) s.uniforms.uWet = slots ? slots.wet : { value: SLOTS[slot].wet };
+        if (f.refl) Object.assign(s.uniforms, refl.uniforms);
+        if (f.contactSun || f.contactAO) { Object.assign(s.uniforms, CONTACT_SHADER.uniforms); s.uniforms.uContactCaster = { value: 0 }; }
+        if (f.planarPuddle) Object.assign(s.uniforms, PUDDLE_UNIFORMS);
+      };
+      installBaked(c, { name: 'lightmap', tag: 'baked-v4', own, features, bind, renderer });
       mats.set(key, c); return c;
     };
     o.material = Array.isArray(o.material) ? o.material.map(lm) : lm(o.material);
@@ -1036,30 +975,6 @@ function attachLampReflections(refl, lamps, groups, multi) {
     for (const k of ['format', 'type', 'generateMipmaps', 'minFilter', 'magFilter', 'wrapS', 'wrapT']) t[k] = day[k];
     t.needsUpdate = true; day.dispose(); refl.uniforms.uReflTex.value = t;
   }
-}
-// A mirror (manifest reflection 'mirror') shows the room's probe at full strength: the probe already holds the room's
-// light and occlusion, and the specular-occlusion guess (baked irradiance at the glass) would darken it to near black in
-// a dim bathroom.
-function reflPatch(sh, refl, occlusion, mirror = false) {
-  Object.assign(sh.uniforms, refl.uniforms);
-  if (!sh.vertexShader.includes('varying vec3 vReflWorld')) sh.vertexShader = 'varying vec3 vReflWorld;\n' + rep(sh.vertexShader, '#include <project_vertex>', `#include <project_vertex>
-    vec4 reflPosition = vec4( transformed, 1.0 );
-    #ifdef USE_BATCHING
-      reflPosition = batchingMatrix * reflPosition;
-    #endif
-    #ifdef USE_INSTANCING
-      reflPosition = instanceMatrix * reflPosition;
-    #endif
-    vReflWorld = ( modelMatrix * reflPosition ).xyz;`, 'reflection vertex');
-  sh.fragmentShader = 'varying vec3 vReflWorld;\n' + reflGLSL(refl.count, !!refl.slots, mirror, refl.lamps) + rep(sh.fragmentShader, /radiance \+= getIBLRadiance\( geometryViewDir, geometryNormal, material\.roughness \)[^;]*;/,
-    `{ vec3 nW = inverseTransformDirection( geometryNormal, viewMatrix ), rW = inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix );
-       rW = normalize( mix( rW, nW, material.roughness * material.roughness ) );
-       radiance += reflProbe( vReflWorld, rW, material.roughness ) * ${occlusion}; }`, 'reflection radiance');
-  // the clearcoat layer (quartz counters, tiles, ceramics) reflects the same room, not the open sky environment
-  if (sh.fragmentShader.includes(CLEARCOAT_IBL.slice(0, -1))) sh.fragmentShader = rep(sh.fragmentShader, /clearcoatRadiance \+= getIBLRadiance\( geometryViewDir, geometryClearcoatNormal, material\.clearcoatRoughness \)[^;]*;/,
-    `{ vec3 nW = inverseTransformDirection( geometryClearcoatNormal, viewMatrix ), rW = inverseTransformDirection( reflect( - geometryViewDir, geometryClearcoatNormal ), viewMatrix );
-       rW = normalize( mix( rW, nW, material.clearcoatRoughness * material.clearcoatRoughness ) );
-       clearcoatRadiance += reflProbe( vReflWorld, rW, material.clearcoatRoughness ) * ${occlusion}; }`, 'reflection clearcoat');
 }
 
 // ---- Probe volume: the probe grid resampled onto a regular 0.5 m 3D texture over the lot (three heights), first-order

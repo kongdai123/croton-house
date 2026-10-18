@@ -24,10 +24,12 @@ import { SHEER_PARS, SHEER_VERTEX_PARS, SHEER_SPREAD_LINE, SHEER_DIRECT_LINE, SH
 import { FOLIAGE_PARS, foliageVertexPars, foliageVertexGLSL } from './foliage.glsl.js';
 import { PLANAR_PUDDLE_GLSL, PUDDLE_NORMAL, PUDDLE_REFLECTION } from './puddle.glsl.js';
 import { TAA_GLSL } from './taa.glsl.js';
+import { lightmapPars, lightmapIrradiance } from './lightmap.glsl.js';
 
 const LUM = 'vec3( 0.2126, 0.7152, 0.0722 )';
 const N_GEOMETRY = 'inverseTransformDirection( geometryNormal, viewMatrix )', N_CLEARCOAT = 'inverseTransformDirection( geometryClearcoatNormal, viewMatrix )';
 // three's lines the baked light replaces (lights_fragment_maps / lights_fragment_begin)
+const LM_TEXEL = 'vec4 lightMapTexel = texture2D( lightMap, vLightMapUv );', LM_IRRADIANCE = 'vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapIntensity;', LM_ADD = 'irradiance += lightMapIrradiance;';
 const IBL_IRRADIANCE = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
 const IBL_RADIANCE = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
 const DIRECTIONAL_INFO = 'getDirectionalLightInfo( directionalLight, directLight );';
@@ -55,10 +57,24 @@ function probeMaps(f) {
     reflectionClearcoat: f.mirror ? '1.0' : occlusion(at('nW'), 'nW', f.foliageBake ? '' : ' + 0.25') };
 }
 
+// the lightmapped path: the decoded atlas (contact AO under the moving casters), its luminance the occlusion
+function lightmapMaps(f) {
+  const lum = bias => `clamp( dot( lightMapIrradiance, ${LUM} ) / 0.95${bias}, 0.0, 1.0 )`;
+  return { fetch: '', irradiance: '', specular: lum(''), clearcoat: lum(''), reflection: f.mirror ? '1.0' : lum(' + 0.25'), reflectionClearcoat: f.mirror ? '1.0' : lum(' + 0.25'),
+    lightmap: m => {
+      // even the unused encoded bilinear lookup goes: every read is in decoded linear light
+      m = rep(m, LM_TEXEL, '', 'lightmap texel');
+      m = rep(m, LM_IRRADIANCE, lightmapIrradiance({ lampGroups: f.lampGroups, multi: f.multi, fade: f.slotFade }), 'lightmap decode');
+      if (f.contactAO) m = rep(m, LM_ADD, `lightMapIrradiance *= contactAO( vBakedWorld, ${N_GEOMETRY} );\n ${LM_ADD}`, 'lightmap contact');
+      return m;
+    } };
+}
+
 // three's lights_fragment_maps with the baked light in place of the sky's
 function maps(f) {
-  const p = probeMaps(f);
+  const p = f.path === 'probe' ? probeMaps(f) : lightmapMaps(f);
   let m = ShaderChunk.lights_fragment_maps;
+  if (p.lightmap) m = p.lightmap(m);
   m = rep(m, IBL_IRRADIANCE, p.irradiance, 'baked irradiance');
   if (f.refl) {
     m = rep(m, IBL_RADIANCE, `{ vec3 nW = ${N_GEOMETRY}, rW = inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix );
@@ -97,6 +113,7 @@ export function compose(f) {
 
   const aoUsed = f.contactAO && !(probe && f.sheer);
   const fpars = [world && WORLD_VARYING,
+    !probe && lightmapPars({ encoding: f.lmEncoding, filter: f.lmFilter, lampGroups: f.lampGroups, multi: f.multi, fade: f.slotFade }),
     probe && PROBE_VOLUME + probeSHGLSL(f.slotFade) + PROBE_FETCH + (f.sided ? PROBE_SIDE_POINT : ''),
     f.wet && WET_PARS,
     f.refl && reflGLSL(f.refl.count, f.refl.slots, f.mirror, f.refl.lamps),

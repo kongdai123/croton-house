@@ -11,6 +11,8 @@
 //             bakedProbe is replaced by E (the old shaders evaluated E at each use).
 //   nW        inside a reflection block `{ vec3 nW = E, ... }` nW is E (both texts), so a lookup written with E where the
 //             old one wrote nW compares equal.
+//   dead      a uniform declared and never read is no part of the program (the old lightmapped patch declared the
+//             slot and shared-lamp uniforms whether its decode read them or not): dropped on both sides.
 //   order     declarations outside main() compared as a set (the old patches prepended at the top or before main, the
 //             composer writes them in one block before main; none depends on its position among the others), main()
 //             and every function body compared as text.
@@ -80,7 +82,9 @@ export function canonical(text) {
   const block = /vec4 bakedPosition = vec4\( transformed, 1\.0 \);\s*#ifdef USE_BATCHING\s*bakedPosition = batchingMatrix \* bakedPosition;\s*#endif\s*#ifdef USE_INSTANCING\s*bakedPosition = instanceMatrix \* bakedPosition;\s*#endif\s*vBakedWorld = \( modelMatrix \* bakedPosition \)\.xyz;/g;
   let seen = false; t = t.replace(block, b => { if (seen) return ''; seen = true; return b; });
   const { items, main } = split(t);
-  return { items: new Set(items.map(ws).filter(s => ![...OLD_DEFS, ...NEW_DEFS].some(d => d.test(s)))), main: ws(main) };
+  const used = name => (t.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length > 1;
+  const live = s => { const u = /^uniform (?:(?:highp|mediump|lowp) )?\w+ (\w+)(?:\[[^\]]*\])?;$/.exec(s); return !u || used(u[1]); };
+  return { items: new Set(items.map(ws).filter(s => ![...OLD_DEFS, ...NEW_DEFS].some(d => d.test(s)) && live(s))), main: ws(main) };
 }
 
 export function equivalent(a, b) {

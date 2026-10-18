@@ -17,3 +17,5 @@ bake/cluster/
 bake/work/
 # the shader link test's page bundle and report (web/tools/shader_link_test.mjs)
 web/tools/out/
+# UI smoke run output (web/tools/smoke/run.mjs --out)
+web/smoke-artifacts/

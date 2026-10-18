@@ -1,5 +1,6 @@
 import { THREE, box } from '../kit.js';
 import { meshId } from '../batch.js';
+import { declare } from '../lighting_roles.js';
 
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
 const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
@@ -60,7 +61,7 @@ function switchLight(root, meshes, lights, { name, zh, exterior = false, always 
     if (!material) {
       material = original.clone(); material.onBeforeCompile = original.onBeforeCompile;
       material.customProgramCacheKey = original.customProgramCacheKey;
-      material.userData.lightGlow = true; materials.set(original, material);
+      material.userData.lightGlow = true; declare(material, {}); materials.set(original, material);   // re-resolved as a switched lamp surface
       glows.push({ material, base: original.emissiveIntensity ?? original.opacity, wash: !original.emissive });
     }
     mesh.material = material; mesh.userData.noBatch = mesh.userData.noHighlight = true;

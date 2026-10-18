@@ -17,7 +17,7 @@ if (process.env.UPDATE_GOLDEN) {
   process.exit(0);
 }
 let failed = 0;
-for (const name of ['objects', 'classify', 'spatial']) {
+for (const name of ['objects', 'classify', 'spatial', 'manifest']) {
   const golden = readGolden(join(GOLDEN, name + '.json'));
   if (!golden) { console.log(`FAIL ${name}.json: no golden (run with UPDATE_GOLDEN=1)`); failed++; continue; }
   const fresh = JSON.parse(JSON.stringify(all[name]));   // same normalisation as the file (undefined dropped)

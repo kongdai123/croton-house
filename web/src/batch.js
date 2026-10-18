@@ -16,6 +16,7 @@
 // umbrella's base, a shade's head rail, the garage door's tracks); what moves gets none and takes the probe volume.
 import { THREE } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { inheritLighting } from './lighting_roles.js';
 
 const CELL = 8, SWAY_R = 10;
 const noRaycast = () => {};
@@ -78,6 +79,7 @@ function merge(list, space) {
   mesh.castShadow = src.castShadow; mesh.receiveShadow = src.receiveShadow; mesh.renderOrder = src.renderOrder; mesh.frustumCulled = src.frustumCulled;
   if (src.onBeforeRender !== THREE.Mesh.prototype.onBeforeRender) mesh.onBeforeRender = src.onBeforeRender;
   mesh.raycast = noRaycast; mesh.name = 'batch'; mesh.userData.batch = true;
+  inheritLighting(mesh, src);   // the members' manifest record (lighting_roles.js)
   return mesh;
 }
 function keyOf(o, cbIds) {

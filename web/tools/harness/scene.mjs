@@ -63,6 +63,7 @@ export async function buildRealScene() {
       export { Layout, PLACEMENTS } from './src/layout.js';
       export { collectLightSwitches, WALL_SWITCHES } from './src/furniture/light_switch.js';
       export { batchStatic, meshId, stillParts } from './src/batch.js';
+      export * as roles from './src/lighting_roles.js';
       export { emitsLight } from './src/materials.js';
       export { createLighting } from './src/lighting.js';
       export { buildGarden } from './src/grass.js';
@@ -89,9 +90,11 @@ export async function buildRealScene() {
     const garden = lib.buildGarden({ quality: 'laptop', camera: new T.PerspectiveCamera() }); scene.add(garden.group);
     const layout = new lib.Layout(scene, lighting.fixtures, house, points);
     await layout.build(() => {});
+    lib.roles.classifyLighting(scene, { stillParts: lib.stillParts });
     lighting.collectMaterials(scene);
     const doors = lib.getDoors();
     const batch = lib.batchStatic([houseRoot, layout.root], { skip: doors.map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+    lib.roles.classifyLighting(scene);
     scene.updateMatrixWorld(true);
     cached = { ...lib, scene, houseRoot, garden, layout, lighting, house, points, doors, batch, switches: lighting.lightSwitches, fixtures: lighting.fixtures };
     return cached;

@@ -15,7 +15,8 @@ import { buildGrid } from './nav.js';
 import { Markers } from './markers.js';
 import { UI, t, setLang, getLang } from './ui.js';
 import { Human } from './human.js';
-import { batchStatic, updateSwayLod, updateRoomVisibility } from './batch.js';
+import { batchStatic, stillParts, updateSwayLod, updateRoomVisibility } from './batch.js';
+import { classifyLighting } from './lighting_roles.js';
 import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
 import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
@@ -123,9 +124,13 @@ ui.progress(0.3, 'furniture');
 const layout = new Layout(scene, fixtures, house, points);
 await layout.build((p, msg) => ui.progress(0.3 + p * 0.35, msg));
 await step(0.66, 'materials');
+// The lighting manifest (lighting_roles.js): every mesh and material resolved before the interior / exterior material
+// split reads it; a second pass after batching resolves the switches' plates, the lamp-surface copies and merged meshes.
+classifyLighting(scene, { stillParts });
 lighting.collectMaterials(scene);
 await step(0.68, 'finishing');
 const batch = Q.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+classifyLighting(scene);
 // Baked sunrise is the default. Keep the complete legacy setup until staging succeeds.
 let baked = null;
 state.baked = false;

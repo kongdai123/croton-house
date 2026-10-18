@@ -17,6 +17,10 @@ it changes nothing unintended.
   are retired as their consumers move to it: the golden tracks `js:plan.*` (spaceAt, roomName, isInside, insideGLSL
   evaluated, indoorWeight) and `py:plan.*`, the remaining consumers' wrappers (`js:roam.areaOf`, `js:roam.isIndoor`,
   `py:lamp_groups.room`), the probe volume's wall boxes and the site-side quotes still in use.
+- `manifest.json`: the lighting manifest (`web/src/lighting_roles.js`, step 3 of docs/architecture-lighting.md): every
+  material's resolved record and every mesh's (fields at their default left out), keyed like `objects.json`, plus the
+  validator's errors. `../test_lighting_manifest.mjs` checks that every decision a consumer reads from it gives today's
+  answer (`classify.json`), listing the ones changed on purpose with their counts.
 - `plan_vectors.json`: the shared test vectors of the two plan readers (`../test_plan.mjs`, `bake/scripts/test_plan.py`).
 - `known_failures.json`: recorded violations of `../test_scene_invariants.mjs`.
 

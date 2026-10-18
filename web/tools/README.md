@@ -40,6 +40,9 @@ per material, `*.glsl.js` the GLSL). Nothing outside `src/shaders` edits a baked
 - `tools/test_shader_invariants.mjs`: who may edit shader text (an allow-list with reasons), no wrapper over a baked
   material, the house's flag sets all enumerated, no recompile on a quality change, dispose restores every material.
 - `tools/test_probe_regions.mjs`: the region-aware probe lookup on the shipped noon probes (a JS transcription).
+- `tools/test_probe_plausible.mjs`: every probe-lit face of the real house (doors shut and open, four slots) lit as the
+  shader lights it, against the bake's own order-2 probe data: no colour channel collapses (postmortem row 19); no
+  probe-lit face wound against its normal beyond a known list. `REPORT=1` lists the failing objects.
 - `node tools/shader_equiv.mjs [class]`: after a shader change, which classes changed text and whether each change is one
   of the documented behaviour-preserving rewrites (`harness/shader_equiv.mjs`). A review tool, not a test.
 - `node tools/shader_link_test.mjs [--sample N] [--units N] [--gpu]`: links every flag set in WebGL2 (Playwright; SwiftShader

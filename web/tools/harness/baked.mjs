@@ -10,7 +10,8 @@ import { join } from 'node:path';
 import { buildRealScene, WEB } from './scene.mjs';
 
 const EXTRA = `
-  export { applyLightmaps } from './src/lightmap.js';
+  export { applyLightmaps, loadProbes, buildProbeVolume } from './src/lightmap.js';
+  export { PROBE_FETCH, PROBE_SIDE_POINT, PROBE_SIDE } from './src/shaders/probe.glsl.js';
   export { createContact } from './src/contact.js';
   export { createPet as createCat } from './src/pets/cat.js';
   export { createPet as createDog } from './src/pets/dog.js';

@@ -18,6 +18,20 @@ export const probeSHGLSL = fade => fade ? `uniform float uProbeBlend; uniform hi
 vec4 probeSH( vec3 uvw, float ch ) { return uProbeBlend > 0.0 ? mix( probeTex( uProbeSH, uvw, ch ), probeTex( uProbeNextSH, uvw, ch ), uProbeBlend ) : probeTex( uProbeSH, uvw, ch ); }
 ` : `vec4 probeSH( vec3 uvw, float ch ) { return probeTex( uProbeSH, uvw, ch ); }
 `;
+// Irradiance from one colour's L1 SH (three's order: L0, then the y, z, x terms), Geomerics' non-linear reconstruction
+// (Hazel, "Reconstructing diffuse lighting from SH"): the sphere's mean A and the linear term B as the plain evaluation
+// A + dot( B, n ) has them, shaped as A * ( a + ( 1 - a ) ( p + 1 ) q^p ), never negative. The plain evaluation goes below
+// zero opposite a strong source once |B| > A (beside an open doorway at noon: the inside of the closed front door read
+// -0.03 / -0.05 / -0.10, clamped black, the bluest light lost first, so dark red bands; the bake's own order-2 data said
+// 0.17). Same mean, same direction; one pow per colour, no extra fetch.
+const PROBE_EVAL = `float probeEvalL1( vec4 c, vec3 n ) {
+  float A = max( 0.886227 * c.x, 0.0 ), L = length( c.wyz ) * 1.023328;
+  float r = clamp( L / max( 2.0 * A, 1e-8 ), 0.0, 1.0 ), q = clamp( 0.5 + 0.5 * dot( c.wyz, n ) * 1.023328 / max( L, 1e-8 ), 0.0, 1.0 );
+  float p = 1.0 + 2.0 * r, a = ( 1.0 - r ) / ( 1.0 + r );
+  return A * ( a + ( 1.0 - a ) * ( p + 1.0 ) * pow( q, p ) );
+}
+vec3 probeEval( BakedProbe s, vec3 n ) { return vec3( probeEvalL1( s.r, n ), probeEvalL1( s.g, n ), probeEvalL1( s.b, n ) ); }
+`;
 // One fetch per pixel: the three colours' SH at a point, shared by the irradiance, the specular and reflection occlusion
 // and the foliage bake's mean (probeFetch), evaluated per normal (probeEval).
 // Region-aware: the hardware's filter blends the 2 x 2 cells around the point (and two heights), and across the house's
@@ -47,11 +61,7 @@ BakedProbe probeFetch( vec3 p ) {
   probeAdd( s, w.x, c0, uvw.z ); probeAdd( s, w.y, c1, uvw.z ); probeAdd( s, w.z, c2, uvw.z ); probeAdd( s, w.w, c3, uvw.z );
   return s;
 }
-vec3 probeEval( BakedProbe s, vec3 n ) {
-  vec4 basis = vec4( 0.886227, 1.023328 * n.y, 1.023328 * n.z, 1.023328 * n.x );
-  return max( vec3( dot( s.r, basis ), dot( s.g, basis ), dot( s.b, basis ) ), 0.0 );
-}
-`;
+` + PROBE_EVAL;
 // The volume's cells are 0.5 m: one at a door, blind or curtain mixes the rooms (closet, garden) on both sides of it.
 // A face that moves there is lit from a little way out (side, m) on the side it looks at, half way towards the viewer:
 // a panel's bevels and a leaf's edges face along the doorway, and only the viewer says which room they are seen from.

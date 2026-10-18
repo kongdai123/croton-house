@@ -23,6 +23,7 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
 | 16 | Stool legs invisible on Apple GPUs | Shader over 16 texture units; patches stacked samplers | I: shader built by stacked string patches |
 | 17 | Slot switch failed | Reflection layout differed between slots (26 vs 27 probes) | B |
 | 18 | Lantern dark at dusk | Lightmapped copies driven by a startup value, original by onTime | D |
+| 19 | Closed front door's inside face dark with reddish vertical bands at noon (the streaks of row 5 before region-aware sampling) | Probe light evaluated as plain L1 SH, max(0, L0 + L1·n) per colour, which goes negative opposite a strong source. The probes just inside the door (baked with it open) are dominated by the sunlit porch: \|L1\| ≈ 1.1 L0, so for the room-facing leaf -0.09 / -0.12 / -0.18, clamped black, blue (sky) first, red left over, banded by probe column. 120 probe-lit objects collapse this way (details below) | J: a light reconstruction that is not positive by construction, with no check against the bake's own data |
 
 ## Classes
 
@@ -39,6 +40,50 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
 - **G. UI state machines without tests.** Tour, doors, switches, quality.
 - **H. Changes reported without a smoke test.**
 - **I. Shaders as stacked string patches.** Order-dependent, sampler-hungry, cache keys easy to get wrong.
+- **J. Reconstructions that are not positive by construction.** The probe volume's plain L1 evaluation rings below zero
+  opposite any strong source (a doorway, a window, a lamp), per colour, so a face collapses to black or to one hue.
+  → a non-negative reconstruction, checked face by face against the bake's own higher-order data.
+
+## Row 19 in detail (2026-10-18)
+
+Measured in node on the shipped bake (`web/tools/harness/baked.mjs`, a JS transcription of the composed shader's
+lookup), the leaf closed, 100 points over its inside face (plan y -4.638) seen from 4 cameras in the room:
+
+- **Lookup.** The sided point lands 0.5 m into the room (plan y ~ -4.14); its 4 cells (x -0.5 / 0, y -4.5 / -4.0) are
+  all inside the outline, so the region-aware blend is the plain one. Each cell's 4 probes: mostly #1513 / #1533
+  (plan (-0.35 / 0.15, -4.35), 0.29 m in front of the door, inside), #1514 / #1534 (y -3.85), and #2122 / #3308 (plan
+  (0, -5.0), outdoors, seen through the opening: ~3% of the weight, its own room-facing light positive). Not an outdoor
+  cell, not a wall probe, not the offset.
+- **Data.** Those probes were baked with the door open (its bake pose is the site's: open), and the sunlit porch through
+  the doorway dominates them: #1533 at 0.95 m has L0 0.50 / 0.52 / 0.53 and L1 towards the door 0.53 / 0.57 / 0.63.
+  The plain L1 irradiance facing into the room is 0.886 L0 - 1.023 L1 = -0.09 / -0.12 / -0.18; the probes 0.8 m in
+  (y -3.85) still read -0.01 / -0.03 / -0.08. Only those beside the opening (x 0.65) see the room alone (L1 ~ 0).
+- **Result.** Shader before: 0.010 / 0.005 / 0.001 (luminance 0.006; all channels 0 at 48% of the points, blue 0 at
+  95%; red 15x blue where anything is left: the vertical bands follow the probe columns). The same probes' own order-2
+  data (in probes.bin, not shipped to the volume): 0.17 / 0.17 / 0.14. The lightmapped wall beside the door (Cycles,
+  decoded from the atlas, x 0.5..0.8 and -0.8..-0.6): 0.083 / 0.076 / 0.058, R/B 1.4. Sunrise, golden and dusk do not
+  collapse: the kitchen pendant group lights the face from the room side (luminance 0.66-0.90, R/B 8-9, against the
+  wall's 0.31-0.47, R/B 7-8; its samples just west of the door read near 0 at every slot, something stands there).
+- **Geometry.** The leaf is fine: 0 of its 11400 triangles wound against their normals; the inside face's normals point
+  into the room.
+- **Fix (runtime, no rebake).** probeEval uses Geomerics' non-linear L1 reconstruction (`web/src/shaders/probe.glsl.js`
+  probeEvalL1; the experimental WebGPU path `web/src/webgpu/probes.js` the same): never negative, the same mean and
+  direction, one pow per colour, no extra fetch or sampler. The door's face at noon: 0.110 / 0.102 / 0.079 (min 0.057),
+  R/B 1.39. House-wide against the lightmaps (3200-3600 lit indoor lightmapped faces per slot, probe looked up 0.5 m
+  out): a colour channel collapsed on 1.9-6.1% of faces before, 0.0-0.7% after (order 2: 0.0-0.75%); under 1/8 of the
+  lightmap 2.6-7.2% before, 1.0-2.5% after.
+- **Affected (the class).** Under the plain evaluation `web/tools/test_probe_plausible.mjs` fails 120 objects at one or
+  more slots: 9 of the 12 hinged and bifold doors (front ca2bb42b5a, garage side gside, kitchen -> garage 2e2d4a125a,
+  vestibule 40c340903a, linen 029f0013aa, baths 143ab6b9ba / 57fafde9ea, both closet bifolds 0f9916c91a / d8425baf7a;
+  not 054ac1818a, 60bf34160a, 498f1f300a) and the probe-lit hardware of the french doors and a slider, the toggles
+  (raised garage door, cellular shades, sheers), movables (kitchen stools, wishbone, office and patio chairs), most
+  garden plants (leaf undersides), and ~70 unmatched pieces. After the fix: none.
+- **Check.** `web/tools/test_probe_plausible.mjs` (in `npm test`): every probe-lit face, both door poses, four slots,
+  against the order-2 reference; and no probe-lit face wound against its normal beyond a known list (plant bases and
+  dried stems, a sheer: a follow-up).
+- **Left.** Doors take the probe volume in every pose, but the probes next to a doorway hold the bake pose's light (the
+  front door open). The outdoor probe seen through an opening still weighs a little in the cells just inside. Neither is
+  visible after the fix; both need the bake (closed-door probes) to remove.
 
 ## Rules from here
 

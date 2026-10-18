@@ -1,5 +1,5 @@
 import { Data3DTexture, DataUtils, HalfFloatType, RGBAFormat, LinearFilter } from 'three/webgpu';
-import { texture3D, vec3, vec4, positionWorld, normalWorld } from 'three/tsl';
+import { texture3D, float, vec3, positionWorld, normalWorld } from 'three/tsl';
 import { plan } from '../plan.js';
 
 export function parseProbes(buffer) {
@@ -26,6 +26,14 @@ export function parseProbes(buffer) {
 // Texture axes are x, plan-north, height: 51 × 55 × 3 over plan.volumes.probe, matching lightmap.js buildProbeVolume.
 const V = plan.volumes.probe, STEP = V.step, DH = Math.round((V.heights[1] - V.heights[0]) * 1e4) / 1e4;
 const NX = Math.round((V.x1 - V.x0) / STEP) + 1, NZ = Math.round((V.y1 - V.y0) / STEP) + 1, NY = V.heights.length;
+// Irradiance from one colour's L1 SH (three's order: L0, y, z, x), Geomerics' non-linear reconstruction: never negative
+// opposite a strong source, as the WebGL probe shader (shaders/probe.glsl.js probeEvalL1; postmortem row 19).
+function evalL1(c, n) {
+  const A = c.x.mul(0.886227).max(0), B = vec3(c.w, c.y, c.z).mul(1.023328), L = B.length();
+  const r = L.div(A.mul(2).max(1e-8)).clamp(0, 1), q = B.dot(n).div(L.max(1e-8)).mul(0.5).add(0.5).clamp(0, 1);
+  const p = r.mul(2).add(1), a = float(1).sub(r).div(r.add(1));
+  return A.mul(a.add(float(1).sub(a).mul(p.add(1)).mul(q.pow(p))));
+}
 export function buildProbeVolume(probes, initialLamps) {
   const valid = Array.from({ length: probes.count }, (_, i) => i).filter(i => probes.valid[i]);
   const near = new Int32Array(NX * NZ * NY * 4), weights = new Float32Array(near.length);
@@ -63,8 +71,7 @@ export function buildProbeVolume(probes, initialLamps) {
   function irradiance(normal = normalWorld) {
     const grid = positionWorld.sub(vec3(V.x0, V.heights[0], -V.y0)).mul(vec3(1 / STEP, 1 / DH, -1 / STEP));
     const uvw = grid.xzy.add(0.5).div(vec3(NX, NZ, NY));
-    const basis = vec4(0.886227, normal.y.mul(1.023328), normal.z.mul(1.023328), normal.x.mul(1.023328));
-    return vec3(...textures.map(t => texture3D(t, uvw).dot(basis))).max(0);
+    return vec3(...textures.map(t => evalL1(texture3D(t, uvw), normal)));
   }
   return { textures, fill, irradiance, count: valid.length };
 }

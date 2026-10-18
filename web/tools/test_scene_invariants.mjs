@@ -56,6 +56,23 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   invariant('closet-lights-clear', 'every closet-rule can is in its space and not above a piece standing there that is taller than 1.9 m', off);
 }
 
+// ---- 1c. door poses of the bake: the lightmaps' (bakePose) and the probes' (probePose) -------------------------------------
+// bakePose 'open' exactly where the plan says bakeOpen (house.js once read them from house.json's scan record, which has
+// none: the front-bedroom closet was going to bake shut again); probePose 'closed' wherever the site starts the door shut
+// and where the plan says probeClosed (the front door), 'site' elsewhere (bake/export/export.mjs --probe-pose).
+{
+  const off = [];
+  for (const d of doors) {
+    const L = d.group.userData.lighting ?? {}, po = w.plan.openings.find(o => o.id === d.id) ?? {};
+    const siteShut = d.kind === 'french' ? !d.open : d.kind === 'slider' ? false : !d.openDefault;
+    const bake = po.bakeOpen ? 'open' : 'site', probe = siteShut || po.probeClosed ? 'closed' : 'site';
+    if (L.bakePose !== bake) off.push(`${d.id} (${d.kind}): bakePose ${L.bakePose}, plan says ${bake}`);
+    if (L.probePose !== probe) off.push(`${d.id} (${d.kind}): probePose ${L.probePose}, expected ${probe} (site ${siteShut ? 'shut' : 'open'}${po.probeClosed ? ', probeClosed' : ''})`);
+  }
+  if (!doors.some(d => d.group.userData.lighting?.bakePose === 'open')) off.push('no door bakes open (the plan has bakeOpen doors)');
+  invariant('door-bake-poses', 'every door declares the lightmaps\' pose (plan bakeOpen) and the probes\' pose (shut where the site starts it shut, or plan probeClosed)', off);
+}
+
 // ---- 2. wall plates: every plate drives a fixture, every declared plate was made, one plate per lamp group, on wall ----------
 // Plates are declared with their fixtures (layout.js placement rows lamp.plate, the niche can in house.js); a plate takes
 // the toggle of its fixture's switch and is named after the switch's lamp group (lighting_roles.js lampGroupAt).

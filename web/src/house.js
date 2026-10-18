@@ -406,8 +406,17 @@ function buildDoor(o, house) {
     doors.push(d); g.userData.door = d; setFrench(d, 0);
   }
   // Lighting manifest: hinged and bifold leaves take the probe volume in every pose (the bake fits only the pose it saw);
-  // the glazed garden doors (french, sliders) keep the bake. bakePose: the pose the bake export sets (plan bakeOpen).
-  if (g.userData.door) declare(g, { role: 'door', leaves: ['french', 'slider'].includes(g.userData.door.kind) ? 'lightmap' : 'probe', bakePose: o.bakeOpen ? 'open' : 'site' });
+  // the glazed garden doors (french, sliders) keep the bake. bakePose: the pose the bake export sets for the lightmaps
+  // (plan bakeOpen: baked open although the site starts it shut). probePose: the pose of the light and reflection probes
+  // (bake/export/export.mjs --probe-pose): shut wherever the site starts the door shut, and where the plan says probeClosed
+  // (the front door); else the site's pose.
+  // Both read the plan's opening record: `o` is house.json's (the scan), which has no bakeOpen / probeClosed (that read
+  // left the front-bedroom closet's bakePose at 'site', i.e. baked shut, its closet black when opened).
+  if (g.userData.door) {
+    const d = g.userData.door, po = plan.openings.find(q => q.id === o.id) ?? o;
+    const siteShut = d.kind === 'french' ? !d.open : d.kind === 'slider' ? false : !d.openDefault;
+    declare(g, { role: 'door', leaves: ['french', 'slider'].includes(d.kind) ? 'lightmap' : 'probe', bakePose: po.bakeOpen ? 'open' : 'site', probePose: siteShut || po.probeClosed ? 'closed' : 'site' });
+  }
   return g;
 }
 // Door motion profile (smootherstep): leaves start and stop gently.

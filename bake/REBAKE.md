@@ -178,24 +178,33 @@ the reference cameras per slot (`lightmap=<slot>&tier=hq&lmres=full`), the bathr
 the front-bedroom closet opened, the kitchen counters, bedroom 3's floor along its west wall; console free of shader
 errors; `baked.auditSamplers()` max <= 16.
 
-## Toggle states of the bake (export.mjs)
-The export is the site's startup state in daytime (`?legacy`, not dusk), except the doors whose plan door spec says
-`bakeOpen` (web/data/plan_overlay.json; their lighting manifest's bakePose is 'open').
-| Object | Site default | Bake |
+## Door and toggle states of the bake (export.mjs)
+Two poses. **Lightmaps** (`croton.glb`, `croton_dusk.glb`): the site's startup state in daytime (`?legacy`, not dusk),
+except the doors whose plan door spec says `bakeOpen` (web/data/plan_overlay.json; manifest bakePose 'open').
+**Probes** (`--probe-pose`: `croton_probe.glb`, `croton_probe_dusk.glb`; the light probes, the lamp groups' probes, the
+daylight and lamp reflection probes): every door shut where the site starts it shut, and where the plan says
+`probeClosed` (manifest probePose 'closed'); the rest as the site has them. The probes next to a doorway hold the light
+of the pose they were rendered in, and a door's leaves take the probe volume in every pose.
+| Door | Site default | Lightmaps | Probes | Why |
+|---|---|---|---|---|
+| Front door (ca2bb42b5a, porch / living) | open | open | **shut** (probeClosed) | open, its leaf swings out onto the porch (outdoor probes), so the probes just inside light only its shut leaf and hardware; rendered open they held the sunlit porch (postmortem row 19); no probe-lit piece stands within 1.5 m inside |
+| Front-bedroom reach-in bifold, white louvers (d8425baf7a, bedroom 3 / closet) | shut | **open** (bakeOpen) | shut | lightmaps: the closet's inside has light when opened (baked shut it stayed black); probes: the room as the site shows it |
+| Primary closet bifold (0f9916c91a) | open | open | open | |
+| Vestibule -> kitchen (40c340903a), bedroom 3 (60bf34160a), bedroom B (498f1f300a) | open | open | open | |
+| Kitchen -> garage (2e2d4a125a), primary bath (143ab6b9ba), primary-bath closet (029f0013aa), hall bath (054ac1818a), bath B (57fafde9ea), garage side door (gside) | shut | shut | shut | |
+| Sliders (e5f2f69eea, 9f018d7dea) | open 0.6 m | open 0.6 m | open 0.6 m | glazed, lightmapped leaves |
+| French doors (161782cdfa, bf8cb9f37a) | shut | shut | shut | glazed, lightmapped leaves |
+
+The invariant `door-bake-poses` (web/tools/test_scene_invariants.mjs) checks both declarations against the plan.
+| Toggle | Site default | Bake |
 |---|---|---|
-| Front door (ca2bb42b5a) | open | open |
-| Front-bedroom reach-in bifold, white louvers (d8425baf7a) | shut | **open** (bakeOpen: light reaches the closet's inside; its leaves are probe-lit in every pose) |
-| Primary closet bifold (0f9916c91a) | open | open |
-| Kitchen -> garage (2e2d4a125a), primary bath (143ab6b9ba), bath B (57fafde9ea), hall bath (054ac1818a), linen closet (029f0013aa), garage side door | shut | shut |
-| Vestibule -> kitchen (40c340903a), bedroom 3 (60bf34160a), bedroom B (498f1f300a), other hinged doors | open | open |
-| Sliders (e5f2f69eea, 9f018d7dea) | open 0.6 m | open 0.6 m |
-| French doors (161782cdfa, bf8cb9f37a) | shut | shut |
 | Garage sectional door | raised | raised |
 | Cellular shades | raised | raised |
-| Sheer curtains | gathered by day, drawn at dusk | gathered (day scenes); drawn in the `--dusk` export (dusk lightmaps, probes, reflections) |
+| Sheer curtains | gathered by day, drawn at dusk | gathered (day scenes); drawn in the `--dusk` exports (dusk lightmaps, probes, reflections) |
 | Patio umbrella | closed | closed |
 | Fire pit | off by day, lit at dusk | off (setup.py skips it as a light) |
-The lamp groups bake once, from the day scene (sheers gathered), for every slot.
+The lamp groups bake once, from the day scenes (sheers gathered), for every slot: lightmaps in the lightmap pose,
+probes and reflections in the probe pose.
 
 ## Cost (RTX 2080 Ti, from the 2026-10-15 logs; 22 lamp groups)
 | Pass | Tasks x time | GPU-h |

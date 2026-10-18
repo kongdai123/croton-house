@@ -85,7 +85,7 @@
   ],
   "spec": {
    "why": "door type, hinge jamb and swing side (plan compass) and resting state (house.js DOOR_TYPES / DOOR_SPEC); unlisted doors keep the scan default",
-   "ca2bb42b5a": { "type": "front", "hinge": "W", "swing": "S", "open": true, "why": "front door, open onto the porch for the first view" },
+   "ca2bb42b5a": { "type": "front", "hinge": "W", "swing": "S", "open": true, "probeClosed": true, "why": "front door, open onto the porch for the first view; its light and reflection probes are rendered with it shut (probeClosed): open, its leaf stands on the porch, so the probes just inside light only its shut leaf and its hardware, which then took the sunlit porch through the doorway (postmortem row 19); no probe-lit piece stands within 1.5 m inside it" },
    "161782cdfa": { "type": "french4" },
    "bf8cb9f37a": { "type": "french2" },
    "e5f2f69eea": { "type": "slider" },

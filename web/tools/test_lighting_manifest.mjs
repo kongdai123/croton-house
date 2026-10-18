@@ -10,7 +10,7 @@ import { captureClassify } from './harness/classify.mjs';
 
 const t0 = performance.now();
 const w = await buildRealScene(), ix = indexScene(w), today = captureClassify(w, ix);
-const { roles } = w, L = roles.lightingOf, R = roles.meshLighting;
+const { roles } = w, L = roles.lightingOf;
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
 let failed = 0;
 const fail = msg => { failed++; console.log('FAIL ' + msg); };
@@ -23,38 +23,20 @@ else console.log('ok   validator: every visible mesh and material resolved');
 // ---- 2. characterisation -------------------------------------------------------------------------------------------------
 // [decision, today's answer from classify.json (undefined = false), the manifest's answer]
 const MATERIAL = [
-  ['foliage', c => !!c.foliage, m => !!L(m).foliage],
-  ['leafSide', c => !!c.leafSide, m => L(m).twoSided === 'faceDirection'],
-  ['wetEligible', c => !!c.wetEligible, m => L(m).wet === 'auto'],
-  ['wetPuddles', c => !!c.wetPuddles, m => !!m.isMeshStandardMaterial && !m.isFogVolumeMaterial && L(m).wet === 'auto'],
   ['unwrapSkip', c => !!c.unwrapSkip, m => L(m).bake === 'probe'],
-  ['glassShadow', c => !!c.glassShadow, m => !L(m).castsSun],
-  ['glassOverlay', c => !!c.glassOverlay, m => !!L(m).glass?.overlay],
   ['glassCycles', c => !!c.glassCycles, m => L(m).glass?.export === 'pane'],
   ['emitsLight', c => !!c.emitsLight, m => !!L(m).emits],
   ['sheer', c => !!c.sheer, m => !!L(m).sheer],
 ];
 const MESH = [
-  ['interior', c => !!c.interior, o => R(o).zone === 'interior' && !mats(o).some(m => L(m).zone === 'exterior')],
-  ['puddleTier', c => c.puddleTier ?? 0, (o, c) => c.puddleTier === undefined ? 0 : o.isInstancedMesh || mats(o).some(m => L(m).foliage) ? 1 : w.puddlesIndoors(boxOf(o)) ? 2 : 0],
-  ['presentation', (c, o) => !!c.presentation || !!o.isReflector, o => R(o).role === 'presentation'],
-  ['bakedFoliagePlant', c => !!c.bakedFoliagePlant, o => o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && !!o.geometry?.attributes.position && !!L(o.material)?.foliage?.bakedPerVertex],
   ['mirrorFace', c => !!c.mirrorFace, o => mats(o).some(m => L(m).reflection === 'mirror')],
   ['unwrapSkip', c => !!c.unwrapSkip, o => mats(o).length > 0 && mats(o).every(m => L(m).bake === 'probe')],
-  ['contactExcluded', c => !!c.contactExcluded, o => mats(o).some(m => !L(m).contact)],
-  ['lmSkip movable', (c, o) => o.userData.lmSkip === 'movable', o => R(o).motion === 'movable' && labelled(o)],
-  // invisible helpers (switch hit proxies) are never exported: only what is drawn
-  ['lmId', (c, o) => !!o.userData.lmId && shown(o), o => !!o.userData.lmId && shown(o) && ['static', 'still', 'door'].includes(R(o).motion)],
 ];
 // A decision leaves these tables when its consumer reads the manifest: classify.json then records the manifest's answer.
 // Decisions changed on purpose: [decision, count of materials / meshes whose answer changed, why].
 const CHANGED = {
 };
 
-const T = w.T, box = new T.Box3();
-const boxOf = o => { box.makeEmpty(); box.expandByObject(o, true); return box; };
-const shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
-const labelled = o => o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !!o.geometry?.attributes.position;
 
 const check = (kind, table, items) => {
   for (const [name, old, now] of table) {

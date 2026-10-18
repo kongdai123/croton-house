@@ -12,6 +12,7 @@ import { parseProbes, buildProbeVolume } from './probes.js';
 import { bakedMaterials } from './materials.js';
 import { createPost } from './post.js';
 import { prepareBatchMaterials } from './scene.js';
+import { classifyLighting } from '../lighting_roles.js';
 
 const query = new URLSearchParams(location.search);
 const diagnostics = window.__webgpu = { ready: false, error: null, backend: null, frames: 0 };
@@ -65,8 +66,9 @@ async function start() {
   // rendered scene because the lamps are already included in the bake.
   const fixtures = new THREE.Group(), layout = new Layout(scene, fixtures, house, points);
   await layout.build((fraction, name) => progress(`furniture ${Math.round(fraction * 100)}% · ${name}`));
-  const switches = prepareBatchMaterials(scene, fixtures, house);
+  const switches = prepareBatchMaterials(scene, fixtures);
   const batch = batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
+  classifyLighting(scene);
   progress('loading baked lighting');
   const bake = await loadBake(renderer, resolution);
   const matching = matchUnits(scene, bake.header, query.get('lmflip') !== '0');

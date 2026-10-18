@@ -15,7 +15,8 @@ import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
 import { ReflectionPass, markReflective } from './reflections.js';
-import { isInside, indoorWeight as planIndoorWeight } from './plan.js';
+import { indoorWeight as planIndoorWeight } from './plan.js';
+import { lightingOf, meshLighting } from './lighting_roles.js';
 
 // Tone curve: Khronos PBR Neutral (the daylight look, fitted to the listing photos), whose final step pulls bright
 // highlights toward white. uHuePreserve scales that step away, so at dusk warm lamps stay amber instead of bleaching.
@@ -122,7 +123,6 @@ export function createLighting(renderer, scene, camera, house, preset) {
   const glass = new Map();
   let daylight;
   let lightSwitches = [];
-  const exteriorFinishes = new Set([M.stucco(), M.soffit(), M.roof()]);
   const exteriorBounce = { value: 2.8 };
 
   const sun = new THREE.DirectionalLight(0xfff7eb, 3.2);
@@ -266,21 +266,20 @@ export function createLighting(renderer, scene, camera, house, preset) {
     sconce.userData.base = 3; sconce.userData.exterior = true; fixtures.add(sconce);
     lightSwitches = collectLightSwitches(root, fixtures);
     // A shared material may serve both a room and a garden bench. Split only those
-    // uses, so looking through a window never gives the garden studio reflections.
+    // uses, so looking through a window never gives the garden studio reflections. The mesh's side is its lighting
+    // manifest zone (lighting_roles.js: the geometry box's centre inside the house, under the ceiling, not a site-wide plane).
     root.updateMatrixWorld(true);
     daylight = bakeDaylight(root, windowLights);
-    const groups = new Map(), center = new THREE.Vector3(), box = new THREE.Box3();
+    const groups = new Map();
     root.traverse(o => {
       if (!o.isMesh || o.isReflector) return;
-      o.geometry.computeBoundingBox();
-      box.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.getCenter(center);
-      const region = isInside(center.x, -center.z) && center.y < house.ceiling + 0.05 && box.max.x - box.min.x < 17 && box.max.z - box.min.z < 13 ? interiorMaterials : exteriorMaterials;
+      const region = meshLighting(o).zone === 'interior' ? interiorMaterials : exteriorMaterials;
       const assign = material => {
         if (material) hqEffects.collect(material);
         if (!material?.isMeshStandardMaterial) return material;
-        // The outer skin sits centimetres inside the opening tolerance. Moving street faces (garage door sections, built in
-        // their open pose under the ceiling) opt in with userData.exteriorFinish.
-        const materialRegion = exteriorFinishes.has(material) || material.userData.exteriorFinish ? exteriorMaterials : region;
+        // The outer skin sits centimetres inside the opening tolerance: its materials declare zone 'exterior' (stucco,
+        // soffit, roof; the garage door sections, built in their open pose under the ceiling).
+        const materialRegion = lightingOf(material).zone === 'exterior' ? exteriorMaterials : region;
         let uses = groups.get(material);
         if (!uses) { uses = new Map(); uses.compile = material.onBeforeCompile; uses.key = material.customProgramCacheKey(); groups.set(material, uses); }
         let local = uses.get(materialRegion);

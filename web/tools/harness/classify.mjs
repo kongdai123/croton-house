@@ -16,7 +16,6 @@ export const QUOTED = [
   ['glass.cycles', 'bake/export/setup.py:42 (Transmission Weight > 0.5 and no sheer key; glass exported by photo.js:149 has transmission 1)', '(daylightOpacity !== undefined || transmission > 0.5) && !sheer'],
   ['mirror.layout', 'web/src/layout.js:466 addMirrors (same test as lightmap.js:1143 isMirror, which is called for mirror.lightmap)', "mat?.name === 'mirror'"],
   ['mesh.sided', 'web/src/lightmap.js applyLightmaps sided (manifest probeSide face)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh whose record says probeSide face'],
-  ['mesh.interior', 'web/src/lighting.js collectMaterials region (plan.isInside)', 'plan.isInside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)'],
   ['mesh.puddleTier', 'web/src/puddles.js sources tier (indoors() is called from the real module)', 'instanced || any material manifest foliage ? 1 : indoors(box) ? 2 : 0'],
   ['mesh.lit', 'web/src/lightmap.js applyLightmaps stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "manifest why ('plant/glass' split by the first material's foliage) ?? (!lmId ? 'dynamic' : 'lightmap')"],
   ['mesh.unwrapGroundFar', 'bake/scripts/unwrap.py:118', 'area > 300 || abs(cx) > 14 || -cz > 18 || -cz < -14, centroid = mean of world vertices, glTF frame (x, y, z) = scene frame'],
@@ -49,7 +48,7 @@ export function materialClassify(w, m, fakeMesh) {
 }
 
 export function captureClassify(w, ix) {
-  const { T, scene, layout, house } = w;
+  const { T, scene } = w;
   const fake = m => ({ isMesh: true, material: m });
   // the set `sided` is built from (lightmap.js applyLightmaps)
   const R = w.roles.meshLighting, sided = new Set();
@@ -73,11 +72,8 @@ export function captureClassify(w, ix) {
       o2.weatherPhoto = R(o).weather;
       box.getCenter(c);
       o2.insidePlan = w.plan.isInside(c.x, -c.z);
-      // lighting.js:285 uses the GEOMETRY box transformed by matrixWorld; for the unrotated common case this equals the tight box
-      o.geometry.computeBoundingBox(); const gb = new T.Box3().copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld), gc = gb.getCenter(new T.Vector3());
-      const inside = (x, y) => w.plan.isInside(x, y);   // lighting.js collectMaterials
-      const exteriorFinish = ms.some(m => m.userData?.exteriorFinish);
-      o2.interior = !exteriorFinish && inside(gc.x, -gc.z) && gc.y < house.ceiling + 0.05 && gb.max.x - gb.min.x < 17 && gb.max.z - gb.min.z < 13;
+      // lighting.js collectMaterials: the mesh's manifest zone, unless a material declares itself exterior
+      o2.interior = R(o).zone === 'interior' && !ms.some(m => w.roles.lightingOf(m).zone === 'exterior');
       o2.puddleTier = o.isInstancedMesh || foliage ? 1 : w.puddlesIndoors(box) ? 2 : 0;
     }
     o2.presentation = !!w.photoPresentation(o);

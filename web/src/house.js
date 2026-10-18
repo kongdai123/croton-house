@@ -3,6 +3,7 @@
 import { THREE, M, box, cyl, plane, group, shadow, tube } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { plan, rectOf, opening } from './plan.js';
+import { declare } from './lighting_roles.js';
 
 export const CEIL = plan.levels.ceiling;
 export const P = (x, y) => new THREE.Vector3(x, 0, -y);              // plan -> world (on the floor)
@@ -62,7 +63,8 @@ function resizeWindows(house) {
 const once = (fn) => { let v; return () => (v ??= fn()); };
 // Garage finishes (g48/g49): chocolate-charcoal paint over block, near-black sealed slab, unpainted drywall header over the laundry nook.
 const GM = {
-  wall: once(() => { const m = M.stucco().clone(); m.color.set(0x4a3e36); m.roughness = 0.9; m.normalScale.set(0.18, 0.18); return m; }),
+  // the garage's dark wall paint, cut from the stucco but an inside finish: its zone follows the mesh (lighting manifest)
+  wall: once(() => { const m = declare(M.stucco().clone(), { zone: null }); m.color.set(0x4a3e36); m.roughness = 0.9; m.normalScale.set(0.18, 0.18); return m; }),
   floor: once(() => { const m = M.concrete().clone(); m.color.set(0x3b3937); m.roughness = 0.55; m.normalScale.set(0.15, 0.15); return m; }),
   ceiling: once(() => new THREE.MeshStandardMaterial({ color: 0x3e3833, roughness: 0.95 })),
   drywall: once(() => new THREE.MeshStandardMaterial({ color: 0xcdbfae, roughness: 0.92 })),

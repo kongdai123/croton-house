@@ -11,12 +11,14 @@
 // moves must be a door, an anchor, an animated root or a toggle (or be added to the scene after batching).
 // Lightmap identity (baked mode, lightmap.js): every mesh that holds still gets userData.lmId, a hash of its vertex count
 // and world-space vertices, so the bake's export and a later session name a mesh the same way whatever the scene order; a
-// merged mesh hashes its parts' ids. Meshes of pieces the visitor carries get userData.lmSkip = 'movable'. In animated and
-// toggled subtrees only the parts that never move get an id (stillParts: a plant's pot, the fire pit's bowl, the
-// umbrella's base, a shade's head rail, the garage door's tracks); what moves gets none and takes the probe volume.
+// merged mesh hashes its parts' ids. What holds still is the lighting manifest's motion (lighting_roles.js): meshes of
+// pieces the visitor carries (motion 'movable') get userData.lmSkip = 'movable'; in animated and toggled subtrees only
+// the parts that never move (motion 'still', found by stillParts below: a plant's pot, the fire pit's bowl, the
+// umbrella's base, a shade's head rail, the garage door's tracks) get an id; what moves gets none and takes the probe
+// volume.
 import { THREE } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { inheritLighting } from './lighting_roles.js';
+import { classifyLighting, inheritLighting, meshLighting } from './lighting_roles.js';
 
 const CELL = 8, SWAY_R = 10;
 const noRaycast = () => {};
@@ -94,22 +96,28 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
   const cbIds = new Map(), c = new THREE.Vector3(), stats = { before: 0, after: 0 };
   // identical meshes in the same place (rare) are told apart by their order: .1, .2
   const seen = new Map(), tag = (o, id) => { const k = seen.get(id) ?? 0; seen.set(id, k + 1); o.userData.lmId = k ? `${id}.${k}` : id; };
-  const label = (o, movable) => { if (!lmMesh(o)) return; if (movable) o.userData.lmSkip = 'movable'; else tag(o, meshId(o)); };
+  const label = o => { if (!lmMesh(o)) return; if (meshLighting(o).motion === 'movable') o.userData.lmSkip = 'movable'; else tag(o, meshId(o)); };
+  // a moving root classified before its last meshes were added (a light switch's hit proxy) is classified again here
+  const classified = root => { let all = true; root.traverse(x => { if (x.isMesh && !x.userData.lighting?.resolved) all = false; }); return all; };
 
   // world-static, interactive roots and doors; returns whether the whole subtree is static
   const groups = new Map(), rooms = new Map();
-  const visit = (o, anchor, door, room, movable) => {
+  const visit = (o, anchor, door, room) => {
     if (!o.visible) return false;
-    if (animSet.has(o) || o.userData.toggle) { if (!o.userData.movable) for (const m of stillParts(o)) label(m, false); return false; }
-    if (o.userData.noBatch) { o.traverse(x => label(x, movable)); return false; }
+    if (animSet.has(o) || o.userData.toggle) {
+      if (!classified(o)) classifyLighting(o, { stillParts, force: true });
+      o.traverse(m => { if (lmMesh(m) && meshLighting(m).motion === 'still') label(m); });
+      return false;
+    }
+    if (o.userData.noBatch) { o.traverse(label); return false; }
     if (o.userData.viewRoom) {
       const bounds = o.userData.viewRoom;
       if (!rooms.has(bounds.key)) { const group = new THREE.Group(); group.name = bounds.key; rooms.set(bounds.key, { bounds, group, roots: [] }); }
       room = rooms.get(bounds.key); room.roots.push(o);
     }
     if (skipSet.has(o)) door = true;
-    if (anchorSet.has(o)) { anchor = o; movable = !!o.userData.movable; }
-    label(o, movable);
+    if (anchorSet.has(o)) anchor = o;
+    label(o);
     if (mergeable(o)) {
       const space = door ? o.parent : anchor;
       let key = (door ? 'p' + space.id : anchor ? anchor.id : 'w') + '|' + keyOf(o, cbIds);
@@ -120,12 +128,12 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
     }
     const fixed = !anchor && !door;
     let still = fixed;
-    for (const ch of o.children) still = visit(ch, anchor, door, room, movable) && still;
+    for (const ch of o.children) still = visit(ch, anchor, door, room) && still;
     if (fixed) o.matrixAutoUpdate = false;
     if (still) o.updateMatrixWorld = staticUMW;
     return still;
   };
-  for (const r of roots) visit(r, null, false, null, false);
+  for (const r of roots) visit(r, null, false, null);
   const world = new THREE.Group(); world.name = 'batched';
   for (const room of rooms.values()) world.add(room.group);
   for (const { space, room, list } of groups.values()) {

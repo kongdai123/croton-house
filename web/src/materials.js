@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { shaderReplace as rep } from './foliage_bake.js';
 import * as proc from './proc.js';
+import { declare } from './lighting_roles.js';
 
 const loader = new THREE.ImageLoader();
 const cache = new Map();
@@ -115,7 +116,8 @@ export const M = {
   // Daylight reflectance is ~0.8 linear; keep the photographed dusk finish.
   wallPaint: once(() => Object.assign(new THREE.MeshStandardMaterial({ color: 0xf7f5f1, roughness: 0.94 }), { userData: { daylightPaint: 0.86 } })),
   ceiling: once(() => Object.assign(new THREE.MeshStandardMaterial({ color: 0xfbfbf9, roughness: 0.96 }), { userData: { daylightPaint: 0.84 } })),
-  stucco: once(() => pbr('white_stucco', { scale: 3.0, color: 0xf7f6f1, roughness: 0.88, normalScale: 0.3 })),
+  // the shell's street faces: always the exterior copy (lighting.js material split), whatever the mesh's centre says
+  stucco: once(() => declare(pbr('white_stucco', { scale: 3.0, color: 0xf7f6f1, roughness: 0.88, normalScale: 0.3 }), { zone: 'exterior' })),
   trim: once(() => new THREE.MeshStandardMaterial({ color: 0xf6f6f4, roughness: 0.55 })),
   doorWhite: once(() => new THREE.MeshStandardMaterial({ color: 0xf4f4f2, roughness: 0.5 })),
   doorBlackHardware: once(() => new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.4, metalness: 0.8 })),
@@ -123,8 +125,8 @@ export const M = {
   shell: once(() => pbr('shell_floor_01', { scale: 0.75, color: 0xfffdf7, roughness: 0.9, normalScale: 1.1 })),
   pebbles: once(() => pbr('clean_pebbles', { scale: 1.0, color: 0xf2efe8, roughness: 0.9, normalScale: 1 })),
   grass: once(() => pbr('leafy_grass', { scale: 1.5, color: 0xbfd48a, roughness: 1, normalScale: 0.8 })),
-  roof: once(() => pbr('grey_roof_01', { scale: 2.5, color: 0xb9b9b6, roughness: 0.95, normalScale: 0.8 })),
-  soffit: once(() => new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.8 })),
+  roof: once(() => declare(pbr('grey_roof_01', { scale: 2.5, color: 0xb9b9b6, roughness: 0.95, normalScale: 0.8 }), { zone: 'exterior' })),
+  soffit: once(() => declare(new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.8 }), { zone: 'exterior' })),
   bark: once(() => pbr('palm_tree_bark', { scale: 1.2, color: 0xcbbfae, roughness: 1 })),
   fenceVinyl: once(() => new THREE.MeshStandardMaterial({ color: 0xf5f5f2, roughness: 0.6 })),
   asphalt: once(() => new THREE.MeshStandardMaterial({ color: 0x5b5b5a, roughness: 0.95 })),

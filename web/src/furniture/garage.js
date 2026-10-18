@@ -5,6 +5,7 @@ import { THREE, M, cyl, lathe, extrude, tube, plane, at, autoCollider, describe,
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { animatedToggle, ss } from './outdoor_parts.js';
 import { addAABB, getColliders } from '../house.js';
+import { declare } from '../lighting_roles.js';
 import { G, PI, box, bake, rod, merged, retile, rng, rrect, sweepX, slotted, perforated, bat, batCase, can, bandsPile, crate, ballHeap, gypsophila } from './garage_parts.js';
 
 // ribbed PVC slip nut around a vertical pipe
@@ -202,7 +203,7 @@ function garageDoorOpen() {
   // level with the skin's depth behind the opening plane (uOpening = root +Z in world), so a rolling section never swaps shader.
   // The pans are hollow: the back of the skin (sweep back faces) is the inside face and keeps garage-level fill.
   const opening = { value: new THREE.Vector4(0, 0, 1, 0) }, skin = WH.clone();
-  skin.userData.exteriorFinish = true;
+  declare(skin, { zone: 'exterior' });   // a street face: the exterior copy (lighting.js material split)
   skin.onBeforeCompile = (shader) => {
     shader.uniforms.uOpening = opening;
     shader.vertexShader = 'varying vec3 vSkinWorld;\n' + shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n\tvSkinWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');

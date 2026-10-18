@@ -13,7 +13,23 @@
 
   (In a linked git worktree `.git` is a file; use `ln -sf "$(git rev-parse --show-toplevel)/web/tools/pre-push.sh" "$(git rev-parse --git-common-dir)/hooks/pre-push"`.)
 
-Tests that need a browser or dev server (`_smoke`, `playtest`, `tourtest`, `pets_*`, ...) are manual tools and are not part of `npm test`.
+## UI smoke tests (gate d)
+
+`npm run smoke` (in `web/`) = `node tools/smoke/run.mjs [--headed] [--url=URL] [--only=a,b] [--list] [--gpu] [--out=DIR] [--timeout=SECONDS]`.
+It builds `dist/` if missing, serves `web/` itself on an ephemeral port (`smoke/server.mjs`), opens the house in Chromium at
+`?tier=mobile` (quarter atlases, music off, 960x600) and drives it through its own UI. Software WebGL2 (SwiftShader) by default,
+as on a CI runner; `--gpu` uses the machine's GPU. `--url` tests an already running server (e.g. `python3 tools/serve.py`).
+Tests share one page, in order (`smoke/tests.mjs`): `load` (landing, enter, baked mode, no page errors or patch warnings,
+sampler audit), `tour` (button start/stop, stop mid-flight, walking works), `switches` (every wall plate moves its whole
+group), `doors` (every door toggles; closed sliders block walking, open ones do not), `quality-and-slots` (manual switches
+survive a quality change; each slot switch resets them to the slot's defaults), `resize` (canvas not blank right after the
+resize handler), `keyboard` (T J N H ? Enter Escape), `legacy` (`?legacy` loads, toggleDusk). A failure leaves
+`<out>/<test>.png` and `<out>/<test>.txt` (default `smoke-artifacts/`, git-ignored); exit code 1 if any test fails.
+The browser-free parts (args, console classification, pixel and stance geometry, the server) are unit-tested by
+`tools/test_smoke_helpers.mjs` in `npm test`. CI: job `smoke` in `pages.yml` (non-blocking for now).
+Do not run it on a laptop you are working on: SwiftShader and real GPUs both load the machine for minutes.
+
+Other tests that need a browser or dev server (`_smoke`, `playtest`, `tourtest`, `pets_*`, ...) are manual tools and are not part of `npm test`.
 
 ## The plan model
 

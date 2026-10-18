@@ -12,7 +12,10 @@
 // Records (all fields always present; `declared` holds what was declared):
 //   material: { surface, alphaCutout, twoSided, foliage, wet, weather, glass, sheer, emits, reflection, clearcoat,
 //               castsSun, bake, contact, zone }
-//   mesh:     { role, motion, bake, why, probeSide, sun: { cast, track }, weather, zone, space, puddleMirror }
+//   mesh:     { role, motion, bake, why, probeSide, sun: { cast, track }, weather, zone, space, puddleMirror, fakeShadow }
+//             (plus roleFrom: declared / structural / default, for the validator)
+//   fixture:  fixtureOf(node): { kind, circuit, heads, label, defaultOn, plate, lights, spec, live, bake, id }; a switch's
+//             record (light_switch.js entry.lighting): { id, kind, circuit, defaultOn, group, space, exterior }
 // See SCHEMA below for every field's values and meaning.
 import { isInside, spaceAt, spaces, levels } from './plan.js';
 
@@ -58,7 +61,7 @@ export const ROLES = SCHEMA.mesh.role;
 export const SURFACES = SCHEMA.material.surface;
 export const EMIT_KINDS = ['lamp', 'screen', 'indicator', 'fire'];
 
-// Presets: what a role or surface implies unless declared otherwise.
+// Presets: what a role or surface implies unless declared otherwise (resolveMesh / resolveMaterial read them).
 export const ROLE_PRESETS = {
   architecture: {}, furniture: {}, ground: {}, glass: {}, cloth: {}, mirror: {}, emitter: {}, fixture: {}, pet: {}, visitor: {},
   plant: { sunTrack: 'plant' },
@@ -165,30 +168,28 @@ function resolveMesh(o, ctx) {
   const member = MEMBERS.get(o);
   if (member) {
     const from = RECORDS.get(member) ?? resolveMesh(member, ctx), own = placeOf(o, ctx);
-    const plant = from.role === 'plant' || mats(o).some(m => lightingOf(m).foliage);
+    const plant = ROLE_PRESETS[from.role]?.sunTrack === 'plant' || mats(o).some(m => lightingOf(m).foliage);
     return { ...from, ...own, sun: { cast: from.sun.cast, track: plant ? 'plant' : 'static' } };
   }
   const ms = mats(o), m0 = ms[0];
   const roleDecl = inherited(o, 'role');
-  let role = roleDecl?.value ?? null, door = null, moving = null, movable = null, presentation = false, hidden = false;
+  let role = roleDecl?.value ?? null, door = null, movable = null, moving = null, presentation = false, hidden = false;
   for (let p = o; p; p = p.parent) {
     if (!p.visible) hidden = true;
     if (p.userData.presentation || p.userData.reflection) presentation = true;
-    if (!door && p.userData.door) door = p;
-    if (!moving && movingRoot(p)) moving = p;
-    if (!movable && p.userData.movable) movable = p;
+    const r = declared(p).role;
+    if (!door && r === 'door') door = p;            // the door group (house.js)
+    if (!movable && r === 'movable') movable = p;   // a piece the visitor carries (kit.js setMovable)
+    if (!moving && movingRoot(p)) moving = p;       // an animated or toggled root: its parts move
   }
   if (o.isReflector || ms.some(m => lightingOf(m).surface === 'presentation')) presentation = true;
   if (presentation) role = 'presentation';
-  else if (!role || role === 'furniture' || role === 'architecture') {
-    if (door) role = 'door';
-    else if (movable) role = 'movable';
-  }
   role ??= 'furniture';
-  // motion: a carried root, a moving root's parts (still ones keep their place), a door's leaves, else static
+  // motion: a moving root's parts (still ones keep their place; nothing holds still on a carried root), a carried piece
+  // (the movable preset), a door's leaves (the door group's own pieces are its frame), else static
   let motion = 'static';
-  if (moving) motion = moving.userData.movable ? 'moving' : ctx.still.has(o) ? 'still' : 'moving';
-  else if (movable) motion = 'movable';
+  if (moving) motion = movable === moving || moving.userData.movable ? 'moving' : ctx.still.has(o) ? 'still' : 'moving';
+  else if (movable) motion = ROLE_PRESETS.movable.motion;
   else if (door) motion = o.parent === door ? 'still' : 'door';
   if (declared(o).motion) motion = declared(o).motion;   // a part that moves on its own (a wall switch's rocker)
   // bake: the lightmap for what holds still; the probe volume for the rest, with the reason unwrap.py and the site report
@@ -200,11 +201,11 @@ function resolveMesh(o, ctx) {
   else if (motion === 'moving') why = 'dynamic';
   else if (motion === 'door' && leaves === 'probe') why = 'door';
   else if (ms.length && ms.every(m => lightingOf(m).bake === 'probe')) why = 'plant/glass';
-  const bake = presentation ? 'none' : why ? 'probe' : 'lightmap';
-  // dynamic roots (doors, toggled moving roots) are lit from the side each face looks at
-  let probeSide = 'none';
-  for (let p = o; p; p = p.parent) if (p.userData.door || (p.userData.animate && p.userData.toggle)) { probeSide = 'face'; break; }
-  const plant = role === 'plant' || ms.some(m => lightingOf(m).foliage);
+  const bake = presentation ? ROLE_PRESETS.presentation.bake : why ? 'probe' : 'lightmap';
+  // a door (its preset) and a toggled moving root (blinds, curtains, the garage door) are lit from the side each face looks at
+  let probeSide = door ? ROLE_PRESETS.door.probeSide : 'none';
+  for (let p = o; p && probeSide === 'none'; p = p.parent) if (p.userData.animate && p.userData.toggle) probeSide = 'face';
+  const plant = ROLE_PRESETS[role]?.sunTrack === 'plant' || ms.some(m => lightingOf(m).foliage);
   const own = declared(o);
   // roleFrom (validateLighting): declared by the mesh or an ancestor, structural (a reflector, a presentation surface) or
   // nobody's (an error: every placed, built or added object declares its role where it is made)

@@ -52,7 +52,7 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 3
 scene.add(camera);
 // Size the drawing buffer from the canvas box (CSS keeps #gl covering the viewport; setSize(..., false) writes no inline size).
 // Registered before any await so viewport changes during the loading screen still reach the canvas; composer joins once lighting exists.
-let post = null, activePreset = preset, photoFit = null;
+let post = null, activePreset = preset, photoFit = null, repaint = null;
 function fitView() {
   const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight;
   const pr = pixelRatio(activePreset);
@@ -60,11 +60,12 @@ function fitView() {
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h, false); post?.setSize(w, h);
   photoFit?.();
+  repaint?.();   // setSize clears the drawing buffer: draw again now, or the cleared canvas shows until the next frame
 }
 fitView();
 // Resizes arrive in bursts while a window edge is dragged, and each fitView reallocates the drawing buffer and every
 // post-processing target. Apply at most one every 500 ms, plus a trailing one when the burst ends, so the final size is
-// always exact; in between the browser stretches the last frame.
+// always exact; in between the browser stretches the last frame (each applied fit repaints at once, fitView).
 const FIT_EVERY_MS = 500;
 let fitTimer = 0, fitLast = -Infinity;
 function scheduleFit() {
@@ -347,6 +348,7 @@ const clock = new THREE.Clock(); let simT = 0;
 // moves or snaps to a new value, on every tier; lighting.update adds the frame after it settles.
 const toggled = layout.animated.filter(o => o.userData.toggle).map(o => ({ toggle: o.userData.toggle, value: o.userData.toggle.value }));
 const togglesMoving = () => toggled.reduce((any, t) => { const v = t.toggle.value, changed = t.toggle.moving || v !== t.value; t.value = v; return any || changed; }, false);
+repaint = () => { if (!document.hidden) frame(0); };
 function frame(dt) {
   if (photo.active) return;   // photo mode owns the canvas while it shows a still
   stats.begin();

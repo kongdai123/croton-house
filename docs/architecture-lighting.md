@@ -60,7 +60,7 @@ test links them.
 | a | headless scene invariants: real house + layout + switches built in node; every space lit and switched, encoding matches groups, probes never cross walls or the outline, sampler budget per material, closed doors block, switch state survives quality change, mirror clones follow slots | pre-push, CI | ~10 s |
 | b | bake QA: per-unit coverage/black/hole stats, tier bleed, lamp/probe/reflection sanity, diff vs approved baseline | after every bake | minutes |
 | c | render regression: cameras per space x 4 slots (+ known-bad spots) vs Cycles and vs last approved, on a GPU node | after bake or lighting/shader change | ~15 min |
-| d | UI smoke: tour, switches, doors, sliders, quality, slots (Playwright asserting) | pre-push for UI changes | ~2 min |
+| d | UI smoke: tour, switches, doors, sliders, quality, slots, canvas not blank right after a resize (Playwright asserting) | pre-push for UI changes | ~2 min |
 
 ## Migration (each step behaviour-preserving unless stated, each with its gate)
 

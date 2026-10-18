@@ -47,7 +47,7 @@ try {
     assert.equal(alpha(0.8, 1), 0.8); assert.ok(alpha(0.8, 0.05) > 0.99999);
     // A retained fur/wind hook survives; the old raster GI wrapper must never run.
     const m = new T.MeshStandardMaterial(); let deformation = 0;
-    m.bakedHooks = { compile(s) { deformation++; s.vertexShader = '// deformation\n' + s.vertexShader; }, key: 'fur' };
+    m.ownShader = { compile(s) { deformation++; s.vertexShader = '// deformation\n' + s.vertexShader; }, key: 'fur' };
     m.onBeforeCompile = () => { throw new Error('legacy GI ran'); };
     // (installing runs the hook once on a scratch copy of the template: the samplers it adds count in the plan)
     probeLit(m, { uniforms: {}, wet: 0 }, pcss); deformation = 0; const f = shader(); m.onBeforeCompile(f, renderer); assert.equal(deformation, 1); assert.ok(f.vertexShader.startsWith('// deformation\n') && f.vertexShader.includes('varying vec3 vBakedWorld;\nvoid main() {'));

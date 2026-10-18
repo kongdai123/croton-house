@@ -150,9 +150,14 @@ export function applyComposed(sh, c) {
   };
   sh.vertexShader = edit(sh.vertexShader, c.vertex, 'vertex');
   sh.fragmentShader = edit(sh.fragmentShader, c.fragment, 'fragment');
+  if (c.flags.diffuse) sh.fragmentShader = diffuseOnly(sh.fragmentShader);
   if (c.flags.taa) sh.fragmentShader = taaBias(sh.fragmentShader);
   return sh;
 }
+
+// Diffuse only (the planar puddle reflection's copies): every specular statement goes (not `irradiance +=`, the baked
+// light), and the SSR tag (reflections.js writes it into the alpha) with them.
+export const diffuseOnly = src => src.replace(/(?<!\w)radiance \+= [^;]+;/g, '').replace(/gl_FragColor\.a = 0\.[0-9]+;/g, '');
 
 // TAA's LOD bias: every included chunk that samples a surface map is expanded and reads through taaSample (shadow and
 // depth maps, reflections and post buffers keep their own level of detail).

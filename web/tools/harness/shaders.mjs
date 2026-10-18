@@ -99,7 +99,7 @@ export async function captureShaders({ variants = VARIANTS } = {}) {
     for (const e of baked.puddleRefl?.sources ?? []) for (const m of [].concat(e.proxy.material)) add(m, e.source, 'puddle');
     for (const e of baked.sunShadow.depthEntries()) add(e.material, e.object, 'depth');
     const warn = console.warn, warnings = []; console.warn = (...a) => warnings.push(a.map(String).join(' '));
-    let compiled = 0;
+    let compiled = 0, dropped = 0;
     try {
       for (const [m, { mesh, container }] of seen) {
         if (!m.isMeshStandardMaterial && !(m.isMeshDepthMaterial && container === 'depth')) continue;
@@ -117,6 +117,8 @@ export async function captureShaders({ variants = VARIANTS } = {}) {
         // the sampler plan (counted from the flags before generating) must never count fewer than the generated text uses
         // (more is conservative: the puddle reflection's diffuse copies lose their environment map)
         if (sh.composed && sh.samplerCount < samplers) c.planMiss = [sh.samplerCount, samplers];
+        // what the sampler plan left out (the generated text shows it too)
+        if (sh.samplerDropped?.length) { dropped++; c.dropped = [...new Set([...(c.dropped ?? []), ...sh.samplerDropped])].sort(); }
         const [rv, rf] = resolved.split('\n//--\n');
         const early = usedBeforeDeclared(rf, stockNames(T, 'fragment')).concat(usedBeforeDeclared(rv, stockNames(T, 'vertex')));
         if (early.length) c.usedBeforeDeclared = early.sort();
@@ -126,16 +128,16 @@ export async function captureShaders({ variants = VARIANTS } = {}) {
         if (!(program in keyText)) keyText[program] = vh + fh; else if (keyText[program] !== vh + fh) c.unstableKey = true;
       }
     } finally { console.warn = warn; }
-    summary[v.name] = { materials: compiled, dropped: warnings.filter(x => /texture units/.test(x)).length };
+    summary[v.name] = { materials: compiled, dropped };
   }
-  // programs: classes sharing a cache key share a program number (numbered in class order), so the golden records which
-  // classes three would draw with one program, whatever the keys look like
-  const programs = new Map(); let n = 0;
+  // programs: classes sharing a cache key share a program, named after the first such class (in class order), so the
+  // golden records which classes three would draw with one program, whatever the keys look like
+  const programs = new Map();
   for (const name of Object.keys(classes).sort()) {
-    const ids = [...keyOf[name]].map(k => programs.get(k)).filter(x => x !== undefined);
-    const id = ids.length ? Math.min(...ids) : n++;
+    const ids = [...keyOf[name]].map(k => programs.get(k)).filter(x => x !== undefined).sort();
+    const id = ids[0] ?? name;
     for (const k of keyOf[name]) programs.set(k, id);
-    classes[name].program = id;
+    classes[name].program = id === name ? '=' : id;
   }
   return { classes: Object.fromEntries(Object.keys(classes).sort().map(k => [k, classes[k]])), texts, summary };
 }

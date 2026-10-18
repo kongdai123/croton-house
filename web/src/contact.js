@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { groundY } from './pets/roam.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
-import { contactSunGLSL, contactAOGLSL } from './shaders/contact.glsl.js';
+import { isBaked, setContactCaster } from './shaders/baked_material.js';
 
 const Q = new URLSearchParams(globalThis.location?.search ?? '');
 export const CONTACT = true; // Compiled once; the pass and its uniforms follow the quality preset.
@@ -19,47 +19,10 @@ const U = { uContactDepth: { value: white }, uContactCoverage: { value: white },
 // The shaders read flat copies of the two arrays: three re-uploads a material's uniforms on every material switch and
 // copies an array of vectors element by element each time, while a typed array goes to WebGL as it is.
 const FLAT = { uContactPos: { value: new Float32Array(MAX * 4) }, uContactShape: { value: new Float32Array(MAX * 4) } };
-// What the composed baked shader (shaders/compose.js) binds and compiles in: the shared uniforms (flat arrays), the
-// march's taps and the AO's capacity.
+// What the composed baked shader (shaders/compose.js: the contactSun / contactAO flags) binds and compiles in: the shared
+// uniforms (flat arrays), the march's taps and the AO's capacity. Only the directional light matching the sun gets the
+// contact; a moving caster's own material skips the sun contact it casts (uContactCaster, setContactCaster).
 export const CONTACT_SHADER = { uniforms: { ...U, ...FLAT }, steps: STEPS, max: MAX };
-const SUN_GLSL = contactSunGLSL(STEPS), AO_GLSL = contactAOGLSL(MAX);
-
-// Called last, after PCSS/probes/wetness/reflections. Only the directional light matching the sun gets contact.
-// sun = false leaves out the contact sun shadow (its two samplers) and keeps the moving AO: the baked hooks do this
-// when a material would exceed the GPU's fragment texture units (sampler_budget.js). Either way the material counts
-// as patched, so a later wrapper (createContact's) does not add the sun back.
-export function contactPatch(sh, baked = true, sun = true) {
-  if (!CONTACT || sh.uniforms.uContactDepth) return;
-  Object.assign(sh.uniforms, U, FLAT);
-  sh.uniforms.uContactCaster = { value: 0 };
-  if (sun) {
-    sh.fragmentShader = SUN_GLSL + sh.fragmentShader;
-    const begin = sh.fragmentShader.includes('#include <lights_fragment_begin>') ? THREE.ShaderChunk.lights_fragment_begin : null;
-    if (begin) sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>', begin);
-    sh.fragmentShader = sh.fragmentShader.replace('getDirectionalLightInfo( directionalLight, directLight );',
-      'getDirectionalLightInfo( directionalLight, directLight );\n if ( dot( directionalLight.direction, uContactDirection ) > 0.999 ) directLight.color *= contactSun( geometryPosition, geometryNormal );');
-  }
-  if (!baked) {
-    // probe-lit surfaces (the unbaked garden ground and lawn, plants): the same moving AO on the probe irradiance, so a
-    // pet or a carried chair stays grounded off the lightmapped floors too (its blob shadow is hidden in every case)
-    const hook = 'irradiance += probeIrradiance( vProbeWorld,';
-    if (sh.fragmentShader.includes(hook)) sh.fragmentShader = AO_GLSL + sh.fragmentShader.replace(hook,
-      'irradiance += contactAO( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) ) * probeIrradiance( vProbeWorld,');
-    return;
-  }
-  sh.vertexShader = 'varying vec3 vContactWorld;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
-    vec4 contactPosition = vec4( transformed, 1.0 );
-    #ifdef USE_BATCHING
-      contactPosition = batchingMatrix * contactPosition;
-    #endif
-    #ifdef USE_INSTANCING
-      contactPosition = instanceMatrix * contactPosition;
-    #endif
-    vContactWorld = ( modelMatrix * contactPosition ).xyz;`);
-  sh.fragmentShader = 'varying vec3 vContactWorld;\n' + AO_GLSL + sh.fragmentShader.replace('irradiance += lightMapIrradiance;',
-    'lightMapIrradiance *= contactAO( vContactWorld, inverseTransformDirection( geometryNormal, viewMatrix ) );\n irradiance += lightMapIrradiance;');
-}
-
 // Cache rigid bounds in root space; sample the skin (96 vertices) each frame, not hundreds of thousands of fur vertices.
 function proxy(root, strength, skinned = false) {
   const box = new THREE.Box3(), inv = new THREE.Matrix4(), mat = new THREE.Matrix4(), p = new THREE.Vector3(), skins = [];
@@ -166,7 +129,7 @@ export function createContact({ scene, camera, lighting, movables = [], pets = n
     const replace = m => {
       if (!shared.has(m)) return m;
       if (!casterCopies.has(m)) {
-        const c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.customProgramCacheKey = m.customProgramCacheKey; c.userData = { ...m.userData }; c.bakedHooks = m.bakedHooks;   // the sun-depth copy skips baked patches
+        const c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.customProgramCacheKey = m.customProgramCacheKey; c.userData = { ...m.userData }; if (m.ownShader) c.ownShader = m.ownShader;   // the sun-depth copy skips baked patches
         casterCopies.set(m, c); clones.push(c); casterMaterials.add(c);
       }
       return casterCopies.get(m);
@@ -176,16 +139,8 @@ export function createContact({ scene, camera, lighting, movables = [], pets = n
     }
   }
   for (const m of shared) casterMaterials.delete(m);
-  const patched = new Set(), hooks = [];
-  scene.traverse(o => { for (const m of [].concat(o.material ?? [])) {
-    if (!m?.isMeshStandardMaterial || patched.has(m) || m.isFogVolumeMaterial) continue;
-    // Baked static materials already call contactPatch in lightmap.js. Only wrap their moving counterparts here.
-    const caster = casterMaterials.has(m); if (m.lightMap && !caster) continue;
-    patched.add(m); const prev = m.onBeforeCompile, key = m.customProgramCacheKey;
-    const hook = function(sh, renderer) { prev?.call(this, sh, renderer); contactPatch(sh, !!m.lightMap); if (sh.uniforms.uContactCaster) sh.uniforms.uContactCaster.value = +caster; };
-    const programKey = function() { return (key?.call(this) ?? '') + '|contact-camera-depth-v2-' + +caster; };
-    m.onBeforeCompile = hook; m.customProgramCacheKey = programKey; m.needsUpdate = true; hooks.push({ m, prev, key, hook, programKey });
-  } });
+  // the casters' own materials skip the sun contact they cast (a uniform of the composed baked shader: no recompile)
+  for (const m of casterMaterials) if (isBaked(m)) setContactCaster(m, true);
   const depth = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
   depth.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType); depth.texture.name = 'Moving contact casters';
   const coverage = new THREE.DataTexture(new Float32Array(2), 1, 1, THREE.RGFormat, THREE.FloatType);
@@ -332,7 +287,7 @@ export function createContact({ scene, camera, lighting, movables = [], pets = n
       observedRenderer?.domElement?.removeEventListener('webglcontextrestored', invalidate);
       U.uContactReady.value = U.uContactCount.value = 0; U.uContactDepth.value = U.uContactCoverage.value = white;
       depth.dispose(); coverage.dispose(); hiddenDepth.dispose(); for (const d of cache.values()) d.dispose(); for (const g of geometries) g.dispose();
-      for (const { m, prev, key, hook, programKey } of hooks) { if (m.onBeforeCompile === hook) m.onBeforeCompile = prev; if (m.customProgramCacheKey === programKey) m.customProgramCacheKey = key; m.needsUpdate = true; }
+      for (const m of casterMaterials) if (isBaked(m)) setContactCaster(m, false);
       for (const [o, original, replacement] of materialSwaps) if (o.material === replacement) o.material = original;
       for (const m of clones) m.dispose(); for (const [o, v] of blobs) o.visible = v;
     }

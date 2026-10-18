@@ -94,7 +94,7 @@ try {
     const broken = fixture();
     const m = kind === 'probe' ? new T.MeshStandardMaterial() : broken.material;
     if (kind === 'probe') broken.scene.add(new T.Mesh(broken.geometry, m));
-    m.bakedHooks = { key: 'fixture ' + kind, compile(sh) {
+    m.ownShader = { key: 'fixture ' + kind, compile(sh) {
       if (kind !== 'depth' || sh.vertexShader.includes('vHighPrecisionZW')) throw Error('fixture ' + kind + ' patch failure');
     } };
     const warn = console.warn; console.warn = () => {};

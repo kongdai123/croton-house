@@ -36,7 +36,7 @@ for (const [k, c] of Object.entries(fresh.classes)) {
   const g = golden.classes[k];
   if (!g) { lines.push(`added   ${k}`); continue; }
   for (const f of ['vertex', 'fragment']) if (g[f] !== c[f]) lines.push(`changed ${k} ${f}: ${firstDiff(goldenTexts[g[f]], fresh.texts[c[f]])}`);
-  for (const f of ['resolved', 'samplers', 'materials', 'program', 'missing', 'unstableKey', 'usedBeforeDeclared', 'planMiss']) if (JSON.stringify(canon(g[f] ?? null)) !== JSON.stringify(canon(c[f] ?? null)) && !(f === 'resolved' && (g.vertex !== c.vertex || g.fragment !== c.fragment))) lines.push(`changed ${k} ${f}: ${JSON.stringify(g[f])} -> ${JSON.stringify(c[f])}`);
+  for (const f of ['resolved', 'samplers', 'materials', 'program', 'missing', 'unstableKey', 'usedBeforeDeclared', 'planMiss', 'dropped']) if (JSON.stringify(canon(g[f] ?? null)) !== JSON.stringify(canon(c[f] ?? null)) && !(f === 'resolved' && (g.vertex !== c.vertex || g.fragment !== c.fragment))) lines.push(`changed ${k} ${f}: ${JSON.stringify(g[f])} -> ${JSON.stringify(c[f])}`);
 }
 if (JSON.stringify(canon(golden.summary)) !== JSON.stringify(canon(fresh.summary))) lines.push(`summary: ${JSON.stringify(golden.summary)} -> ${JSON.stringify(fresh.summary)}`);
 // the invariants, independent of the golden: every chunk resolves, one key never stands for two texts

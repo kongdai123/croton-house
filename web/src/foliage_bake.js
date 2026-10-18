@@ -113,7 +113,7 @@ export async function bakeFoliage(scene, url, volume, staged = undefined) {
       o.geometry.setAttribute('foliageNext', new THREE.BufferAttribute(decodeFoliage(a, header.K), 3));
     }
     const m = o.material;
-    if (!mats.has(m)) { const key = shaderKey(m), c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.onBeforeRender = m.onBeforeRender; c.customProgramCacheKey = () => key + '|foliage'; c.bakedHooks = m.bakedHooks; c.foliageBake = FOLIAGE; mats.set(m, c); }
+    if (!mats.has(m)) { const key = shaderKey(m), c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.onBeforeRender = m.onBeforeRender; c.customProgramCacheKey = () => key + '|foliage'; if (m.ownShader) c.ownShader = m.ownShader; c.foliageBake = FOLIAGE; mats.set(m, c); }
     o.material = mats.get(m); vertices += a.length / 3;
   }
   const stats = { units: header.units.length, meshes: data.size, byId: byIdCount, vertices, materials: mats.size, ms: Math.round(performance.now() - t0) };

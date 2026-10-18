@@ -1,8 +1,8 @@
-// Fragment sampler budget for the baked shader patches. Apple GPUs (Mac, iPhone) give a fragment shader 16 texture
-// units, NVIDIA 32: a patched material over the limit fails to link and its mesh vanishes (the kitchen stools' teak
-// frames, 18 samplers before the probe volume and reflection arrays were packed). Every baked hook counts the
-// fragment samplers it is about to compile and drops optional features in a fixed order (planar puddle, contact sun,
-// then the next slot's crossfade), warning once per material; auditPrograms() checks what actually linked.
+// Fragment sampler budget of the baked shaders. Apple GPUs (Mac, iPhone) give a fragment shader 16 texture units, NVIDIA
+// 32: a material over the limit fails to link and its mesh vanishes (the kitchen stools' teak frames, 18 samplers
+// before the probe volume and reflection arrays were packed). The composed shader plans its optional features from its
+// flags before it is generated (shaders/sampler_plan.js); this counts what a generated shader uses (the check of that
+// plan), warns once per material and outcome, and audits what actually linked (auditPrograms).
 const MAPS = ['map', 'matcap', 'alphaMap', 'aoMap', 'bumpMap', 'normalMap', 'emissiveMap', 'metalnessMap', 'roughnessMap',
   'anisotropyMap', 'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap', 'iridescenceMap', 'iridescenceThicknessMap',
   'sheenColorMap', 'sheenRoughnessMap', 'specularMap', 'specularColorMap', 'specularIntensityMap', 'transmissionMap',
@@ -36,9 +36,6 @@ export function fragmentSamplers(sh) {
   return n;
 }
 
-// The limit for this material: the device's units, less any cut the audit added after a failed link.
-export const samplerLimit = (renderer, material) => (renderer?.capabilities?.maxTextures ?? 16) - (material?.userData?.samplerCut ?? 0);
-
 const warned = new Set();
 export function warnDropped(material, count, limit, dropped, over = false) {
   const name = material?.name || material?.type || 'material';
@@ -47,20 +44,6 @@ export function warnDropped(material, count, limit, dropped, over = false) {
   warned.add(key);
   console.warn(`baked shader "${name}": ${count} fragment samplers > ${limit} texture units;` +
     (dropped.length ? ` dropped ${dropped.join(', ')}` : '') + (over ? ' and still over the limit' : ''));
-}
-
-// Fit a patched material's optional features into the limit, in drop order: each { name, cost, pending }, pending
-// (default) when the feature is still to be added, cost the samplers it adds or that leaving it out saves. Returns the
-// names to leave out; warns once per material and outcome.
-export function fitSamplers(sh, renderer, material, features) {
-  const limit = samplerLimit(renderer, material);
-  let count = fragmentSamplers(sh);
-  for (const f of features) if (f.pending !== false) count += f.cost;
-  const start = count, drop = new Set();
-  for (const f of features) { if (count <= limit) break; if (f.cost > 0) { drop.add(f.name); count -= f.cost; } }
-  if (start > limit) warnDropped(material, start, limit, [...drop], count > limit);
-  sh.samplerCount = count;
-  return drop;
 }
 
 // Linked baked programs: the most fragment samplers any of them uses, and any that failed to link (with the log).

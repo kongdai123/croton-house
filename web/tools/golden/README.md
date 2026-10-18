@@ -70,7 +70,10 @@ the scene, a mirror, the puddle reflection or the sun's depth pass is compiled t
 maps, an environment map and one shadowed sun; per class (`variant:container/path/role/surface/tags`, from the material
 and mesh records, not from shader text) the golden keeps the vertex and fragment text after every hook (by hash; the texts
 are in the gzipped file), the hash of that text resolved against three's `ShaderChunk`, the fragment sampler count, the
-material count and a program number (classes three would draw with one program share it). Variants: the shipped bake
+material count, what the sampler plan left out (`dropped`) and its program (`=`, or the first class, in class order, that
+three would draw with the same program). The test also checks that every include resolves, that no cache key stands for
+two texts, that nothing the baked shader declares is used before its declaration, and that the sampler plan never counts
+fewer samplers than the generated text uses. Variants: the shipped bake
 (lamp groups, four slots), the shared lamps layer (`?lmgroups=0`), sunrise only, and the shipped scene recompiled for an
 11-texture-unit GPU (the sampler budget's drops).
 

@@ -19,7 +19,7 @@ import { CONTACT, CONTACT_SHADER } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
 import { createPuddles, PUDDLE_UNIFORMS } from './puddles.js';
-import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderReplace as rep, shaderPatch, shaderKey, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
+import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
@@ -33,7 +33,7 @@ import { PCSS_TAPS } from './shaders/pcss.glsl.js';
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
 import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
-import { installBaked } from './shaders/baked_material.js';
+import { installBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -78,19 +78,9 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     if (!d) {
       d = new THREE.MeshDepthMaterial(); cache.set(m, d);
       // Keep vertex/alpha deformation, with raster GI removed before the depth hook is captured.
-      const hook = m.bakedHooks?.compile ?? m.onBeforeCompile, key = m.bakedHooks?.key ?? shaderKey(m);
-      d.onBeforeCompile = function(sh, r) { shaderPatch(sh, 'sun depth ' + key, s => {
-        if (hook !== THREE.Material.prototype.onBeforeCompile) {
-          // A deformation hook can use skinned normals, and leaf hooks emit normals during GTAO. Supply those chunks
-          // in the depth variant too; retain its depth output and alpha/discard code (including fur coverage).
-          s.vertexShader = 'varying vec2 vHighPrecisionZW;\n' + rep(THREE.ShaderLib.standard.vertexShader, '#include <clipping_planes_vertex>', '#include <clipping_planes_vertex>\n vHighPrecisionZW = gl_Position.zw;', 'depth clip');
-          s.fragmentShader = 'varying vec3 vViewPosition;\n#include <normal_pars_fragment>\n#include <color_pars_fragment>\n' + s.fragmentShader;
-          s.fragmentShader = rep(s.fragmentShader, 'vec4 diffuseColor = vec4( 1.0 );', 'vec4 diffuseColor = vec4( 1.0 );\n#include <normal_fragment_begin>', 'depth normal');
-          s.fragmentShader = rep(s.fragmentShader, '#include <map_fragment>', '#include <map_fragment>\n#include <color_fragment>', 'depth alpha');
-          hook.call(m, s, r);
-        }
-      }); };
-      d.customProgramCacheKey = () => key + '|sun-depth-v2';
+      const { compile, key } = sunDepthShader(m);
+      d.onBeforeCompile = compile;
+      d.customProgramCacheKey = () => key;
       d.onBeforeRender = m.onBeforeRender;
     }
     if (d.userData.sourceVersion !== m.version || !!d.map !== !!m.map || !!d.alphaMap !== !!m.alphaMap || d.side !== (m.shadowSide ?? THREE.DoubleSide)) d.needsUpdate = true;
@@ -583,17 +573,16 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       // the flags (shaders/features.js): wet ground where the mesh's after-rain class is not a plant's (the mask is per
       // pixel: outdoors, facing up, near the ground), reflections dimmed by the baked light reaching the spot (specular
       // occlusion: a dim room reflects little of the bright sky environment, a sunlit terrace keeps it all), the lamp
-      // groups, the slot crossfade; puddles.js marks the ground copies that show the planar puddle reflection
-      const own = { compile: m.bakedHooks?.compile ?? m.onBeforeCompile, key: m.bakedHooks?.key ?? shaderKey(m) }, L = lightingOf(m);
-      c.bakedHooks = own;
+      // groups, the slot crossfade; and the options other modules set (baked_material.js)
+      const own = ownShader(m), L = lightingOf(m);
       const features = self => bakedFeatures(L, { weather: cls }, { path: 'lightmap', multi, wet: multi ? 1 : SLOTS[slot].wet, refl,
         contact: CONTACT ? CONTACT_SHADER : null, lmEncoding: enc ? 'tone' : 'rgbm', lmFilter: LM_FILTER, lampGroups: groups ? groupMeta.textures : 0,
-        planarPuddle: !!self.userData.planarPuddle });
+        ...materialOptions(self) });
       const bind = (s, f) => {
         Object.assign(s.uniforms, lmUniforms, slots?.uniforms, groups?.uniforms, pcss.uniforms);
         if (f.wet) s.uniforms.uWet = slots ? slots.wet : { value: SLOTS[slot].wet };
         if (f.refl) Object.assign(s.uniforms, refl.uniforms);
-        if (f.contactSun || f.contactAO) { Object.assign(s.uniforms, CONTACT_SHADER.uniforms); s.uniforms.uContactCaster = { value: 0 }; }
+        if (f.contactSun || f.contactAO) Object.assign(s.uniforms, CONTACT_SHADER.uniforms);
         if (f.planarPuddle) Object.assign(s.uniforms, PUDDLE_UNIFORMS);
       };
       installBaked(c, { name: 'lightmap', tag: 'baked-v4', own, features, bind, renderer });
@@ -620,7 +609,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const faceCopy = m => {
     if (faceUse.get(m) !== 3) return m;
     let c = faceCopies.get(m);
-    if (!c) { c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.onBeforeRender = m.onBeforeRender; c.customProgramCacheKey = m.customProgramCacheKey; if (m.bakedHooks) c.bakedHooks = m.bakedHooks; faceCopies.set(m, c); }
+    if (!c) { c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.onBeforeRender = m.onBeforeRender; c.customProgramCacheKey = m.customProgramCacheKey; copyOwnShader(m, c); faceCopies.set(m, c); }
     return c;
   };
   scene.traverse(o => {
@@ -636,7 +625,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       for (const m of [].concat(o.material)) {
         if (!m?.isMeshStandardMaterial || m.lightMap || m.isFogVolumeMaterial || !volume) continue;
         if (!hooks.has(m) && !m.userData.probeLit) {
-          hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, bakedHooks: m.bakedHooks });
+          hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, ownShader: m.ownShader });
           const L = lightingOf(m);
           if (!L.emits) m.emissiveIntensity = 0;
           // an unswitched lamp follows the slot's lamp level as its lightmapped copies do (switched lamps: their switch)
@@ -786,7 +775,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     else { skyBg?.dispose(); refl?.uniforms.uReflTex.value.dispose();
       for (const u of Object.values(volume?.uniforms ?? {})) if (u.value?.isTexture) u.value.dispose(); }
     for (const [m, e] of envs) { m.envMap = e.map; m.envMapIntensity = e.intensity; if (e.rotation) m.envMapRotation.copy(e.rotation); m.needsUpdate = true; }
-    for (const [m, h] of hooks) { m.onBeforeCompile = h.compile; m.customProgramCacheKey = h.key; m.emissiveIntensity = h.emission; delete m.userData.probeLit; if (h.bakedHooks) m.bakedHooks = h.bakedHooks; else delete m.bakedHooks; m.needsUpdate = true; }
+    for (const [m, h] of hooks) { m.onBeforeCompile = h.compile; m.customProgramCacheKey = h.key; m.emissiveIntensity = h.emission; delete m.userData.probeLit; if (h.ownShader) m.ownShader = h.ownShader; else delete m.ownShader; m.needsUpdate = true; }
     foliage?.dispose();
     for (const [o, s] of originalMeshes) { o.geometry.dispose(); o.geometry = s.geometry; o.material = s.material; o.castShadow = s.castShadow; }
     for (const [o, m] of faceSwaps) o.material = m;
@@ -1071,19 +1060,18 @@ const toHalf = THREE.DataUtils.toHalfFloat;
 function probeLit(material, volume, pcss, sided = false, renderer = null) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
-  const own = { compile: material.bakedHooks?.compile ?? material.onBeforeCompile, key: material.bakedHooks?.key ?? shaderKey(material) };
-  material.bakedHooks = own;
+  const own = ownShader(material);
   // the material's manifest record (lighting_roles.js): leaf cards, the plant treatment, wet ground, sheer cloth, mirrors;
   // the slot runtime joins the volume after registration, so the flags are read when compiled
   const L = lightingOf(material), refl = volume.refl, fol = material.foliageBake;
-  // (puddles.js marks the ground materials that show the planar puddle reflection)
+  // (and the options other modules set: the planar puddle, the puddle reflection's copies, TAA; baked_material.js)
   const features = self => bakedFeatures(L, { probeSide: sided ? 'face' : 'none' }, { path: 'probe', multi: !!volume.slots, wet: volume.multi ? 1 : volume.wet,
-    refl, contact: CONTACT ? CONTACT_SHADER : null, foliageBake: !!fol, planarPuddle: !!self.userData.planarPuddle });
+    refl, contact: CONTACT ? CONTACT_SHADER : null, foliageBake: !!fol, ...materialOptions(self) });
   const bind = (s, f) => {
     Object.assign(s.uniforms, volume.uniforms, pcss.uniforms);
     if (f.wet) s.uniforms.uWet = volume.slots ? volume.slots.wet : { value: volume.wet };
     if (f.refl) Object.assign(s.uniforms, refl.uniforms);
-    if (f.contactSun || f.contactAO) { Object.assign(s.uniforms, CONTACT_SHADER.uniforms); s.uniforms.uContactCaster = { value: 0 }; }
+    if (f.contactSun || f.contactAO) Object.assign(s.uniforms, CONTACT_SHADER.uniforms);
     if (f.sheer) s.uniforms.uSheer = material.sheerUniform ??= { value: new THREE.Vector2(L.sheer.reflect, L.sheer.transmit) };
     if (f.foliageBake) Object.assign(s.uniforms, FOLIAGE_UNIFORMS, f.multi ? volume.slots.uniforms : {});
     if (f.planarPuddle) Object.assign(s.uniforms, PUDDLE_UNIFORMS);

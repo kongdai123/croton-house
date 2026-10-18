@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { TAA_GLSL } from './shaders/taa.glsl.js';
+import { taaBias, TAA_MAPS } from './shaders/compose.js';
+import { isBaked, setBakedTaa } from './shaders/baked_material.js';
 
 const vertex = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const color = `
@@ -113,16 +114,10 @@ void main() {
 
 const halton = (i, base) => { let f = 1, r = 0; for (; i > 0; i = Math.floor(i / base)) { f /= base; r += f * (i % base); } return r; };
 const scaleOf = value => Number.isFinite(+value) && +value > 0 ? THREE.MathUtils.clamp(+value, 0.5, 1) : 0.75;
-const maps = ['map', 'alphaMap', 'normalMap', 'bumpMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'lightMap', 'specularMap', 'specularIntensityMap', 'specularColorMap', 'clearcoatMap', 'clearcoatNormalMap', 'clearcoatRoughnessMap'];
-const samples = new RegExp('texture2D\\s*\\(\\s*(' + maps.join('|') + ')\\s*,', 'g');
+// the legacy raster materials' wrapper: the composed shader's own pass (shaders/compose.js taaBias)
 function textureBias(sh, bias) {
   if (sh.uniforms.uTaaLodBias) return;   // a material clone may already carry this hook
-  // Expand only chunks sampling surface textures; shadow/depth, reflections and post buffers keep their own LOD.
-  sh.fragmentShader = sh.fragmentShader.replace(/#include <(\w+)>/g, (include, name) => {
-    samples.lastIndex = 0; const chunk = THREE.ShaderChunk[name]; return chunk && samples.test(chunk) ? chunk : include;
-  }).replace(samples, 'taaSample( $1,');
-  sh.uniforms.uTaaLodBias = bias;
-  sh.fragmentShader = TAA_GLSL + sh.fragmentShader;
+  sh.fragmentShader = taaBias(sh.fragmentShader); sh.uniforms.uTaaLodBias = bias;
 }
 const material = (fragmentShader, uniforms) => new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.NoBlending });
 const target = (name, depth = false) => {
@@ -151,9 +146,13 @@ class TAAPass extends Pass {
   }
   reset() { this.valid = false; this.frame = 0; }
   setScale(value) { this.scale = scaleOf(value); this.lodBias.value = Math.log2(this.scale); this.setSize(this.width, this.height); this.reset(); }
+  // The LOD bias on every surface map: a flag of the composed baked shader (shaders/baked_material.js setBakedTaa),
+  // and for the legacy raster materials (no baked shader: the fallback) a wrapper of their hook.
   patchTextures() {
+    setBakedTaa(this.lodBias);
     this.scene.traverse(o => { for (const m of [].concat(o.material ?? [])) {
-      if (this.materials.has(m) || !maps.some(name => m[name])) continue;
+      if (this.materials.has(m) || !TAA_MAPS.some(name => m[name])) continue;
+      if (isBaked(m)) { this.materials.set(m, { baked: true }); m.needsUpdate = true; continue; }
       const prev = m.onBeforeCompile, key = m.customProgramCacheKey, sourceKey = key?.call(m) ?? '', bias = this.lodBias;
       const hook = function(sh, renderer) { prev?.call(this, sh, renderer); textureBias(sh, bias); };
       const programKey = () => sourceKey + '|taa-lod-bias-v1';
@@ -200,7 +199,9 @@ class TAAPass extends Pass {
   }
   dispose() {
     this.lodBias.value = 0;
-    for (const [m, { prev, key, hook, programKey }] of this.materials) {
+    setBakedTaa(null);
+    for (const [m, { baked, prev, key, hook, programKey }] of this.materials) {
+      if (baked) { m.needsUpdate = true; continue; }
       if (m.onBeforeCompile === hook) m.onBeforeCompile = prev;
       if (m.customProgramCacheKey === programKey) m.customProgramCacheKey = key;
       m.needsUpdate = true;

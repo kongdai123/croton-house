@@ -1,43 +1,12 @@
 // ?lightmap=sunrise&puddlerefl: one clipped, half-resolution ground reflection, independent of the HQ SSR pass.
 import * as THREE from 'three';
-import { fragmentSamplers, samplerLimit, warnDropped } from './sampler_budget.js';
 import { isInside } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
-import { PLANAR_PUDDLE_GLSL } from './shaders/puddle.glsl.js';
-export { PLANAR_PUDDLE_GLSL };
+import { isBaked } from './shaders/baked_material.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
 // Only one height is rendered per update; the other terrace falls back to probes, as do mismatched surfaces.
-// Call AFTER wetPatch/reflPatch. Replace the puddle's indirect specular, rather than adding a second reflection.
-// radiance remains the existing box-projected probe (or sky) result, including its baked specular occlusion.
-// The first optional feature left out when the material would exceed the GPU's fragment texture units: the baked hook
-// decides (noPlanarPuddle), and this checks again with the final shader (sampler_budget.js).
-export function patchPuddleReflection(sh, uniforms, renderer = null, material = null) {
-  // a composed baked shader decides its planar puddle itself (its sampler plan)
-  if (sh.composed || !sh.fragmentShader.includes('float wetPuddle =') || sh.noPlanarPuddle) return false;
-  if (renderer) {
-    const n = fragmentSamplers(sh) + 1, limit = samplerLimit(renderer, material);
-    if (n > limit) { warnDropped(material, n, limit, ['planar puddle']); return false; }
-  }
-  Object.assign(sh.uniforms, uniforms);
-  // the world position: the composed probe shader's shared varying, else the lightmapped wet patch's own
-  const world = sh.fragmentShader.includes('varying vec3 vBakedWorld') ? 'vBakedWorld' : 'vWetWorld';
-  sh.fragmentShader = sh.fragmentShader.replace('void main() {', PLANAR_PUDDLE_GLSL + '\nvoid main() {')
-    .replace('#include <lights_physical_fragment>', `
-      vec3 puddleNW = vec3( 0.0, 1.0, 0.0 );
-      if ( wetPuddle > 0.001 ) { puddleNW = puddleNormal( ${world} ); normal = normalize( mix( normal, mat3( viewMatrix ) * puddleNW, wetPuddle ) ); }
-      #include <lights_physical_fragment>`)
-    .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-      if ( wetPuddle > 0.001 ) {
-        vec3 puddleN = puddleNW;
-        float puddleNV = clamp( dot( puddleN, normalize( cameraPosition - ${world} ) ), 0.0, 1.0 );
-        float puddleF = 0.02037 + 0.97963 * pow( 1.0 - puddleNV, 5.0 ); // water IOR 1.333, Schlick Fresnel
-        reflectedLight.indirectSpecular = mix( reflectedLight.indirectSpecular, puddleRadiance( radiance, ${world}, puddleN ) * puddleF, wetPuddle );
-      }`);
-  return true;
-}
-
 // The planar reflection's uniforms: one set (one reflection render per page), bound by every shader that shows it (the
 // composed baked shader, shaders/compose.js), filled in by createPuddles.
 export const PUDDLE_UNIFORMS = { uPuddleTex: { value: null }, uPuddleMatrix: { value: new THREE.Matrix4() }, uPuddleValid: { value: 0 }, uPuddleTime: { value: 0 },
@@ -71,12 +40,6 @@ function outsideTriangle(a, b, c) {
   }
   return false;
 }
-// The source material's program key, kept live (it may depend on state). three's default key is the callback's source,
-// which after wrapping would be the same string for every material, so that one is frozen from the original callback.
-function cacheKey(m) {
-  const own = m.customProgramCacheKey, compile = m.onBeforeCompile;
-  return own === THREE.Material.prototype.customProgramCacheKey ? () => compile.toString() : () => own.call(m);
-}
 function visible(o) { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }
 function reflectionVisible(o) { for (let p = o; p; p = p.parent) if (!p.visible && !(p.name === 'frozen' && p.userData.batch)) return false; return true; }
 
@@ -107,21 +70,17 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), point = new THREE.Vector3();
   const projection = new THREE.Matrix4(), frustum = new THREE.Frustum(), clip = new THREE.Plane(), cp = new THREE.Vector4(), q = new THREE.Vector4(), viewport = new THREE.Vector4();
   scene.updateMatrixWorld(true);
+  // The reflection's copies: diffuse only (no normal map, shadow, probe specular, transmission, SSR tag or nested
+  // reflection work in this scene; its environment exists only to enable SH code), still the baked atlas decoding, SH,
+  // vertex colours, wind and alpha cut-outs: for a baked material the composed shader's diffuse flag.
   function simple(m) {
     if (materials.has(m)) return materials.get(m).material;
-    const compile = m.onBeforeCompile, key = cacheKey(m);
     const s = m.isMeshStandardMaterial ? new THREE.MeshStandardMaterial().copy(m) : m.clone();
     s.defines = { ...m.defines, ...s.defines }; s.onBeforeRender = m.onBeforeRender;
-    // Keep baked atlas decoding, SH, vertex colours, wind and alpha cutouts. No normal-map, shadow, probe specular,
-    // transmission, SSR tag or nested reflection work in this scene. Its environment exists only to enable SH code.
+    s.onBeforeCompile = m.onBeforeCompile; s.customProgramCacheKey = m.customProgramCacheKey; if (m.ownShader) s.ownShader = m.ownShader;
     if (s.isMeshStandardMaterial) { s.normalMap = s.bumpMap = s.roughnessMap = s.metalnessMap = null; s.roughness = 1; s.metalness = 0; s.envMapIntensity = 0; }
+    if (isBaked(m)) s.userData.bakedDiffuse = true;
     s.toneMapped = false;
-    s.onBeforeCompile = function (sh, r) {
-      compile.call(this, sh, r);
-      sh.fragmentShader = sh.fragmentShader.replace(/(?<!\w)radiance \+= [^;]+;/g, '')   // not irradiance += (the lightmap)
-        .replace(/gl_FragColor\.a = 0\.[0-9]+;/g, '');
-    };
-    s.customProgramCacheKey = () => key() + '|puddle-diffuse';
     materials.set(m, { material: s, env: s.envMap }); return s;
   }
   // Ground samples come from real triangles, including merged batches, never the house's interior floor.
@@ -183,15 +142,13 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
       tier: o.isInstancedMesh || ms.some(m => lightingOf(m).foliage) ? 1 : indoors(box) ? 2 : 0 };
     sources.push(e);
   });
-  // Wrap all eligible material callbacks once: their existing bake/probe hook supplies wetPuddle and vWetWorld.
+  // The ground materials show the reflection: the composed baked shader's planar puddle flag (its sampler plan may still
+  // leave it out on a GPU without a texture unit to spare).
   scene.traverse(o => {
     if (!o.isMesh) return;
     for (const m of [].concat(o.material)) {
-      if (!wetMaterial(m) || !ground.has(m) || patches.some(p => p.material === m)) continue;
-      const compile = m.onBeforeCompile, oldKey = m.customProgramCacheKey, key = cacheKey(m);
-      const wrapped = function (sh, r) { compile.call(this, sh, r); patchPuddleReflection(sh, uniforms, r, this); };
-      m.onBeforeCompile = wrapped; m.customProgramCacheKey = () => key() + '|planar-puddle'; m.needsUpdate = true; m.userData.planarPuddle = true;
-      patches.push({ material: m, compile, oldKey, wrapped });
+      if (!wetMaterial(m) || !ground.has(m) || !isBaked(m) || patches.some(p => p.material === m)) continue;
+      m.userData.planarPuddle = true; m.needsUpdate = true; patches.push({ material: m });
     }
   });
   let lastRender = -Infinity, lastVisibility = -Infinity, plane = null, busy = false;
@@ -284,9 +241,9 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   const hook = function (r, s, cam, ...args) { before?.call(this, r, s, cam, ...args); update(cam); };
   scene.onBeforeRender = hook;
   stats.samples = samples.length; stats.sources = sources.length; stats.materials = patches.length;
-  return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, patch: sh => patchPuddleReflection(sh, uniforms), setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
+  return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
     if (scene.onBeforeRender === hook) scene.onBeforeRender = before;
-    for (const p of patches) { delete p.material.userData.planarPuddle; if (p.material.onBeforeCompile === p.wrapped) { p.material.onBeforeCompile = p.compile; p.material.customProgramCacheKey = p.oldKey; p.material.needsUpdate = true; } }
+    for (const p of patches) { delete p.material.userData.planarPuddle; p.material.needsUpdate = true; }
     for (const { material } of materials.values()) material.dispose();
     rt.dispose(); uniforms.uPuddleValid.value = 0;
   } };

@@ -291,7 +291,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
           // into the source split the same material features into two or three programs each, and every program is
           // a ~90 KB shader that Windows compiles slowly.
           const paint = { value: local.userData.daylightPaint ?? 1 };
-          local.bakedHooks = { compile: previousCompile, key: previousKey };
+          local.ownShader = { compile: previousCompile, key: previousKey };   // the material's own hook (shaders/baked_material.js)
           local.onBeforeCompile = function (shader, renderer) {
             previousCompile.call(this, shader, renderer);
             if (!shader.uniforms.uHQShadow) hqEffects.patch(shader);
@@ -436,7 +436,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
     const place = { in: { value: 0 }, out: { value: 1 } };
     material.userData.petPlace = place;
     const prev = material.onBeforeCompile, prevKey = material.customProgramCacheKey();
-    material.bakedHooks = { compile: prev, key: prevKey };
+    material.ownShader = { compile: prev, key: prevKey };   // the pet's own hook (shaders/baked_material.js)
     material.onBeforeCompile = function (shader, renderer) {
       prev?.call(this, shader, renderer);
       shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', lightingChunk);

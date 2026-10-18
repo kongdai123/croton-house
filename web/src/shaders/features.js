@@ -59,7 +59,8 @@ export function bakedFeatures(material, mesh, env) {
       // doors and toggles are lit from the side they face; not sheer cloth, the foliage bake or leaf cards
       sided: mesh?.probeSide === 'face' && !sheer && !foliageBake && !leafSide });
   } else Object.assign(f, { lmEncoding: env.lmEncoding === 'rgbm' ? 'rgbm' : 'tone', lmFilter: env.lmFilter | 0, lampGroups: env.lampGroups | 0 });
-  f.planarPuddle = !!env.planarPuddle && f.wet;   // a puddle needs the wet mask
+  // a puddle needs the wet mask; the puddle reflection's own copies never show it (they draw into its target)
+  f.planarPuddle = !!env.planarPuddle && f.wet && !f.diffuse;
   return f;
 }
 

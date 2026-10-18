@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node tools/run_tests.mjs",
+    "smoke": "node tools/smoke/run.mjs",
     "lint": "eslint src tools"
   },
   "keywords": [],

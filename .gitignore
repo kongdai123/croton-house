@@ -20,3 +20,5 @@ web/tools/out/
 # bake QA output (bake/validate/qa.py writes qa.json and qa.txt into the working directory by default)
 /qa.json
 /qa.txt
+# UI smoke run output (web/tools/smoke/run.mjs --out)
+web/smoke-artifacts/

@@ -1,0 +1,35 @@
+{
+ "note": "Gate (c) thresholds (compare.py). Stops are log2 ratios of linear luminance; cell = the largest per-cell difference over the grid; chroma = the largest per-cell shift of log2 R/G plus log2 B/G. visitorOnly: absolute checks applied to the visitor sets only (a closet is black at the slot's fixed exposure). enforce false: reported as warnings, not failures. cameras: per-camera overrides, e.g. {\"backGarden_1\": {\"absolute\": {\"hueFrac\": 0.2}}}.",
+ "grid": [8, 6],
+ "absolute": {
+  "blackP99": 0.01,
+  "zeroFrac": 0.3,
+  "magentaFrac": 0.002,
+  "hueFrac": 0.6,
+  "hueCell": 1.01
+ },
+ "visitorOnly": ["blackP99", "zeroFrac"],
+ "baseline": {
+  "global": 0.15,
+  "cell": 0.4,
+  "chroma": 0.35,
+  "enforce": true,
+  "satCell": 0.2,
+  "zeroCell": 0.2
+ },
+ "cycles": {
+  "global": 0.5,
+  "cell": 1.0,
+  "chroma": 0.8,
+  "enforce": false
+ },
+ "pair": {
+  "global": 0.3,
+  "cell": 0.8,
+  "chroma": 0.6,
+  "enforce": false,
+  "satCell": 0.3,
+  "zeroCell": 0.3
+ },
+ "cameras": {}
+}

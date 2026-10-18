@@ -13,17 +13,20 @@
 //   node web/tools/shader_link_test.mjs --gpu              the GPU (ANGLE's default backend)
 //   node web/tools/shader_link_test.mjs --units 16         plan for 16 units (Apple GPUs) whatever the device reports
 //   node web/tools/shader_link_test.mjs --build-only       write the page bundle and exit (no browser)
+//   node web/tools/shader_link_test.mjs --prebuilt         reuse the page bundle --build-only wrote (no esbuild: a machine
+//                                                          with playwright only, e.g. a GPU node fed the bundle)
+//   node web/tools/shader_link_test.mjs --gpu --angle vulkan   pick ANGLE's backend (a headless Linux GPU node has no GL
+//                                                          display: vulkan there; the default backend falls back to SwiftShader)
 // Writes web/tools/out/shader_link_report.json; exits 1 if any program fails to link or uses more fragment samplers than
 // its plan counted. Materials whose plan is still over the units (a five-map clear-coat material on the lightmapped path
 // with everything on, for example) are listed, not failed: the house has none (test_shader_golden.mjs).
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 
 const WEB = fileURLToPath(new URL('../', import.meta.url)), OUT = join(WEB, 'tools/out');
 const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i < 0 ? null : args[i + 1]; };
-const sample = +(opt('--sample') ?? 0), units = +(opt('--units') ?? 0), gpu = args.includes('--gpu');
+const sample = +(opt('--sample') ?? 0), units = +(opt('--units') ?? 0), gpu = args.includes('--gpu'), angle = opt('--angle');
 
 // ---- the page: three, the composer and the flag space, bundled for the browser --------------------------------------
 const PAGE = `
@@ -44,7 +47,7 @@ const scalar = { float: () => 0, int: () => 0, vec2: () => new THREE.Vector2(), 
 const flat = { float: 1, vec2: 2, vec3: 3, vec4: 4 };
 function bindDeclared(sh) {
   const re = /uniform\\s+(?:(?:highp|mediump|lowp)\\s+)?(\\w+)\\s+([^;]+);/g;
-  for (const [, type, names] of (sh.vertexShader + '\n' + sh.fragmentShader).matchAll(re)) for (const decl of names.split(',')) {
+  for (const [, type, names] of (sh.vertexShader + '\\n' + sh.fragmentShader).matchAll(re)) for (const decl of names.split(',')) {
     const m = /(\\w+)\\s*(?:\\[\\s*(\\w+)\\s*\\])?/.exec(decl.trim()); if (!m || sh.uniforms[m[1]] || !scalar[type]) continue;
     let n = m[2]; if (n && !/^\\d+$/.test(n)) n = +(new RegExp('#define\\\\s+' + n + '\\\\s+(\\\\d+)').exec(sh.fragmentShader)?.[1] ?? 1);
     sh.uniforms[m[1]] = { value: n ? (flat[type] ? new Float32Array(+n * flat[type]) : Array.from({ length: +n }, scalar[type])) : scalar[type]() };
@@ -58,7 +61,8 @@ window.runLinkTest = async ({ sample = 0, units = 0 } = {}) => {
   const map = () => { const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1); t.needsUpdate = true; return t; };
   let flags = [...enumerateFlags({ bakedFeatures, samplerPlan }).values()];
   if (sample) { const step = flags.length / sample; flags = Array.from({ length: Math.min(sample, flags.length) }, (_, i) => flags[Math.floor(i * step)]); }
-  const report = { device: { renderer: gl.getParameter(gl.RENDERER), maxTextures: renderer.capabilities.maxTextures, limit }, programs: 0, failed: [], overPlan: [], over: [], maxSamplers: 0 };
+  const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+  const report = { device: { renderer: gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER), maxTextures: renderer.capabilities.maxTextures, limit }, programs: 0, failed: [], overPlan: [], over: [], maxSamplers: 0 };
   const sun = new THREE.DirectionalLight(); sun.castShadow = true;
   const camera = new THREE.PerspectiveCamera(); camera.position.z = 3;
   const geometry = new THREE.BoxGeometry(); geometry.setAttribute('uv1', geometry.attributes.uv);
@@ -89,15 +93,19 @@ window.runLinkTest = async ({ sample = 0, units = 0 } = {}) => {
   return report;
 };
 `;
-const bundle = await build({ stdin: { contents: PAGE, resolveDir: WEB }, bundle: true, format: 'esm', platform: 'browser', write: false, logLevel: 'silent' });
 mkdirSync(OUT, { recursive: true });
 const pageFile = join(OUT, 'shader_link_page.js');
-writeFileSync(pageFile, bundle.outputFiles[0].text);
+if (!args.includes('--prebuilt')) {
+  const { build } = await import('esbuild');
+  const bundle = await build({ stdin: { contents: PAGE, resolveDir: WEB }, bundle: true, format: 'esm', platform: 'browser', write: false, logLevel: 'silent' });
+  writeFileSync(pageFile, bundle.outputFiles[0].text);
+}
 if (args.includes('--build-only')) { console.log('page bundle written:', pageFile); process.exit(0); }
 
 // ---- the browser --------------------------------------------------------------------------------------------------
 const { chromium } = await import('playwright');
-const browser = await chromium.launch({ headless: true, args: gpu ? ['--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader'] });
+const gpuArgs = ['--enable-gpu', '--ignore-gpu-blocklist', ...(angle ? [`--use-angle=${angle}`] : []), ...(angle === 'vulkan' ? ['--enable-features=Vulkan', '--disable-vulkan-surface'] : [])];
+const browser = await chromium.launch({ headless: true, args: gpu ? gpuArgs : ['--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader'] });
 try {
   const page = await browser.newPage();
   page.on('console', m => { if (m.type() === 'error') console.log('page:', m.text()); });

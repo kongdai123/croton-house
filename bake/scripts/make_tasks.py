@@ -1,5 +1,5 @@
 # Fill tasks/pending with one bake task per (layer, group) for a time slot.
-# usage: python3 scripts/make_tasks.py <slot> <groups> [samples] [version] [probes]
+# usage: python3 scripts/make_tasks.py <slot> <groups> [samples] [version] [probes] [--scene S] [--probe-scene S] [--layers a,b]
 #   version: scene/<version>/scene_lm.blend -> bakes/<version>/<slot>/; the light probes (probe.py, 8 chunks per layer)
 #   come along without a version, or with one when 'probes' is given (packed by probe_pack.py)
 import json, os, sys
@@ -22,23 +22,15 @@ B = os.environ.get('BLENDER', 'blender')   # Blender 4.5 LTS
 os.makedirs('tasks/pending', exist_ok=True)
 import struct
 with open(f'{BAKES}/lightmap_uv.bin', 'rb') as f: n = struct.unpack('<I', f.read(4))[0]; W, H = json.loads(f.read(n))['atlas']
-# probe grid: 0.5 m inside the house, 1 m outside near it, at three heights a movable piece can stand at; "inside" is
-# the plan's outline grown by its inside margin (plan.py, as the site's plan.js)
+# probe grid (probe_grid.py): 0.5 m inside the house, 1 m outside near it, at three heights; points inside a plan wall
+# piece or the exterior skin are flagged solid (probe.py never renders them: invalid)
+import probe_grid
 PLAN = planlib.load()
-def inside(x, y):
-    return PLAN.is_inside(x, y)
-pts = []
-for z in (0.35, 0.95, 1.55):
-    for i in range(33):
-        for j in range(24):
-            x, y = -7.85 + 0.5 * i, -5.85 + 0.5 * j
-            if inside(x, y): pts.append((x, y, z))
-    for i in range(25):
-        for j in range(27):
-            x, y = -12 + i, -11 + j
-            if not inside(x, y): pts.append((x, y, z))
-json.dump({'points': [{'b': [round(x, 3), round(y, 3), z], 't': [round(x, 3), z, round(-y, 3)]} for x, y, z in pts]}, open('scene/probes.json', 'w'))
-print('probes', len(pts))
+grid = probe_grid.probes_json(PLAN)
+json.dump(grid, open('scene/probes.json', 'w'))
+print('probes', len(grid['points']), 'solid', sum(1 for p in grid['points'] if p.get('solid')))
+# --probe-scene: the probe tasks render this scene instead of the lightmaps' (the probe pose, export.mjs --probe-pose)
+PROBE_SCENE = option('--probe-scene', SCENE)
 PROBE_CHUNKS = 8
 for layer in (LAYERS if WITH_PROBES else ()):
     for k in range(PROBE_CHUNKS):
@@ -46,7 +38,7 @@ for layer in (LAYERS if WITH_PROBES else ()):
         name = f'{VER + "_" if VER else ""}{slot}_probes_{layer}_c{k:02d}'
         if os.path.exists(cfg['out']) or os.path.exists(f'tasks/done/{name}'): continue
         with open(f'tasks/pending/{name}', 'w') as f:
-            f.write(f"#!/bin/bash\n{B} -b --python-exit-code 1 {SCENE} -P scripts/probe.py -- '{json.dumps(cfg)}'\n")
+            f.write(f"#!/bin/bash\n{B} -b --python-exit-code 1 {PROBE_SCENE} -P scripts/probe.py -- '{json.dumps(cfg)}'\n")
 for layer in LAYERS:
     for g in range(G):
         cfg = dict(SLOTS[slot], layer=layer, group=g, groups=G, samples=samples, size=[W, H], out=f'{BAKES}/{slot}/{layer}_g{g:02d}.exr')

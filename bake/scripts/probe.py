@@ -1,6 +1,7 @@
 # Light probes for movable objects: at each grid point, render a small 360-degree view in Cycles and project it to
 # order-2 spherical harmonics (9 coefficients per colour) in three.js's world frame and basis order, so the site can
-# evaluate shGetIrradianceAt() directly. Points inside geometry (mostly back faces around them) are marked invalid.
+# evaluate shGetIrradianceAt() directly. Points inside geometry (mostly back faces around them) are marked invalid, and so are
+# the points probe_grid.py flags solid (inside a plan wall or the exterior skin), without rendering them.
 # usage: blender -b scene/scene_lm.blend -P scripts/probe.py -- '<json>'
 #   {"layer", "chunk", "chunks", "probes": "scene/probes.json", "out": "bakes/<slot>/probes_<layer>_cNN.json",
 #    "samples": n, ... the slot's light settings (see layer_lights.py); optional "near": [[x, y, z]...] and "maxDist"
@@ -86,6 +87,8 @@ near = [Vector(q) for q in cfg.get('near', [])]; far = cfg.get('maxDist')
 for n, i in enumerate(mine):
     bxp, byp, bzp = probes[i]['b']
     p = Vector((bxp, byp, bzp))
+    if probes[i].get('solid'):   # inside a plan wall or the exterior skin (probe_grid.py): never rendered, invalid
+        results.append([i, 0] + [0.0] * 27); continue
     if far and (not near or min((p - q).length for q in near) > far):
         results.append([i, 1] + [0.0] * 27); continue
     # inside geometry: rays leave through back faces

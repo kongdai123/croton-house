@@ -127,7 +127,8 @@ try {
   const scene4 = new THREE.Scene(), sun4 = new THREE.DirectionalLight(); scene4.add(sun4, sun4.target);
   const mesh4 = new THREE.Mesh(g.clone(), new THREE.MeshStandardMaterial()); mesh4.userData.lmId = 'fixture'; scene4.add(mesh4);
   const source4 = mesh4.material; source4.userData = { emits: 'lamp', lightGlow: true }; source4.emissiveIntensity = 0;
-  const toggle4 = { on: true, manual: false, glows: [], set(on) { this.on = on; this.manual = true; } };
+  // a switch as light_switch.js makes it, with its lighting manifest record (on at dusk, the default)
+  const toggle4 = { on: true, manual: false, glows: [], lighting: { group: 'bedB', defaultOn: ['dusk'] }, set(on) { this.on = on; this.manual = true; } };
   mesh4.userData.id = 'fixture';
   groupMeta = { version: 1, curve: 'sqrt(x/(x+K))', textures: 1, groups: [{ index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1, 1, 1], members: [{ id: 'fixture', root: [0, 0, 0], w: 1 }] }] };
   renderer.initTexture = () => {}; renderer.copyTextureToTexture = () => {};

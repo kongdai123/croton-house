@@ -13,7 +13,7 @@
 //               castsSun, bake, contact, zone }
 //   mesh:     { role, motion, bake, why, probeSide, sun: { cast, track }, weather, zone, space, puddleMirror }
 // See SCHEMA below for every field's values and meaning.
-import { isInside, spaceAt, levels } from './plan.js';
+import { isInside, spaceAt, spaces, levels } from './plan.js';
 
 // ---- vocabulary -----------------------------------------------------------------------------------------------------
 export const SCHEMA = {
@@ -351,6 +351,34 @@ export function lampGroupAt(fixture, x, y) {
   if (!space) return { group: null, space: null, exterior: false };
   const exterior = space.zone === 'exterior';
   return { group: exterior ? EXTERIOR_GROUP : (space.lampGroup ?? space.id) + (CIRCUITS[fixture.circuit] ?? ''), space: space.id, exterior };
+}
+// The lamp groups of a set of switch records in their canonical order (the bake's texture channels): rooms in the plan's
+// order, each room's circuits in CIRCUITS order, then the porch, then 'always' (lamp surfaces no switch controls).
+export function lampGroupOrder(records) {
+  const order = new Map(), rank = new Map(spaces.map((s, i) => [s.id, i])), circuits = Object.keys(CIRCUITS);
+  for (const r of records) if (r.group && !order.has(r.group)) order.set(r.group, [r.exterior ? 1 : 0, rank.get(r.space) ?? 1e3, circuits.indexOf(r.circuit)]);
+  const cmp = (a, b) => { for (let i = 0; i < 3; i++) if (a[1][i] !== b[1][i]) return a[1][i] - b[1][i]; return a[0] < b[0] ? -1 : 1; };
+  return [...[...order].sort(cmp).map(e => e[0]), ALWAYS_GROUP];
+}
+// The checks a switch set must pass: every switch in exactly one group, every group with members and a wall plate (unless
+// it is 'always'), members agreeing on the default slots, slots by name. plates: the wall plates (userData.lightSwitch).
+export function validateSwitches(entries, plates = []) {
+  const errors = [], byGroup = new Map();
+  for (const e of entries) {
+    const r = e.lighting;
+    if (!r?.group) { errors.push(`switch ${r?.id ?? e.root.name}: no lamp group (no plan space at its lamp surfaces)`); continue; }
+    if (!byGroup.has(r.group)) byGroup.set(r.group, []);
+    byGroup.get(r.group).push(e);
+    for (const s of r.defaultOn) if (!SLOTS.includes(s)) errors.push(`switch ${r.id} (${r.group}): unknown default slot ${s}`);
+  }
+  for (const [g, list] of byGroup) {
+    const d = JSON.stringify([...list[0].lighting.defaultOn].sort());
+    if (list.some(e => JSON.stringify([...e.lighting.defaultOn].sort()) !== d)) errors.push(`group ${g}: members disagree on their default slots`);
+    const n = plates.filter(p => list.some(e => e.toggle === p.userData.lightSwitch)).length;
+    if (n !== 1) errors.push(`group ${g}: ${n} wall plates`);
+  }
+  for (const p of plates) if (!entries.some(e => e.toggle === p.userData.lightSwitch)) errors.push(`plate ${p.name}: drives no switch`);
+  return errors;
 }
 // Live lights a fixture owns (layout.js addLight, lighting.js extra lights): registered here, not matched by position.
 const LIGHTS = new WeakMap();

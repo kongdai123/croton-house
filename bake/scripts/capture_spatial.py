@@ -56,9 +56,9 @@ def js_bool(v):   # the JS side stringifies booleans as true/false
 
 def main():
     args = sys.argv[1:]
-    switches = None
+    doc = None
     if '--switches' in args:
-        switches = json.load(open(args[args.index('--switches') + 1]))['switches']
+        doc = json.load(open(args[args.index('--switches') + 1]))
     grid = dict(GRID)
     if '--step-mm' in args:
         grid['step'] = int(args[args.index('--step-mm') + 1]); grid['nx'] = (32000 // grid['step']) + 1; grid['ny'] = (35000 // grid['step']) + 1
@@ -70,11 +70,10 @@ def main():
             b = rl.plan_box(plan, p)
             out.append(dict(i=i, p=[p[0], p[2], -p[1]], min=b['min'] if b else None, max=b['max'] if b else None))
         json.dump(out, sys.stdout); return
-    lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'PLAN', 'room', 'where', 'group_of', 'ORDER'})
+    lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'group_of', 'order_of'})
     import plan as planlib
     P = planlib.load(str(ROOT / 'web/data/plan.json'))
     C = [
-        ('py:lamp_groups.room', 'bake/scripts/lamp_groups.py room(): lampGroup (or id) of the plan space, near 0.3; outside outdoors', lambda x, y: lg['room']([x, y, 0])),
         # the plan model (bake/scripts/plan.py over web/data/plan.json), same answers as web/src/plan.js
         ('py:plan.space_at', 'bake/scripts/plan.py space_at (exact, empty in walls)', lambda x, y: (P.space_at(x, y) or {}).get('id', '')),
         ('py:plan.is_inside', 'bake/scripts/plan.py is_inside, default margin', lambda x, y: js_bool(P.is_inside(x, y))),
@@ -82,12 +81,14 @@ def main():
     out = {}
     for name, source, fn in C:
         out[name] = dict(source=source, **encode(fn, grid))
-    groups = {}
-    if switches is not None:
-        for s in switches:
-            try: groups[s['key']] = dict(room=lg['room'](lg['where'](s)), group=lg['group_of'](s), inOrder=lg['group_of'](s) in lg['ORDER'])
+    # lamp_groups.py reading the site's switch records (switch_groups.mjs): the group it bakes each switch into, and its order
+    groups, order = {}, None
+    if doc is not None:
+        order = lg['order_of'](doc)
+        for s in doc['switches']:
+            try: groups[s['key']] = dict(group=lg['group_of'](s), inOrder=lg['group_of'](s) in order)
             except Exception as e: groups[s['key']] = dict(error=type(e).__name__)
-    json.dump(dict(grid=grid, classifiers=out, lampGroups=groups, order=lg['ORDER']), sys.stdout, separators=(',', ':'))
+    json.dump(dict(grid=grid, classifiers=out, lampGroups=groups, order=order), sys.stdout, separators=(',', ':'))
 
 
 if __name__ == '__main__':

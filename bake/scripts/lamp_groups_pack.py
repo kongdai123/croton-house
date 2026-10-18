@@ -81,7 +81,7 @@ def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}
         d = os.path.join(bakes, f'g{g["index"]:02d}'); lum = np.load(os.path.join(d, 'lum.npy'), mmap_mode='r')
         if lum.shape != (H, W): raise SystemExit(f'{d}: {lum.shape} != coverage {(H, W)}')
         info = json.load(open(os.path.join(d, 'color.json'))); K = tone_K(np.asarray(lum[::4, ::4]))
-        meta['groups'].append({k: g[k] for k in ('name', 'index', 'always', 'exterior', 'members')} | {'tex': g['index'] // 3, 'ch': g['index'] % 3, 'K': round(K, 5), 'color': info['color'], 'gain': float(gains.get(g['name'], 1.0))})
+        meta['groups'].append({k: g[k] for k in ('name', 'index', 'always', 'exterior', 'members', 'defaultOn') if k in g} | {'tex': g['index'] // 3, 'ch': g['index'] % 3, 'K': round(K, 5), 'color': info['color'], 'gain': float(gains.get(g['name'], 1.0))})
         lums.append(lum); print(f'{g["name"]:15s} K {K:.4f} max {info["max"]:.2f} colour {info["color"]}', flush=True)
     rows = [H // 2, H - H // 2]; meta['rows'] = rows; sizes = {}
     # every texel of a chart or its padding stores at least 1/255 (decoded ~K * 1.5e-5), 0 marks empty atlas: the site's

@@ -86,9 +86,9 @@ export function captureSpatialJS(w) {
 
 // Python side: bake/scripts/capture_spatial.py prints {classifiers, lampGroups}. `switches` = the switch records the bake exporter
 // would write (bakeSwitches in objects.json) so group_of is run on the real fixtures.
-export function captureSpatialPython(switches) {
+export function captureSpatialPython(switches, groups) {
   const tmp = join(tmpdir(), `croton-switches-${process.pid}.json`);
-  writeFileSync(tmp, JSON.stringify({ switches }));
+  writeFileSync(tmp, JSON.stringify({ switches, groups }));
   try {
     const out = execFileSync('python3', ['-I', join(REPO, 'bake/scripts/capture_spatial.py'), '--switches', tmp], { maxBuffer: 1 << 28, encoding: 'utf8' });
     return JSON.parse(out);

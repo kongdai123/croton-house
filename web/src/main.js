@@ -16,7 +16,7 @@ import { Markers } from './markers.js';
 import { UI, t, setLang, getLang } from './ui.js';
 import { Human } from './human.js';
 import { batchStatic, stillParts, updateSwayLod, updateRoomVisibility } from './batch.js';
-import { classifyLighting } from './lighting_roles.js';
+import * as roles from './lighting_roles.js';
 import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
 import { TIERS, detectTier, detectTexSet, qualityPair } from './tier.js';
@@ -126,11 +126,11 @@ await layout.build((p, msg) => ui.progress(0.3 + p * 0.35, msg));
 await step(0.66, 'materials');
 // The lighting manifest (lighting_roles.js): every mesh and material resolved before the interior / exterior material
 // split reads it; a second pass after batching resolves the switches' plates, the lamp-surface copies and merged meshes.
-classifyLighting(scene, { stillParts });
+roles.classifyLighting(scene, { stillParts });
 lighting.collectMaterials(scene);
 await step(0.68, 'finishing');
 const batch = Q.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
-classifyLighting(scene);
+roles.classifyLighting(scene);
 // Baked sunrise is the default. Keep the complete legacy setup until staging succeeds.
 let baked = null;
 state.baked = false;
@@ -399,7 +399,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets };
+window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles };
 // Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
 // Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
 // cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.

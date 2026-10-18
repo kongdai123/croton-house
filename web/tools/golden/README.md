@@ -12,11 +12,12 @@ it changes nothing unintended.
   `bake/export/switch_groups.mjs` writes), lights, doors.
 - `classify.json`: today's answer of each classifier per material, mesh and placed root.
 - `spatial.json`: every room / inside classifier sampled on a 5 cm lattice, x -16..16, y -15..20 (plan frame), as run-length
-  rows of `[labelIndex, length]`. JS ones from `harness/spatial.mjs`, Python ones (`py:*`, plus lamp group per switch) from
+  rows of `[labelIndex, length]`. JS ones from `harness/spatial.mjs`, Python ones (`py:*`, plus the lamp group
+  `lamp_groups.py` bakes each switch record into, and its group order) from
   `bake/scripts/capture_spatial.py`. Since the plan model (step 2 of docs/architecture-lighting.md) the old classifiers
   are retired as their consumers move to it: the golden tracks `js:plan.*` (spaceAt, roomName, isInside, insideGLSL
-  evaluated, indoorWeight) and `py:plan.*`, the remaining consumers' wrappers (`js:roam.areaOf`, `js:roam.isIndoor`,
-  `py:lamp_groups.room`), the probe volume's wall boxes and the site-side quotes still in use.
+  evaluated, indoorWeight) and `py:plan.*`, the remaining consumers' wrappers (`js:roam.areaOf`, `js:roam.isIndoor`), the
+  probe volume's wall boxes and the site-side quotes still in use. (Lamp groups come from the lighting manifest since step 3.)
 - `manifest.json`: the lighting manifest (`web/src/lighting_roles.js`, step 3 of docs/architecture-lighting.md): every
   material's resolved record and every mesh's (fields at their default left out), keyed like `objects.json`, plus the
   validator's errors. `../test_lighting_manifest.mjs` checks that every decision a consumer reads from it gives today's
@@ -36,8 +37,8 @@ Commands (run from the repo root):
 `emitsLight`, lightmap.js `isMirror` / `weatherClass` / `probeWalls`, photo.js `presentation` / `weatherClass`,
 foliage_bake.js `isPlant`, puddles.js `wetMaterial` / `indoors`, light_switch.js `glowing`, pets/roam.js `areaOf` /
 `isIndoor`, plan.js (all of it), `lighting.indoorWeight`. Module-private ones are exposed by appending an export at bundle
-time (no change to `web/src`). Python: `plan.py` and `reflprobe_layout.py` imported; `lamp_groups.py` functions lifted by
-AST (with its `import plan` and `PLAN`).
+time (no change to `web/src`). Python: `plan.py` and `reflprobe_layout.py` imported; `lamp_groups.py` `group_of` / `order_of`
+lifted by AST.
 
 ## Quoted, to be replaced
 

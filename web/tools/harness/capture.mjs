@@ -17,7 +17,8 @@ export async function captureAll() {
   const objects = captureObjects(w, ix);
   const classify = captureClassify(w, ix);
   const manifest = captureManifest(w, ix);
-  const py = captureSpatialPython(Object.values(objects.bakeSwitches));
+  const records = Object.values(objects.bakeSwitches);
+  const py = captureSpatialPython(records, w.roles.lampGroupOrder(records));
   const spatial = { meta: { note: 'Room / inside classifiers sampled on a 5 cm plan lattice (plan frame, +y north); see web/tools/golden/README.md.', grid: GRID, lattice: 'x = (x0 + i * step) / 1000, y = (y0 + j * step) / 1000; rows are y, runs are [labelIndex, length] along x' },
     classifiers: { ...captureSpatialJS(w), ...py.classifiers }, lampGroups: py.lampGroups, order: py.order };
   return { world: w, index: ix, objects, classify, spatial, manifest };

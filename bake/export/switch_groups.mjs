@@ -39,13 +39,14 @@ const out = await page.evaluate(() => {
     return {
       i, key: `${id}@${plan(root.getWorldPosition(new V())).map(v => v.toFixed(2)).join(',')}`, id, name: toggle.label.en.replace(/^Turn on · /, ''),
       root: plan(root.getWorldPosition(new V())), group: toggle.lighting.group, space: toggle.lighting.space, exterior: toggle.lighting.exterior,
-      defaultOn: toggle.lighting.defaultOn, on: toggle.on,
+      kind: toggle.lighting.kind, circuit: toggle.lighting.circuit, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
       lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new V())), intensity: l.userData.base ?? l.userData.switchBase })),
       spec: spec ? { ...spec, p: plan(new V(0, spec.y ?? 2.3, 0).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
       glows,
     };
   });
-  return { switches };
+  // the lamp groups in their canonical order (lighting_roles.js lampGroupOrder): the bake's texture channels
+  return { switches, groups: A.roles.lampGroupOrder(switches) };
 });
 console.log(JSON.stringify(out));
 await browser.close(); server?.close();

@@ -108,17 +108,20 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   invariant('interior-light-in-outline', 'light specs of interior fixtures lie inside the plan outline', off);
 }
 
-// ---- 7. committed lamp-group encoding == lamp_groups.py ORDER ---------------------------------------------------------------------
+// ---- 7. committed lamp-group encoding == the manifest's lamp groups (lighting_roles.js lampGroupOrder) ------------------------
 {
-  const py = readFileSync(join(REPO, 'bake/scripts/lamp_groups.py'), 'utf8');
-  const order = [...py.match(/ORDER = (\[[\s\S]*?\])/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+  const order = w.roles.lampGroupOrder(switches.map(s => s.lighting));
   const enc = JSON.parse(readFileSync(join(WEB, 'assets/lightmaps/v2/lampgroups/encoding.json'), 'utf8')).groups.map(g => g.name);
   const off = [];
   for (const n of order) if (!enc.includes(n)) off.push(`missing from encoding.json: ${n}`);
-  for (const n of enc) if (!order.includes(n)) off.push(`not in ORDER: ${n}`);
+  for (const n of enc) if (!order.includes(n)) off.push(`not a lamp group of the manifest: ${n}`);
   if (!off.length && order.join() !== enc.join()) off.push('same groups, different order');
-  invariant('encoding-matches-lamp-groups-order', `committed lampgroups/encoding.json groups (${enc.length}) equal lamp_groups.py ORDER (${order.length})`, off);
+  invariant('encoding-matches-lamp-groups-order', `committed lampgroups/encoding.json groups (${enc.length}) equal the manifest's lamp groups (${order.length})`, off);
 }
+
+// ---- 7b. switches and lamp groups: every switch in exactly one group, every group with members and one wall plate (unless
+// always), members agreeing on their default slots (lighting_roles.js validateSwitches) ----------------------------------------
+invariant('switches-map-to-groups', 'every switch in one lamp group, every group with members and one wall plate, members agree on default slots', w.roles.validateSwitches(switches, plates));
 
 // ---- 8. committed reflection probe meta == reflprobe_layout.py ------------------------------------------------------------------------
 {

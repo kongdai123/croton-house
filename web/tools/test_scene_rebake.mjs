@@ -1,6 +1,5 @@
 // CPU fixtures for the combined rebake: no browser, renderer or network.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,12 +24,9 @@ try {
     : k === 'getImageData' || k === 'createImageData' ? (...a) => image(a.at(-2), a.at(-1)) : k === 'measureText' ? () => ({ width: 0 }) : () => {}) });
   globalThis.document = { createElement: () => ({ getContext: () => context }) };
   const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, sheerProbePatch } = await import(pathToFileURL(file));
-  const py = "import ast,sys,json; t=ast.parse(open(sys.argv[1]).read()); print(json.dumps(next(ast.literal_eval(n.value) for n in t.body if isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == 'ORDER')))";
-  const names = JSON.parse(execFileSync('python3', ['-c', py, fileURLToPath(new URL('../../bake/scripts/lamp_groups.py', import.meta.url))], { encoding: 'utf8' }));
-  assert.equal(names.length, 22);
-  for (const name of names) for (const slot of ['sunrise', 'noon', 'golden', 'dusk']) {
-    const expected = ['garage', 'always'].includes(name) || slot === 'dusk' || name === 'kitchenPendant' && slot === 'sunrise' || slot === 'golden' && ['living', 'livingNiche', 'kitchenPendant', 'dining'].includes(name);
-    assert.equal(defaultOn(slot, { name, always: name === 'always' }), expected, `${slot}/${name}`);
+  // default slots are the groups' (lighting manifest); the always group is always on
+  for (const slot of ['sunrise', 'noon', 'golden', 'dusk']) {
+    assert.equal(defaultOn(slot, { always: true }), true); assert.equal(defaultOn(slot, { defaultOn: ['dusk'] }), slot === 'dusk');
   }
   const scene = new T.Scene(), fixtures = new T.Group();
   // The porch sconce and a baked bath can as placed (their placement rows declare the plates), and the garden lantern.
@@ -83,7 +79,7 @@ try {
   }
   assert.ok(seam.points.some(p => p.x > w / 2 * 1.05));
   for (const p of seam.points) assert.ok(Math.min(...edges.map(e => e.closestPointToPoint(new T.Vector3(p.x, 0, p.z), true, new T.Vector3()).distanceTo(new T.Vector3(p.x, 0, p.z)))) < 0.001);
-  const glsl = lampGroupGLSL(Math.ceil(names.length / 3));
+  const glsl = lampGroupGLSL(8);
   assert.equal((glsl.match(/sampler2DArray/g) ?? []).length, 1); assert.ok(glsl.includes('uLampK7')); assert.ok(!glsl.includes('uLampK8'));
-  console.log('scene rebake: 22 groups/8 layers, all slot defaults, declared wall plates, baked bath can, porch lantern switching, cellular transmission and pillow edge geometry OK');
+  console.log('scene rebake: 8 group layers, slot defaults, declared wall plates, baked bath can, porch lantern switching, cellular transmission and pillow edge geometry OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

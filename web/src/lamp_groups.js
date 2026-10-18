@@ -11,22 +11,12 @@
 import * as THREE from 'three';
 import { lightmapBitmap } from './lightmap_assets.js';
 
-// Default switch states per slot (by group name). The always-on group (lamp surfaces without a switch) is always on.
-export const DEFAULT_ON = {
-  sunrise: ['kitchenPendant'],                     // first light: someone is up, the island pendant is on (all off
-                                                   // read as a dark house: -0.8 stops in the living view)
-  noon: [],
-  golden: ['living', 'livingNiche', 'kitchenPendant', 'dining'],  // evening: the living room, island and dining table
-  dusk: '*',                                       // blue hour: every interior lamp and the porch
-};
-// The garage has almost no daylight (dark walls, one small window): its lights start on at every time of day.
-const ALWAYS_DEFAULT = new Set(['garage']);
-export const defaultOn = (slot, group) => {
-  if (group.always || ALWAYS_DEFAULT.has(group.name)) return true;
-  const set = DEFAULT_ON[slot];
-  if (set === '*') return true;
-  return !!set?.includes(group.name);
-};
+// Default switch states per slot: the lighting manifest's (lighting_roles.js), declared with the fixtures (defaultOn: the
+// slots a switch starts on; dusk, blue hour, has every lamp on; the island pendant at sunrise, someone is up; the living
+// room, alcove, island and dining table through golden hour; the garage, with almost no daylight, always). A group's
+// members agree (validateSwitches); a bake writes the group's slots into encoding.json, older ones take its switches'.
+// The always-on group (lamp surfaces without a switch) is always on.
+export const defaultOn = (slot, group) => !!group && (!!group.always || !!group.defaultOn?.includes(slot));
 // Cap the array at half resolution unless ?lmgroups=full: each full-size RGBA8 layer with mips is ~177 MiB.
 const capRes = res => res === 'full' && new URLSearchParams(location.search).get('lmgroups') !== 'full' ? 'half' : res;
 export const lampGroupsWanted = (search = location.search) => !['0', 'off'].includes(new URLSearchParams(search).get('lmgroups'));
@@ -99,6 +89,10 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     if (best) matched++;
     records.push({ toggle, group: best?.g ?? null, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
   }
+  // each group's default slots: the bake's, else its switches' (lighting manifest)
+  const defaults = new Map(groups.map(g => [g, g.defaultOn ? g : null]));
+  for (const r of records) if (r.group && !defaults.get(r.group) && r.toggle.lighting) defaults.set(r.group, { always: r.group.always, defaultOn: r.toggle.lighting.defaultOn });
+  const isOn = (slot, g) => g.always || defaultOn(slot, defaults.get(g));
   const levels = new Float32Array(G);   // per group, 0..gain
   let array = null, res = null, pending = null, disposed = false;
   const volumes = new Set();
@@ -106,7 +100,7 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
   const probeWeights = new Float32Array(G * 3);
   const state = { slotA: null, slotB: null, blend: 0 };
   const defaultLevel = (group, a, b, blend) => {
-    const x = defaultOn(a, group) ? 1 : 0, y = defaultOn(b ?? a, group) ? 1 : 0;
+    const x = isOn(a, group) ? 1 : 0, y = isOn(b ?? a, group) ? 1 : 0;
     return x + (y - x) * blend;
   };
   const smooth = t => t * t * (3 - 2 * t);
@@ -118,7 +112,7 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     reset(slot) {
       state.slotA = slot; state.slotB = slot; state.blend = 0;
       for (const r of records) {
-        const on = r.group ? defaultOn(slot, r.group) : r.toggle.on;
+        const on = r.group ? isOn(slot, r.group) : r.toggle.on;
         Object.assign(r.toggle, { manual: false, on, value: +on, moving: false });
         r.level = r.from = +on; r.t = 1; r.on = on; r.manual = false;
       }

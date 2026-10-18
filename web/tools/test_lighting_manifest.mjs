@@ -55,21 +55,11 @@ for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seenMat.has(m
 check('material', MATERIAL, matItems);
 check('mesh', MESH, ix.meshes.map(({ key, node }) => [key, node, today.meshes[key]]));
 
-// ---- 3. switches: the manifest's lamp group and default slots of every switch equal today's (lamp_groups.py group_of
-// over its room table, as golden/spatial.json lampGroups records it; lamp_groups.js DEFAULT_ON and the garage rule) ----
+// ---- 3. switches: lamp groups and wall plates pass the manifest's checks ----------------------------------------------------
 {
-  const { readFileSync } = await import('node:fs');
-  const lampGroups = JSON.parse(readFileSync(new URL('./golden/spatial.json', import.meta.url), 'utf8')).lampGroups;
-  const ON = { sunrise: ['kitchenPendant'], noon: [], golden: ['living', 'livingNiche', 'kitchenPendant', 'dining'], dusk: '*' };
-  const T = w.T, plan = v => [+v.x.toFixed(3), +(-v.z).toFixed(3), +v.y.toFixed(3)], diffs = [];
-  for (const { root, toggle } of w.switches) {
-    let f = root; while (f && !f.userData.placement) f = f.parent;
-    const id = f?.userData.id || root.userData.id || root.name, key = `${id}@${plan(root.getWorldPosition(new T.Vector3())).map(v => v.toFixed(2)).join(',')}`;
-    const old = lampGroups[key]?.group, r = toggle.lighting;
-    if (r.group !== old) diffs.push(`${key}: group today ${old}, manifest ${r.group}`);
-    for (const slot of roles.SLOTS) if (r.defaultOn.includes(slot) !== (old === 'garage' || ON[slot] === '*' || ON[slot].includes(old))) diffs.push(`${key}: ${slot} default differs`);
-  }
-  if (diffs.length) fail(`switches: ${diffs.length} differ\n  ${diffs.slice(0, 8).join('\n  ')}`); else console.log(`ok   switches: ${w.switches.length} lamp groups and default slots`);
+  const plates = w.scene.children.filter(c => c.name?.startsWith('wall-switch-') && c.userData.lightSwitch);
+  const errs = roles.validateSwitches(w.switches, plates);
+  if (errs.length) fail(`switches: ${errs.length} errors\n  ${errs.slice(0, 8).join('\n  ')}`); else console.log(`ok   switches: ${w.switches.length} switches, ${plates.length} plates, one group each`);
 }
 
 console.log(`${failed ? 'FAILED' : 'lighting manifest OK'} (${((performance.now() - t0) / 1000).toFixed(1)} s)`);

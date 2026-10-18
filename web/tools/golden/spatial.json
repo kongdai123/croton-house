@@ -64,11 +64,11 @@
   "props-rooms-egg-lamp@-5.55,2.95,0.54": {"group":"primaryLamps","inOrder":true},
   "props-rooms-linen-lamp@4.32,4.91,0.80": {"group":"bedroomBLamps","inOrder":true},
   "props-rooms-linen-lamp@-2.64,2.38,0.28": {"group":"primaryLamps","inOrder":true},
-  "decor-recessed-light@-6.30,1.95,0.00": {"group":"primaryBathCloset","inOrder":true},
-  "decor-recessed-light@3.72,2.80,0.00": {"group":"bedroomBCloset","inOrder":true},
-  "decor-recessed-light@6.51,-1.71,0.00": {"group":"hallCloset","inOrder":true},
-  "decor-recessed-light@-7.13,0.82,0.00": {"group":"laundry","inOrder":true},
-  "decor-recessed-light@-4.16,0.03,0.00": {"group":"linen","inOrder":true}
+  "decor-recessed-light@-6.30,1.94,0.00": {"group":"primaryBathCloset","inOrder":true},
+  "decor-recessed-light@3.70,2.80,0.00": {"group":"bedroomBCloset","inOrder":true},
+  "decor-recessed-light@6.51,-1.49,0.00": {"group":"hallCloset","inOrder":true},
+  "decor-recessed-light@-6.76,0.81,0.00": {"group":"laundry","inOrder":true},
+  "decor-recessed-light@-4.16,0.22,0.00": {"group":"linen","inOrder":true}
  },
  "order": ["kitchen","kitchenPendant","kitchenCabinet","living","livingNiche","livingCenter","family","dining","hall","primary","primaryLamps","primaryBath","primaryBathCloset","bedroomB","bedroomBLamps","bedroomBCloset","bathB","hallBath","hallCloset","bedroom3","bedroom3Lamps","garage","laundry","closet","linen","porch","always"]
 }

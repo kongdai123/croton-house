@@ -33,6 +33,29 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
     w.plan.spaces.filter(sp => sp.zone !== 'exterior' && !lit.has(sp.id)).map(sp => `${sp.id} (${sp.label.en})`));
 }
 
+// ---- 1b. closet rule: each closet / laundry can over the clear part of its space -----------------------------------------
+// Owner decision 2026-10-17: the centre of the largest clear part of the space, never above furniture taller than ~1.9 m
+// (layout.js closetSpot: the laundry can sat on the washer-dryer stack). Checked from the scene: the can's centre is in its
+// space and its footprint over no mesh standing in that space (footprint centre inside) that reaches above 1.9 m.
+{
+  const off = [], box = new T.Box3(), tall = [];
+  scene.updateMatrixWorld(true);
+  // the pieces as placed: batched originals (hidden, userData.batched) count, the merged cells (userData.batch) do not
+  scene.traverse(o => { if (!o.isMesh || o.userData.batch || (!visible(o) && !o.userData.batched)) return; box.setFromObject(o);
+    if (box.isEmpty() || box.max.y <= 1.9 || box.min.y >= 2.32) return;
+    tall.push({ x0: box.min.x, x1: box.max.x, y0: -box.max.z, y1: -box.min.z, o }); });
+  const cans = w.layout.placed.filter(o => o.userData.placement?.rule === 'closet');
+  for (const c of cans) {
+    const p = c.userData.placement, sp = w.plan.spaces.find(s => s.id === p.space), x = c.position.x, y = -c.position.z;
+    if (!sp || w.plan.spaceAt(x, y)?.id !== sp.id) { off.push(`${p.space}: can at (${x.toFixed(2)}, ${y.toFixed(2)}) outside its space`); continue; }
+    const cb = new T.Box3().setFromObject(c), e = 0.005, f = { x0: cb.min.x + e, x1: cb.max.x - e, y0: -cb.max.z + e, y1: -cb.min.z - e };   // the can's own footprint
+    for (const q of tall) if (w.plan.spaceAt((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2)?.id === sp.id && f.x1 > q.x0 && f.x0 < q.x1 && f.y1 > q.y0 && f.y0 < q.y1)
+      off.push(`${p.space}: can at (${x.toFixed(2)}, ${y.toFixed(2)}) above ${fixtureOf(q.o)?.userData.placement?.i ?? q.o.name ?? 'a mesh'} (top ${box.setFromObject(q.o).max.y.toFixed(2)} m)`);
+  }
+  if (!cans.length) off.push('no closet-rule cans placed');
+  invariant('closet-lights-clear', 'every closet-rule can is in its space and not above a piece standing there that is taller than 1.9 m', off);
+}
+
 // ---- 2. wall plates: every plate drives a fixture, every declared plate was made, one plate per lamp group, on wall ----------
 // Plates are declared with their fixtures (layout.js placement rows lamp.plate, the niche can in house.js); a plate takes
 // the toggle of its fixture's switch and is named after the switch's lamp group (lighting_roles.js lampGroupAt).

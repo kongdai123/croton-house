@@ -59,3 +59,21 @@ manifest records:
 
 Also quoted in `spatial.mjs`: grass.js `outdoor` (a planting keep-out, not yet from the plan), house.js `garagePts` (the
 garage + laundry floor slab), vpaudit.mjs `roomAt` (a manual tool over house.json).
+
+## Shader goldens
+
+`shaders.json` + `shader_texts.json.gz` (`../test_shader_golden.mjs`, `../harness/shaders.mjs`): the baked lighting
+applied headless to the real house with the shipped bake (`../harness/baked.mjs`: `applyLightmaps` over
+`web/assets/lightmaps` read from disk, HDR and WebP pixels never decoded), plus the visitor, both pets, contact shadows, the
+hq puddles and the mirrors' reflected scenes, as `main.js` sets them up before the warm compile. Every material drawn in
+the scene, a mirror, the puddle reflection or the sun's depth pass is compiled through its `onBeforeCompile` with its own
+maps, an environment map and one shadowed sun; per class (`variant:container/path/role/surface/tags`, from the material
+and mesh records, not from shader text) the golden keeps the vertex and fragment text after every hook (by hash; the texts
+are in the gzipped file), the hash of that text resolved against three's `ShaderChunk`, the fragment sampler count, the
+material count and a program number (classes three would draw with one program share it). Variants: the shipped bake
+(lamp groups, four slots), the shared lamps layer (`?lmgroups=0`), sunrise only, and the shipped scene recompiled for an
+11-texture-unit GPU (the sampler budget's drops).
+
+    node web/tools/test_shader_golden.mjs                         # diff (first differing line per changed text)
+    UPDATE_GOLDEN=1 node web/tools/test_shader_golden.mjs         # rewrite
+    SHOW='groups-slots:scene/probe/door' node web/tools/test_shader_golden.mjs   # print a class's current text

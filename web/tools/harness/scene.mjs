@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 export const WEB = fileURLToPath(new URL('../../', import.meta.url));
-let cached;
+const cache = new Map();
 
 // Module-private pure helpers that the lighting audit lists are exposed by appending an export to the module source at
 // bundle time (nothing in web/src changes): the harness then calls the real function instead of a copy.
@@ -51,8 +51,11 @@ function installShims() {
   return deep;
 }
 
-export async function buildRealScene() {
-  if (cached) return cached;
+// extra: more export lines for the same bundle (one module instance with the scene: the baked harness adds lightmap.js);
+// plugins: esbuild plugins for it (asset decoders stubbed); variant: a cache key, so a variant builds its own scene.
+export async function buildRealScene({ extra = '', plugins = [], variant = '' } = {}) {
+  const key = variant + '|' + extra;
+  if (cache.has(key)) return cache.get(key);
   const dir = await mkdtemp(join(tmpdir(), 'croton-harness-'));
   try {
     const built = await build({ stdin: { contents: `
@@ -72,8 +75,9 @@ export async function buildRealScene() {
       export { __presentation as photoPresentation } from './src/photo.js';
       export { __isPlant as foliageIsPlant } from './src/foliage_bake.js';
       export { __wetMaterial as puddlesWetMaterial, __indoors as puddlesIndoors } from './src/puddles.js';
-      export { __glowing as switchGlowing } from './src/furniture/light_switch.js';`, resolveDir: WEB },
-      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', sourcemap: false, plugins: [internals] });
+      export { __glowing as switchGlowing } from './src/furniture/light_switch.js';
+      ${extra}`, resolveDir: WEB },
+      bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', sourcemap: false, plugins: [internals, ...plugins] });
     const file = join(dir, 'harness-bundle.mjs'); await writeFile(file, built.outputFiles[0].contents);
     const deep = installShims();
     const lib = await import(pathToFileURL(file));
@@ -95,8 +99,9 @@ export async function buildRealScene() {
     const batch = lib.batchStatic([houseRoot, layout.root], { skip: doors.map(d => d.group), anchors: layout.interactive, animated: layout.animated });
     lib.roles.classifyLighting(scene);
     scene.updateMatrixWorld(true);
-    cached = { ...lib, scene, houseRoot, garden, layout, lighting, house, points, doors, batch, switches: lighting.lightSwitches, fixtures: lighting.fixtures };
-    return cached;
+    const world = { ...lib, scene, houseRoot, garden, layout, lighting, house, points, doors, batch, switches: lighting.lightSwitches, fixtures: lighting.fixtures };
+    cache.set(key, world);
+    return world;
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 

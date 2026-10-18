@@ -65,29 +65,26 @@ function split(src) {
 const OLD_DEFS = [/^vec3 probeIrradiance\(/, /^float foliageScale\(vec3 p\)/];
 const NEW_DEFS = [/^struct BakedProbe\{/, /^BakedProbe probeFetch\(/, /^vec3 probeEval\(/, /^vec3 probeSidePoint\(/, /^float foliageScale\(BakedProbe s\)/];
 
-export function canonical(text, isNew) {
+// Both texts go through every rewrite (each is the identity on text that has nothing to rewrite).
+export function canonical(text) {
   let t = text.replace(/\/\/[^\n]*/g, '');
-  if (!isNew) {
-    t = t.replace(/\bv(Probe|Wet|Refl|Contact)World\b/g, 'vBakedWorld').replace(/\b(probe|wet|refl|contact)Position\b/g, 'bakedPosition');
-    t = rewriteCalls(t, 'probeIrradiance', a => /^vec3 /.test(a[0]) ? null : a.length === 3 ? `probeEval( probeFetch( probeSidePoint( ${a[0]}, ${a[1]}, ${a[2]} ) ), ${a[1]} )` : `probeEval( probeFetch( ${a[0]} ), ${a[1]} )`);
-    t = rewriteCalls(t, 'foliageScale', a => /^vec3 /.test(a[0]) ? null : `foliageScale( probeFetch( ${a[0]} ) )`);
-  } else {
-    const m = /BakedProbe bakedProbe = ([^;]*);/.exec(t);
-    // E is a call (a primary expression): substituted without parentheses
-    if (m) { t = t.replace(m[0], ''); t = t.replace(/\bbakedProbe\b/g, m[1]); }
-  }
+  t = t.replace(/\bv(Probe|Wet|Refl|Contact)World\b/g, 'vBakedWorld').replace(/\b(probe|wet|refl|contact)Position\b/g, 'bakedPosition');
+  t = rewriteCalls(t, 'probeIrradiance', a => /^vec3 /.test(a[0]) ? null : a.length === 3 ? `probeEval( probeFetch( probeSidePoint( ${a[0]}, ${a[1]}, ${a[2]} ) ), ${a[1]} )` : `probeEval( probeFetch( ${a[0]} ), ${a[1]} )`);
+  t = rewriteCalls(t, 'foliageScale', a => /^(vec3|BakedProbe) /.test(a[0]) || /^probeFetch\(|^bakedProbe$/.test(a[0]) ? null : `foliageScale( probeFetch( ${a[0]} ) )`);
+  // E is a call (a primary expression): substituted without parentheses
+  const m = /BakedProbe bakedProbe = ([^;]*);/.exec(t);
+  if (m) { t = t.replace(m[0], ''); t = t.replace(/\bbakedProbe\b/g, m[1]); }
   // nW in a reflection block is its initialiser
   t = t.replace(/\{\s*vec3 nW = (inverseTransformDirection\( geometry(?:Clearcoat)?Normal, viewMatrix \)),([^}]*)\}/g, (all, e, body) => `{ vec3 nW = ${e},${body.replace(/\bnW\b/g, e)}}`);
   // the same value assigned to the same varying again: keep the first assignment block
   const block = /vec4 bakedPosition = vec4\( transformed, 1\.0 \);\s*#ifdef USE_BATCHING\s*bakedPosition = batchingMatrix \* bakedPosition;\s*#endif\s*#ifdef USE_INSTANCING\s*bakedPosition = instanceMatrix \* bakedPosition;\s*#endif\s*vBakedWorld = \( modelMatrix \* bakedPosition \)\.xyz;/g;
   let seen = false; t = t.replace(block, b => { if (seen) return ''; seen = true; return b; });
   const { items, main } = split(t);
-  const defs = isNew ? NEW_DEFS : OLD_DEFS;
-  return { items: new Set(items.map(ws).filter(s => !defs.some(d => d.test(s)))), main: ws(main) };
+  return { items: new Set(items.map(ws).filter(s => ![...OLD_DEFS, ...NEW_DEFS].some(d => d.test(s)))), main: ws(main) };
 }
 
 export function equivalent(a, b) {
-  const x = canonical(a, false), y = canonical(b, true);
+  const x = canonical(a), y = canonical(b);
   for (const i of x.items) if (!y.items.has(i)) return `only in the old text: ${i.slice(0, 200)}`;
   for (const i of y.items) if (!x.items.has(i)) return `only in the new text: ${i.slice(0, 200)}`;
   if (x.main !== y.main) {

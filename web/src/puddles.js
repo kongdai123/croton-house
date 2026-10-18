@@ -14,7 +14,8 @@ export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHei
 // The first optional feature left out when the material would exceed the GPU's fragment texture units: the baked hook
 // decides (noPlanarPuddle), and this checks again with the final shader (sampler_budget.js).
 export function patchPuddleReflection(sh, uniforms, renderer = null, material = null) {
-  if (!sh.fragmentShader.includes('float wetPuddle =') || sh.noPlanarPuddle) return false;
+  // a composed baked shader decides its planar puddle itself (its sampler plan)
+  if (sh.composed || !sh.fragmentShader.includes('float wetPuddle =') || sh.noPlanarPuddle) return false;
   if (renderer) {
     const n = fragmentSamplers(sh) + 1, limit = samplerLimit(renderer, material);
     if (n > limit) { warnDropped(material, n, limit, ['planar puddle']); return false; }
@@ -36,6 +37,11 @@ export function patchPuddleReflection(sh, uniforms, renderer = null, material = 
       }`);
   return true;
 }
+
+// The planar reflection's uniforms: one set (one reflection render per page), bound by every shader that shows it (the
+// composed baked shader, shaders/compose.js), filled in by createPuddles.
+export const PUDDLE_UNIFORMS = { uPuddleTex: { value: null }, uPuddleMatrix: { value: new THREE.Matrix4() }, uPuddleValid: { value: 0 }, uPuddleTime: { value: 0 },
+  uPuddleY: { value: PUDDLE_PARAMS.ground }, uPuddleEdge: { value: PUDDLE_PARAMS.edge }, uPuddleWind: { value: PUDDLE_PARAMS.wind } };
 
 // CPU copy of lightmap.js's mask, used only to gate the render from actual puddle samples in ground triangles.
 const fract = x => x - Math.floor(x), mix = (a, b, t) => a + (b - a) * t;
@@ -80,7 +86,9 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   flat.matrixWorldAutoUpdate = false; camera.userData.hqReflection = true; camera.userData.puddleReflection = true;
   const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true, samples: 0 });
   rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
-  const uniforms = { uPuddleTex: { value: rt.texture }, uPuddleMatrix: { value: new THREE.Matrix4() }, uPuddleValid: { value: 0 }, uPuddleTime: { value: 0 }, uPuddleY: { value: P.ground }, uPuddleEdge: { value: P.edge }, uPuddleWind: { value: P.wind } };
+  const uniforms = PUDDLE_UNIFORMS;
+  uniforms.uPuddleMatrix.value.identity(); uniforms.uPuddleTex.value = rt.texture; uniforms.uPuddleValid.value = 0; uniforms.uPuddleTime.value = 0;
+  uniforms.uPuddleY.value = P.ground; uniforms.uPuddleEdge.value = P.edge; uniforms.uPuddleWind.value = P.wind;
   const sources = [], lights = [], samples = [], materials = new Map(), patches = [], candidates = [];
   // Materials that can show a puddle: on a flat, up-facing triangle at a puddle plane's height outside the house (the
   // wet mask is zero elsewhere). Only these take the planar reflection: never indoor floors or furniture, whose

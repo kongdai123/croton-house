@@ -36,7 +36,7 @@ for (const [k, c] of Object.entries(fresh.classes)) {
   const g = golden.classes[k];
   if (!g) { lines.push(`added   ${k}`); continue; }
   for (const f of ['vertex', 'fragment']) if (g[f] !== c[f]) lines.push(`changed ${k} ${f}: ${firstDiff(goldenTexts[g[f]], fresh.texts[c[f]])}`);
-  for (const f of ['resolved', 'samplers', 'materials', 'program', 'missing', 'unstableKey', 'usedBeforeDeclared']) if (JSON.stringify(canon(g[f] ?? null)) !== JSON.stringify(canon(c[f] ?? null)) && !(f === 'resolved' && (g.vertex !== c.vertex || g.fragment !== c.fragment))) lines.push(`changed ${k} ${f}: ${JSON.stringify(g[f])} -> ${JSON.stringify(c[f])}`);
+  for (const f of ['resolved', 'samplers', 'materials', 'program', 'missing', 'unstableKey', 'usedBeforeDeclared', 'planMiss']) if (JSON.stringify(canon(g[f] ?? null)) !== JSON.stringify(canon(c[f] ?? null)) && !(f === 'resolved' && (g.vertex !== c.vertex || g.fragment !== c.fragment))) lines.push(`changed ${k} ${f}: ${JSON.stringify(g[f])} -> ${JSON.stringify(c[f])}`);
 }
 if (JSON.stringify(canon(golden.summary)) !== JSON.stringify(canon(fresh.summary))) lines.push(`summary: ${JSON.stringify(golden.summary)} -> ${JSON.stringify(fresh.summary)}`);
 // the invariants, independent of the golden: every chunk resolves, one key never stands for two texts
@@ -44,6 +44,7 @@ for (const [k, c] of Object.entries(fresh.classes)) {
   if (c.missing) lines.push(`unresolved includes in ${k}: ${c.missing.join(', ')}`);
   if (c.unstableKey) lines.push(`one cache key, two shader texts: ${k}`);
   if (c.usedBeforeDeclared) lines.push(`used before declared in ${k}: ${c.usedBeforeDeclared.join(', ')}`);
+  if (c.planMiss) lines.push(`sampler plan ${c.planMiss[0]} but the shader uses ${c.planMiss[1]}: ${k}`);
 }
 for (const l of lines.slice(0, LIMIT)) console.log('  ' + l);
 if (lines.length > LIMIT) console.log(`  ... ${lines.length - LIMIT} more (GOLDEN_LINES=${lines.length})`);

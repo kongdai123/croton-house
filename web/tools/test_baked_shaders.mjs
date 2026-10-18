@@ -49,7 +49,8 @@ try {
     const m = new T.MeshStandardMaterial(); let deformation = 0;
     m.bakedHooks = { compile(s) { deformation++; s.vertexShader = '// deformation\n' + s.vertexShader; }, key: 'fur' };
     m.onBeforeCompile = () => { throw new Error('legacy GI ran'); };
-    probeLit(m, { uniforms: {}, wet: 0 }, pcss); const f = shader(); m.onBeforeCompile(f, renderer); assert.equal(deformation, 1); assert.ok(f.vertexShader.startsWith('// deformation\n') && f.vertexShader.includes('varying vec3 vBakedWorld;\nvoid main() {'));
+    // (installing runs the hook once on a scratch copy of the template: the samplers it adds count in the plan)
+    probeLit(m, { uniforms: {}, wet: 0 }, pcss); deformation = 0; const f = shader(); m.onBeforeCompile(f, renderer); assert.equal(deformation, 1); assert.ok(f.vertexShader.startsWith('// deformation\n') && f.vertexShader.includes('varying vec3 vBakedWorld;\nvoid main() {'));
     assert.deepEqual(warnings, []);
     // Missing or duplicated replacements leave both strings and uniforms untouched, warn once per patch.
     const bad = shader(), original = structuredClone(bad);

@@ -114,6 +114,9 @@ export async function captureShaders({ variants = VARIANTS } = {}) {
         c.materials++; c.samplers = Math.max(c.samplers, samplers);
         if (c.vertex !== vh || c.fragment !== fh) (c.variants ??= []).includes(fh) || c.variants.push(fh);   // one class, several texts (own hooks)
         if (missing.size) c.missing = [...missing].sort();
+        // the sampler plan (counted from the flags before generating) must never count fewer than the generated text uses
+        // (more is conservative: the puddle reflection's diffuse copies lose their environment map)
+        if (sh.composed && sh.samplerCount < samplers) c.planMiss = [sh.samplerCount, samplers];
         const [rv, rf] = resolved.split('\n//--\n');
         const early = usedBeforeDeclared(rf, stockNames(T, 'fragment')).concat(usedBeforeDeclared(rv, stockNames(T, 'vertex')));
         if (early.length) c.usedBeforeDeclared = early.sort();

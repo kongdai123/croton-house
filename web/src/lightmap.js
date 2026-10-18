@@ -18,7 +18,7 @@ import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CONTACT, CONTACT_SHADER, contactPatch } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
-import { createPuddles } from './puddles.js';
+import { createPuddles, PUDDLE_UNIFORMS } from './puddles.js';
 import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderReplace as rep, shaderPatch, shaderKey, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
@@ -34,7 +34,7 @@ import { PCSS_TAPS, PCSS_GLSL, PCSS_LOOKUP, PCSS_CALL } from './shaders/pcss.gls
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
 import { reflGLSL, CLEARCOAT_IBL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
-import { installBaked, fitComposed } from './shaders/baked_material.js';
+import { installBaked } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -702,7 +702,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
           if (!L.emits) m.emissiveIntensity = 0;
           // an unswitched lamp follows the slot's lamp level as its lightmapped copies do (switched lamps: their switch)
           else if (L.emits.kind === 'lamp' && !L.emits.switched) emissionCopies.set(m, { record: L, source: m, base: m.emissiveIntensity });
-          probeLit(m, volume, pcss, sided.has(m)); probeLitCount++;
+          probeLit(m, volume, pcss, sided.has(m), renderer); probeLitCount++;
         }
         if (envTarget) setEnv(m);
       }
@@ -1153,7 +1153,7 @@ function buildProbeVolume(P, groups = null, walls = []) {
   return { fill, uniforms, near, wts };
 }
 const toHalf = THREE.DataUtils.toHalfFloat;
-function probeLit(material, volume, pcss, sided = false) {
+function probeLit(material, volume, pcss, sided = false, renderer = null) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
   const own = { compile: material.bakedHooks?.compile ?? material.onBeforeCompile, key: material.bakedHooks?.key ?? shaderKey(material) };
@@ -1161,8 +1161,9 @@ function probeLit(material, volume, pcss, sided = false) {
   // the material's manifest record (lighting_roles.js): leaf cards, the plant treatment, wet ground, sheer cloth, mirrors;
   // the slot runtime joins the volume after registration, so the flags are read when compiled
   const L = lightingOf(material), refl = volume.refl, fol = material.foliageBake;
-  const features = () => bakedFeatures(L, { probeSide: sided ? 'face' : 'none' }, { path: 'probe', multi: !!volume.slots, wet: volume.multi ? 1 : volume.wet,
-    refl, contact: CONTACT ? CONTACT_SHADER : null, foliageBake: !!fol });
+  // (puddles.js marks the ground materials that show the planar puddle reflection)
+  const features = self => bakedFeatures(L, { probeSide: sided ? 'face' : 'none' }, { path: 'probe', multi: !!volume.slots, wet: volume.multi ? 1 : volume.wet,
+    refl, contact: CONTACT ? CONTACT_SHADER : null, foliageBake: !!fol, planarPuddle: !!self.userData.planarPuddle });
   const bind = (s, f) => {
     Object.assign(s.uniforms, volume.uniforms, pcss.uniforms);
     if (f.wet) s.uniforms.uWet = volume.slots ? volume.slots.wet : { value: volume.wet };
@@ -1170,8 +1171,9 @@ function probeLit(material, volume, pcss, sided = false) {
     if (f.contactSun || f.contactAO) { Object.assign(s.uniforms, CONTACT_SHADER.uniforms); s.uniforms.uContactCaster = { value: 0 }; }
     if (f.sheer) s.uniforms.uSheer = material.sheerUniform ??= { value: new THREE.Vector2(L.sheer.reflect, L.sheer.transmit) };
     if (f.foliageBake) Object.assign(s.uniforms, FOLIAGE_UNIFORMS, f.multi ? volume.slots.uniforms : {});
+    if (f.planarPuddle) Object.assign(s.uniforms, PUDDLE_UNIFORMS);
   };
-  installBaked(material, { name: 'probe', tag: 'probe-v4', own, features, bind, fit: fitComposed });
+  installBaked(material, { name: 'probe', tag: 'probe-v4', own, features, bind, renderer });
   material.needsUpdate = true;
 }
 

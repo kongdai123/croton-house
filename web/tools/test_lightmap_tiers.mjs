@@ -151,13 +151,15 @@ try {
   assert.equal((probeShader.fragmentShader.match(/uniform highp sampler3D/g) ?? []).length, 2);   // packed R/G/B: current + next
   // sampler budget (Apple GPUs: 16 per fragment shader): too few units leave out optional features in order (here, with
   // contact.js stubbed, the slot crossfade of the probe volume), with one warning naming the material
-  assert.equal(probeShader.samplerCount, 4);   // uSunDepth, uReflTex (both slots), uProbeSH + uProbeNextSH
-  const tight = { ...renderer, capabilities: { ...renderer.capabilities, maxTextures: 3 } }, warnings = [], warn = console.warn;
+  // the plan's count: uSunDepth, uReflTex (both slots), uProbeSH + uProbeNextSH, and three's dfgLUT, environment and
+  // the sun's shadow map (every baked program has them)
+  assert.equal(probeShader.samplerCount, 7);
+  const tight = { ...renderer, capabilities: { ...renderer.capabilities, maxTextures: 6 } }, warnings = [], warn = console.warn;
   console.warn = (...a) => warnings.push(a.join(' '));
   const fitted = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
   try { late4.material.onBeforeCompile(fitted, tight); } finally { console.warn = warn; }
   assert.ok(!fitted.fragmentShader.includes('uProbeNextSH') && fitted.fragmentShader.includes('probeEval( bakedProbe,'));
-  assert.equal(fitted.samplerCount, 3); assert.equal(warnings.length, 1); assert.match(warnings[0], /4 fragment samplers > 3 texture units; dropped slot crossfade$/);
+  assert.equal(fitted.samplerCount, 6); assert.equal(warnings.length, 1); assert.match(warnings[0], /7 fragment samplers > 6 texture units; dropped slot crossfade$/);
   assert.equal(multiShader.uniforms.uSlotBlend, probeShader.uniforms.uProbeBlend);
   const pump = async promise => { let done = false; promise.finally(() => { done = true; }); for (let i = 0; i < 40 && !done; i++) { await new Promise(setImmediate); baked4.updateMovables(0.25); } assert.ok(done, 'transition must complete'); await promise; };
   const dawnAtlas = baked4.target.texture, dawnBackground = scene4.background;

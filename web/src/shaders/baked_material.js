@@ -1,37 +1,44 @@
 // One composed shader per baked material (compose.js): the material's own hook runs first (leaf, fur, wind, the SSR
-// tag: edits of three's template that keep its includes), then the composition of the material's feature flags. One
-// onBeforeCompile and one cache key per material, the key derived from the flags.
+// tag: edits of three's template that keep its includes), then the composition of the material's planned flags. One
+// onBeforeCompile and one cache key per material, the key derived from the planned flags.
 import { shaderPatch } from './patch.js';
 import { compose, applyComposed } from './compose.js';
 import { flagsKey } from './features.js';
-import { fragmentSamplers, samplerLimit, warnDropped } from '../sampler_budget.js';
+import { samplerPlan, threeSamplers } from './sampler_plan.js';
+import { fragmentSamplers, warnDropped } from '../sampler_budget.js';
+import { ShaderLib } from 'three';
 
-// spec: { name, tag (key part), own: { compile, key } (the material's own hook and key), features(material) -> flags,
-//         bind(shader, flags, material) (the uniforms), fit(shader, renderer, material, flags) -> { flags, ...extra } }
-export function installBaked(material, { name, tag, own, features, bind, fit }) {
-  material.onBeforeCompile = function (sh, renderer) {
-    const self = this ?? material;
-    shaderPatch(sh, `${name} ${own.key}`, s => {
-      own.compile?.call(this, s, renderer);
-      const { flags, ...extra } = fit(s, renderer, self, features(self));
-      applyComposed(s, compose(flags));
-      bind(s, flags, self);
-      Object.assign(s, extra);
-    });
-  };
-  material.customProgramCacheKey = function () { const self = this ?? material; return `${own.key}|${tag}:${flagsKey(features(self))}:${self.userData.samplerCut ?? 0}`; };
+// The sampler plan of a material: its flags within the renderer's fragment texture units, less the cut the post-link
+// audit adds to a material that failed to link anyway (lightmap.js audit).
+export function planOf(material, flags, renderer, ownSamplers = 0) {
+  const units = renderer?.capabilities?.maxTextures ?? 16;
+  return samplerPlan({ ...flags, threeSamplers: threeSamplers(material) + ownSamplers }, units - (material.userData.samplerCut ?? 0));
+}
+// The samplers a material's own hook adds to three's template (the turf's macro noise, the dog's strand texture): its
+// edit of the stock text, counted once (sampler_budget.js counts declared-and-referenced custom samplers).
+export function ownSamplers(material, own) {
+  if (!own.compile) return 0;
+  const lib = material.isMeshPhysicalMaterial ? ShaderLib.physical : ShaderLib.standard;
+  const sh = { uniforms: {}, vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader };
+  try { own.compile.call(material, sh, null); } catch { return 0; }
+  return fragmentSamplers(sh);
 }
 
-// The fit after composing (count the composed text, leave optional features out in order, compose again): the planar
-// puddle (added by puddles.js's wrapper), the contact sun, the slot crossfade. Warns once per material and outcome.
-export function fitComposed(s, renderer, material, f) {
-  const limit = samplerLimit(renderer, material);
-  const count = flags => fragmentSamplers(applyComposed({ ...s }, compose(flags)));
-  let flags = f, planar = material.userData.planarPuddle && f.wet ? 1 : 0, n = count(flags) + planar;
-  const start = n, dropped = [];
-  if (n > limit && planar) { dropped.push('planar puddle'); planar = 0; n--; }
-  if (n > limit && flags.contactSun) { flags = { ...flags, contactSun: false }; n = count(flags) + planar; dropped.push('contact sun'); }
-  if (n > limit && flags.slotFade) { flags = { ...flags, slotFade: false }; n = count(flags) + planar; dropped.push('slot crossfade'); }
-  if (start > limit) warnDropped(material, start, limit, dropped, n > limit);
-  return { flags, samplerCount: n, ...(dropped.includes('planar puddle') ? { noPlanarPuddle: true } : {}) };
+// spec: { name, tag (key part), own: { compile, key } (the material's own hook and key), features(material) -> flags,
+//         bind(shader, flags, material) (the uniforms), renderer (for the key: the units three compiles for) }
+export function installBaked(material, { name, tag, own, features, bind, renderer = null }) {
+  const extra = ownSamplers(material, own);
+  material.onBeforeCompile = function (sh, r) {
+    const self = this ?? material;
+    shaderPatch(sh, `${name} ${own.key}`, s => {
+      own.compile?.call(this, s, r);
+      const plan = planOf(self, features(self), r ?? renderer, extra);
+      if (plan.start > plan.limit) warnDropped(self, plan.start, plan.limit, plan.dropped, plan.over);
+      const c = compose(plan.flags);
+      applyComposed(s, c);
+      bind(s, plan.flags, self);
+      s.samplerCount = plan.count; s.composed = c.key;
+    });
+  };
+  material.customProgramCacheKey = function () { const self = this ?? material; return `${own.key}|${tag}:${flagsKey(planOf(self, features(self), renderer, extra).flags)}`; };
 }

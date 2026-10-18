@@ -27,7 +27,9 @@ function installInPage() {
 
 async function enterHouse(ctx, page = ctx.page) {
   await ctx.untilOn(page, () => !document.getElementById('enter').disabled, null, 120000, 'the Enter button to enable');
-  await page.click('#enter');
+  // under SwiftShader entering compiles the house's programs on the main thread: the click is acknowledged only after
+  // that (minutes on a 4-core machine); the test's own time limit bounds the wait
+  await page.click('#enter', { timeout: 0 });
   await ctx.untilOn(page, () => document.getElementById('title').classList.contains('hidden'), null, 10000, 'the landing page to close');
   // the first-steps card opens on entering; Escape only closes it
   if (await page.evaluate(() => !document.getElementById('firststeps').classList.contains('hidden'))) {
@@ -42,8 +44,7 @@ export const TESTS = [
   {
     name: 'load', timeoutS: 420,
     async run(ctx) {
-      const { page } = ctx;
-      await ctx.openMain();
+      const page = await ctx.openMain();   // ctx.page is null until openMain sets it
       // landing
       const landing = await page.evaluate(() => ({ title: !document.getElementById('title').classList.contains('hidden'), w: document.getElementById('gl').width, h: document.getElementById('gl').height, ready: window.__ready === true, enter: !!document.getElementById('enter') }));
       ctx.expect(landing.title && landing.enter, `the landing page is not showing: ${fmt(landing)}`);
@@ -90,7 +91,7 @@ export const TESTS = [
         const p0 = await page.evaluate(() => { const p = window.__app.player.pos; return { x: p.x, z: p.z }; });
         await page.keyboard.down(k);
         try {
-          await page.waitForFunction(p0 => Math.hypot(window.__app.player.pos.x - p0.x, window.__app.player.pos.z - p0.z) > 0.3, p0, { timeout: 12000 });
+          await page.waitForFunction(p0 => Math.hypot(window.__app.player.pos.x - p0.x, window.__app.player.pos.z - p0.z) > 0.3, p0, { timeout: 12000 * ctx.session.slow });
         } catch { /* blocked this way, try the next key */ }
         await page.keyboard.up(k);
         moved = await page.evaluate(p0 => Math.hypot(window.__app.player.pos.x - p0.x, window.__app.player.pos.z - p0.z), p0);
@@ -114,8 +115,8 @@ export const TESTS = [
       });
       ctx.expect(plates.length > 0, 'no wall-switch-* objects in the scene');
       ctx.log(`${plates.length} wall switches`);
-      const report = [];
-      for (let i = 0; i < plates.length; i++) {
+      const report = [], failures = [];
+      for (let i = 0; i < plates.length; i++) try {
         const info = await page.evaluate(i => {
           const a = window.__app, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
           const plate = plates[i], p = plate.getWorldPosition(new a.THREE.Vector3()), lg = a.baked.lampGroups;
@@ -124,19 +125,31 @@ export const TESTS = [
           return { name: plate.name, x: p.x, y: p.y, z: p.z, ry: plate.rotation.y, matched: !!rec?.group, members, on: plate.userData.lightSwitch.on };
         }, i);
         if (!info.matched) { report.push(`${info.name}: matches no baked lamp group (skipped)`); continue; }
-        const stance = switchStance(info);
+        // Stand where a visitor can: 0.7 m in front of the plate first (switchStance), else further back or to the side
+        // (the click reaches 4 m; a bed or a counter may stand in front of a plate), never where the walk's colliders would push the player away; aim at the plate's centre.
+        const first = switchStance(info);
         for (const target of [!info.on, info.on]) {   // press it, then press it back
-          const r = await page.evaluate(({ i, stance }) => {
-            const a = window.__app, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
-            const plate = plates[i];
-            window.__smoke.place(stance.x, stance.z, stance.yaw, stance.pitch);
-            a.interact.pointer.set(0, 0);
-            const hit = a.interact.pick(), root = hit?.root ?? null;
-            const hitName = root ? (root.name || root.userData.id || '?') : hit?.door ? 'door ' + hit.door.id : hit ? 'other' : 'nothing';
-            a.interact.press(); a.interact.release();
-            return { hitName, pickedPlate: root === plate };
-          }, { i, stance });
-          ctx.expect(r.pickedPlate, `${info.name}: aiming at the plate from ${fmt(stance)} picks ${r.hitName}, not the plate`);
+          const r = await page.evaluate(({ i, first }) => {
+            const a = window.__app, T = a.THREE, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
+            const plate = plates[i], c = plate.getWorldPosition(new T.Vector3());
+            const ry = new T.Euler().setFromQuaternion(plate.getWorldQuaternion(new T.Quaternion()), 'YXZ').y;
+            const n = { x: Math.sin(ry), z: Math.cos(ry) }, l = { x: Math.cos(ry), z: -Math.sin(ry) }, tried = [];
+            const spots = [{ x: first.x, z: first.z }];
+            for (const d of [0.7, 1.0, 1.4, 1.9, 2.5, 3.2]) for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.5, -1.5]) spots.push({ x: c.x + n.x * d + l.x * off, z: c.z + n.z * d + l.z * off });
+            for (const s of spots) {
+              window.__smoke.place(s.x, s.z, 0, 0);
+              const p = a.player.pos;
+              if (Math.hypot(p.x - s.x, p.z - s.z) > 0.02) { tried.push(`(${s.x.toFixed(2)}, ${s.z.toFixed(2)}) blocked`); continue; }
+              const e = a.camera.getWorldPosition(new T.Vector3()), dx = c.x - e.x, dz = c.z - e.z;
+              window.__smoke.place(s.x, s.z, Math.atan2(-dx, -dz), Math.atan2(c.y - e.y, Math.hypot(dx, dz)));
+              a.interact.pointer.set(0, 0);
+              const hit = a.interact.pick(), root = hit?.root ?? null;
+              if (root === plate) { a.interact.press(); a.interact.release(); return { pickedPlate: true, stance: s, tried }; }
+              tried.push(`(${s.x.toFixed(2)}, ${s.z.toFixed(2)}) picks ${root ? (root.name || root.userData.id || '?') : hit?.door ? 'door ' + hit.door.id : hit ? 'other' : 'nothing'}`);
+            }
+            return { pickedPlate: false, tried };
+          }, { i, first });
+          ctx.expect(r.pickedPlate, `${info.name} at (${info.x.toFixed(2)}, ${info.z.toFixed(2)}): no standing spot within 3.2 m (1.5 m to either side) picks the plate: ${r.tried.filter((t, k, all) => all.indexOf(t) === k).slice(0, 10).join('; ')}`);
           try { await ctx.until(() => window.__smoke.settled(), null, 30000, 'the switch fade to finish'); } catch (e) { throw new Error(`${info.name}: ${e.message}`); }
           const after = await page.evaluate(({ i, target }) => {
             const a = window.__app, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
@@ -149,8 +162,10 @@ export const TESTS = [
           ctx.expect(Math.abs(after.groupLevel - after.gain * +target) < 0.01, `${info.name}: the group's baked level is ${after.groupLevel}, expected ${after.gain * +target}`);
         }
         report.push(`${info.name}: ${info.members} member(s)`);
-      }
+      } catch (e) { failures.push(e.message); await page.evaluate(() => { const a = window.__app; a.baked.lampGroups.reset(a.baked.slotName); }); }
       ctx.log(report.join('; '));
+      // every plate is tried, so one bad plate does not hide the others
+      ctx.expect(failures.length === 0, `${failures.length} of ${plates.length} switches failed:\n  ${failures.join('\n  ')}`);
       await page.evaluate(() => { const a = window.__app; a.baked.lampGroups.reset(a.baked.slotName); window.__smoke.restore(); });
     },
   },
@@ -276,7 +291,10 @@ export const TESTS = [
       ctx.expect(!isBlank(sampleStats(pre.px), bgMean), `control: the canvas is already blank before resizing (${fmt(sampleStats(pre.px))}, background ${bgMean.toFixed(1)}); the scene may be too dark for this check`);
       const sizes = [[1100, 700], [820, 620], [960, 600]];
       for (const [w, h] of sizes) {
-        await sleep(800);   // the app applies at most one fit per 500 ms; wait it out so this resize is applied inside the observer callback
+        // the app applies at most one fit per 500 ms, and after an immediate fit it also schedules a trailing one 500 ms
+        // later (main.js scheduleFit: window 'resize' and the ResizeObserver both call it), which restarts the 500 ms: wait
+        // out both so this resize is applied inside the observer callback
+        await sleep(1300);
         const n = await page.evaluate(() => window.__smoke.samples.length);
         await page.setViewportSize({ width: w, height: h });
         await ctx.until(n => window.__smoke.samples.length > n, n, 15000, `a ResizeObserver callback for ${w}x${h}`);

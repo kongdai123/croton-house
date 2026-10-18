@@ -2,6 +2,7 @@
 //   node tools/smoke/run.mjs [--headed] [--url=http://host:port] [--out=DIR] [--only=load,tour] [--list] [--gpu] [--timeout=SECONDS] [--no-build]
 // Without --url it builds dist/ if missing and serves web/ itself on an ephemeral port. Mobile tier (quarter atlases), music off.
 // Default is software WebGL2 (SwiftShader), as on a CI runner; --gpu uses whatever GPU the machine has.
+// --timeout raises every test's limit (a test's own limit is a floor): software GL on a small machine needs it.
 // Failures leave <out>/<test>.png and <test>.txt (message and the page's recent console).
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -32,7 +33,7 @@ let browser = null, session = null;
 const withTimeout = (p, s, name) => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`test '${name}' timed out after ${s}s`)), s * 1000); })]).finally(() => clearTimeout(t)); };
 try {
   browser = await launch({ headed: args.headed, gpu: args.gpu });
-  session = new Session({ browser, base });
+  session = new Session({ browser, base, slow: args.gpu ? 1 : 10 });   // SwiftShader: every wait 10x
   const ctx = makeContext(session, m => console.log(m));
   // the tests share the page that 'load' opens, so a selection of anything but 'legacy' brings 'load' along
   const needLoad = args.only.some(n => n !== 'legacy');
@@ -45,7 +46,7 @@ try {
     else if (!ctx.page && test.name !== 'load' && test.name !== 'legacy') error = new Error("the page is not loaded (run 'load' first)");
     else {
       try {
-        await withTimeout(test.run(ctx), test.timeoutS ?? args.timeoutS, test.name);
+        await withTimeout(test.run(ctx), Math.max(test.timeoutS ?? 0, args.timeoutS), test.name);
         const bad = session.since(c0);
         if (bad.length) throw new Error(`${bad.length} error(s) while the test ran:\n  ${bad.slice(0, 6).join('\n  ')}`);
       } catch (e) { error = e; }

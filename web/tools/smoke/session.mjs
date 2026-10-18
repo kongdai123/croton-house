@@ -2,17 +2,22 @@
 // tests their context (ctx). Playwright is imported lazily so the helpers and the server stay usable without it.
 import { classifyConsole } from './helpers.mjs';
 
-// Software WebGL2 (SwiftShader) is what a GitHub runner has; --gpu leaves the choice to the machine.
+// Software WebGL2 (SwiftShader) is what a GitHub runner has; --gpu leaves the choice to the machine, except on Linux,
+// where headless Chromium's default ANGLE backend (GL, no display) loses or crashes the GPU process under the house's
+// load (seen on the cluster's NVIDIA nodes): Vulkan there, as bake/validate/shoot.mjs uses.
 export const SOFTWARE_GL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+export const LINUX_GPU = ['--use-angle=vulkan', '--enable-features=Vulkan', '--disable-vulkan-surface', '--enable-gpu-rasterization'];
 
 export async function launch({ headed = false, gpu = false } = {}) {
   const { chromium } = await import('playwright');
-  return chromium.launch({ headless: !headed, args: [...(gpu ? ['--ignore-gpu-blocklist'] : SOFTWARE_GL), '--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
+  const gpuArgs = ['--ignore-gpu-blocklist', ...(process.platform === 'linux' && !headed ? LINUX_GPU : [])];
+  return chromium.launch({ headless: !headed, args: [...(gpu ? gpuArgs : SOFTWARE_GL), '--autoplay-policy=no-user-gesture-required', '--mute-audio'] });
 }
 
 export class Session {
-  constructor({ browser, base, query = 'tier=mobile' }) {
-    this.browser = browser; this.base = base; this.query = query;
+  // slow: a factor on every wait a test asks for (ctx.until): software GL answers input in seconds, not frames
+  constructor({ browser, base, query = 'tier=mobile', slow = 1 }) {
+    this.browser = browser; this.base = base; this.query = query; this.slow = slow;
     this.pages = []; this.contexts = [];
     this.pageErrors = []; this.consoleErrors = []; this.patchWarnings = []; this.recent = [];
   }
@@ -30,6 +35,7 @@ export class Session {
       addEventListener('unhandledrejection', e => console.error('unhandled rejection: ' + (e.reason?.stack || e.reason)));
     });
     const page = await context.newPage();
+    page.setDefaultTimeout(30000 * this.slow);   // clicks and key presses wait for the page's main thread too
     const tag = `[page ${this.pages.length}]`;
     page.on('pageerror', e => { const m = String(e.stack || e.message || e); this.pageErrors.push(m); this.recent.push(`${tag} pageerror ${m}`); });
     page.on('crash', () => { this.pageErrors.push('the page crashed'); });
@@ -42,7 +48,8 @@ export class Session {
     });
     this.pages.push(page); this.contexts.push(context);
     const q = [this.query, extraQuery.replace(/^\?/, '')].filter(Boolean).join('&');
-    await page.goto(`${this.base}/index.html?${q}`, { waitUntil: 'load', timeout: 60000 });
+    // a second page (legacy) loads while the first keeps drawing: under SwiftShader that takes more than a minute
+    await page.goto(`${this.base}/index.html?${q}`, { waitUntil: 'load', timeout: 180000 });
     await page.waitForFunction(() => window.__ready === true, null, { timeout: 300000 });
     return page;
   }
@@ -58,6 +65,7 @@ export function makeContext(session, logLine) {
     async openMain() { ctx.page = await session.newPage(); return ctx.page; },
     openPage: extra => session.newPage(extra),
     async untilOn(page, fn, arg, timeout, what) {
+      timeout *= session.slow;
       try { await page.waitForFunction(fn, arg, { timeout }); } catch (e) { throw new Error(`timed out after ${timeout / 1000}s waiting for ${what}`); }
     },
     until(fn, arg, timeout, what) { return ctx.untilOn(ctx.page, fn, arg, timeout, what); },

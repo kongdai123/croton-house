@@ -68,7 +68,8 @@ try {
   movable(100, -1); movable(0, 2);
   const hidden = new THREE.Group(); hidden.visible = false; contactScene.add(hidden); movable(0, -0.5, hidden);
   const pet = movable(0, -30); movables.pop();
-  const petBlob = new THREE.Group(); petBlob.name = 'cat-blob'; pet.add(petBlob);
+  // a pet's stand-in shadow, declared as cat.js does (lighting manifest: fakeShadow)
+  const petBlob = new THREE.Mesh(new THREE.PlaneGeometry(), new THREE.MeshBasicMaterial()); petBlob.userData.lighting = { role: 'presentation', fakeShadow: true }; pet.add(petBlob);
   const contactLighting = { composer: { insertPass() {}, removePass() {} } };
   const contact = createContact({ scene: contactScene, camera, lighting: contactLighting, movables, pets: { agents: [{ root: pet }] }, human, player });
   assert.equal(petBlob.visible, false);

@@ -12,6 +12,7 @@
 // its slices. Bounds are compared at the rest pose (animate(0)), with a few centimetres of slack for the pose the export
 // caught.
 import * as THREE from 'three';
+import { lightingOf } from './lighting_roles.js';
 
 // Baked shader edits are transactional: a three chunk changing must never leave half a patch installed.
 const warned = new Set(), failures = [];
@@ -46,7 +47,9 @@ export async function loadFoliage(url, track = work => work()) {
   return header;
 }
 
-const isPlant = o => o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && /^plant/.test(o.material?.name || '') && o.geometry?.attributes.position;
+// plant parts whose material takes the per-vertex foliage bake (manifest foliage.bakedPerVertex: the modelled plants, not
+// the garden's instanced leaf cards)
+const isPlant = o => o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && !!lightingOf(o.material)?.foliage?.bakedPerVertex && o.geometry?.attributes.position;
 const box = new THREE.Box3(), v = new THREE.Vector3();
 function bounds(o) {
   box.makeEmpty(); const p = o.geometry.attributes.position;

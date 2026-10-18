@@ -4,7 +4,7 @@ import { materialKey } from './objects.mjs';
 
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
 // mesh fields at their most common value are left out
-const MESH_DEFAULT = { role: 'furniture', motion: 'static', bake: 'lightmap', why: null, probeSide: 'none', weather: null, zone: 'interior', space: null, puddleMirror: true };
+const MESH_DEFAULT = { role: 'furniture', motion: 'static', bake: 'lightmap', why: null, probeSide: 'none', weather: null, zone: 'interior', space: null, puddleMirror: true, fakeShadow: false };
 export function compactMesh(r) {
   const out = {};
   for (const [k, v] of Object.entries(r)) {

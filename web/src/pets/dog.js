@@ -7,6 +7,7 @@
 // 3-D fields over the rest pose. Animation is procedural: a gait with planted feet (2-bone leg IK, stride from speed),
 // idle / sit / lie / jump poses blended per mode, spring-driven ears and hair lag.
 import { THREE } from '../kit.js';
+import { declare } from '../lighting_roles.js';
 
 const SHELLS = 32, CARD_SEG = 5, TAU = Math.PI * 2;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -423,6 +424,7 @@ export function createPet(opts = {}) {
   const blob = blobTexture();
   const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: blob, transparent: true, opacity: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
   shadow.name = 'dog-contact-shadow'; shadow.castShadow = false; shadow.receiveShadow = false; shadow.raycast = () => {}; shadow.renderOrder = 1;
+  declare(shadow, { role: 'presentation', fakeShadow: true });   // a stand-in contact shadow: never traced, hidden under contact AO
   root.add(shadow);
 
   // ---- animation state

@@ -1,5 +1,5 @@
 {
- "meta": {"errors":0,"note":"The lighting manifest (web/src/lighting_roles.js) of the headless scene: material records keyed like objects.json materials, mesh records like its meshes (fields at their default left out: {\"role\":\"furniture\",\"motion\":\"static\",\"bake\":\"lightmap\",\"why\":null,\"probeSide\":\"none\",\"weather\":null,\"zone\":\"interior\",\"space\":null,\"puddleMirror\":true}, sun { cast: true, track: static })."},
+ "meta": {"errors":0,"note":"The lighting manifest (web/src/lighting_roles.js) of the headless scene: material records keyed like objects.json materials, mesh records like its meshes (fields at their default left out: {\"role\":\"furniture\",\"motion\":\"static\",\"bake\":\"lightmap\",\"why\":null,\"probeSide\":\"none\",\"weather\":null,\"zone\":\"interior\",\"space\":null,\"puddleMirror\":true,\"fakeShadow\":false}, sun { cast: true, track: static })."},
  "errors": [],
  "materials": {
   "laminate_floor_02#7609923c": {"alphaCutout":false,"bake":"lightmap","castsSun":true,"clearcoat":null,"contact":true,"emits":null,"foliage":null,"glass":null,"reflection":"probe","sheer":null,"surface":"opaque","twoSided":false,"weather":"auto","wet":"auto","zone":null},

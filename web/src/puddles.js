@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { fragmentSamplers, samplerLimit, warnDropped } from './sampler_budget.js';
 import { isInside } from './plan.js';
+import { lightingOf, meshLighting } from './lighting_roles.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -70,7 +71,8 @@ function isPuddle(x, z) {
   x *= 0.35; z *= 0.35;
   return 0.55 * noise(x, z) + 0.3 * noise(x * 2.1 + 5.2, z * 2.1 + 5.2) + 0.15 * noise(x * 4.3 + 9.1, z * 4.3 + 9.1) > 0.565;
 }
-const wetMaterial = m => m?.isMeshStandardMaterial && !/^garden-/.test(m.name || '') && !(m.alphaTest > 0) && !m.isFogVolumeMaterial;
+// wet: the manifest's (lighting_roles.js): leaf cards and cut-out leaves stay dry
+const wetMaterial = m => m?.isMeshStandardMaterial && !m.isFogVolumeMaterial && lightingOf(m).wet === 'auto';
 const outsideBox = b => !(isInside(b.min.x, -b.min.z) && isInside(b.max.x, -b.max.z) && isInside(b.min.x, -b.max.z) && isInside(b.max.x, -b.min.z));
 // A ground triangle that reaches clearly outside the house: its centroid, or a point 15 cm in from a corner, with a
 // 10 cm margin all round outside the plan. Floors and walls meeting the plan's outline (vertices on it) do not count.
@@ -166,14 +168,15 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
       proxy.shadow = o.shadow; proxy.castShadow = o.castShadow;
       proxy.matrixAutoUpdate = proxy.matrixWorldAutoUpdate = false; flat.add(proxy); lights.push({ source: o, proxy }); return;
     }
-    if (!o.isMesh || o.isSkinnedMesh || o.isReflector || o.userData.batched || o.userData.lightHit || /^garden-turf/.test(o.name) || !o.layers.isEnabled(0)) return;
+    if (!o.isMesh || o.isSkinnedMesh || o.isReflector || o.userData.batched || o.userData.lightHit || !meshLighting(o).puddleMirror || !o.layers.isEnabled(0)) return;
     // Use the existing merged plant LOD even up close: keep whole crowns without hundreds of tiny leaf draws.
     for (let p = o.parent; p && p !== scene; p = p.parent) {
       const frozen = p.children.find(c => c.name === 'frozen' && c.userData.batch);
       if (frozen) { let branch = o; while (branch.parent !== p) branch = branch.parent; if (branch !== frozen) return; }
     }
     const ms = [].concat(o.material);
-    if (ms.some(m => !m || m.isShaderMaterial || m.isFogVolumeMaterial || m.transmission > 0 || m.transparent && m.opacity < 0.6)) return;
+    // see-through surfaces (manifest castsSun false: glass) stay out of the reflection, as shader and fog volumes
+    if (ms.some(m => !m || m.isShaderMaterial || m.isFogVolumeMaterial || !lightingOf(m).castsSun)) return;
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
     if (o.isInstancedMesh && !o.boundingSphere) o.computeBoundingSphere();
     sphere.copy(o.boundingSphere ?? o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
@@ -190,7 +193,7 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     proxy.layers.set(0); flat.add(proxy);
     const e = { source: o, proxy, sphere: sphere.clone(), box: box.clone(), score: 0, triangles: (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3, draws: o.geometry.groups.length || 1,
       // budget order: 0 outside architecture, 1 plants, 2 anything wholly inside the house (seen only through windows)
-      tier: o.isInstancedMesh || ms.some(m => m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '')) ? 1 : indoors(box) ? 2 : 0 };
+      tier: o.isInstancedMesh || ms.some(m => lightingOf(m).foliage) ? 1 : indoors(box) ? 2 : 0 };
     sources.push(e);
   });
   // Wrap all eligible material callbacks once: their existing bake/probe hook supplies wetPuddle and vWetWorld.

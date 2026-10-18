@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { groundY } from './pets/roam.js';
+import { lightingOf, meshLighting } from './lighting_roles.js';
 
 const Q = new URLSearchParams(globalThis.location?.search ?? '');
 export const CONTACT = true; // Compiled once; the pass and its uniforms follow the quality preset.
@@ -168,15 +169,15 @@ export function createContact({ scene, camera, lighting, movables = [], pets = n
   depthScene.matrixWorldAutoUpdate = depthCamera.matrixWorldAutoUpdate = false;
   const hiddenDepth = new THREE.MeshDepthMaterial(); hiddenDepth.visible = false;
   const depthOf = (m, skin) => {
-    if (!m || !m.visible || !m.depthWrite || m.transparent || m.transmission > 0 || m.isShaderMaterial) return null;
-    // Plants never enter this pass: wind shaders would disagree with the depth, and PCSS already handles them.
-    if (m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '')) return null;
+    // The manifest's contact flag (lighting_roles.js) keeps out see-through and shader surfaces, and plants: their wind
+    // shaders would disagree with the depth, and PCSS already handles them.
+    if (!m || !m.visible || !m.depthWrite || !lightingOf(m).contact) return null;
     const key = m.uuid + ':' + skin; if (cache.has(key)) return cache.get(key);
     const d = new THREE.MeshDepthMaterial({ side: m.side, displacementMap: m.displacementMap ?? null,
       displacementScale: m.displacementScale ?? 1, displacementBias: m.displacementBias ?? 0 });
     d.colorWrite = false; cache.set(key, d); return d;
   };
-  for (const a of pets?.agents ?? []) a.root.traverse(o => { if (o.name === 'cat-blob' || o.name === 'dog-contact-shadow') { blobs.push([o, o.visible]); o.visible = false; } });
+  for (const a of pets?.agents ?? []) a.root.traverse(o => { if (o.isMesh && meshLighting(o).fakeShadow) { blobs.push([o, o.visible]); o.visible = false; } });
   for (const p of proxies) {
     p.worldBox = new THREE.Box3(); p.screenBox = new THREE.Box3(); p.onScreen = false;
     p.root.traverse(o => {

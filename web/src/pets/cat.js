@@ -37,6 +37,7 @@
 //   modes                   list of the modes the pet animates (roam.js uses it to detect 'pet' support).
 // Pets never cast sun shadows (the shadow map only refreshes when something moves); each carries its own blob shadow.
 import * as THREE from 'three';
+import { declare } from '../lighting_roles.js';
 
 // ---------------------------------------------------------------- helpers
 const TAU = Math.PI * 2;
@@ -917,6 +918,7 @@ export function createPet(opts = {}) {
   for (const m of [body, eyes]) { m.castShadow = false; m.receiveShadow = true; m.bind(skeleton, new THREE.Matrix4()); m.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.2, -0.08), 0.62); root.add(m); }
   const blobMat = new THREE.MeshBasicMaterial({ map: blobTexture(), color: 0x000000, transparent: true, opacity: 0.42, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), blobMat); blob.name = 'cat-blob'; blob.renderOrder = 2; blob.castShadow = blob.receiveShadow = false; root.add(blob);
+  declare(blob, { role: 'presentation', fakeShadow: true });   // a stand-in contact shadow: never traced, hidden under contact AO
   const rig = new CatRig(bones, opts.seed ?? 7); rig.root = root;
   const uni = fur.userData.uniforms;
   const pet = {

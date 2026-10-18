@@ -1,5 +1,6 @@
 import { IrradianceNode, Material, NodeMaterial } from 'three/webgpu';
 import { texture, uv, uniform, normalWorld, normalViewGeometry, faceDirection, positionWorld, mix, smoothstep } from 'three/tsl';
+import { lightingOf } from '../lighting_roles.js';
 
 // The denominator floor is the existing 8-bit decoder's saturation guard.
 export const decodeLight = (encoded, K) => {
@@ -36,10 +37,11 @@ export function bakedMaterials(renderer, scene, matched, bake, volume, level) {
       material.lightMap = null;
       let indirect = irradiance;
       if (!lightmap) {
-        const garden = /^garden-/.test(source.name);
-        if (garden) material.normalNode = normalViewGeometry; // grass's outward normals
-        indirect = volume.irradiance(garden ? normalWorld.mul(faceDirection) : normalWorld);
-        if (source.alphaTest > 0 || /^(garden-|plant)/.test(source.name)) {
+        // the manifest record (lighting_roles.js), as lightmap.js probeLit reads it
+        const L = lightingOf(source), leafCard = L.twoSided === 'faceDirection';
+        if (leafCard) material.normalNode = normalViewGeometry; // grass's outward normals
+        indirect = volume.irradiance(leafCard ? normalWorld.mul(faceDirection) : normalWorld);
+        if (L.foliage?.groundOcclusion) {
           indirect = indirect.mul(mix(0.45, 1, smoothstep(0, 1.2, positionWorld.y)));
         }
       }
@@ -59,7 +61,7 @@ export function bakedMaterials(renderer, scene, matched, bake, volume, level) {
     // The old custom depth materials contain GLSL wind patches; node shadows derive
     // alpha and geometry from the converted material instead.
     mesh.customDepthMaterial = undefined; mesh.customDistanceMaterial = undefined;
-    if (originals.some(m => m.transmission > 0 || m.userData?.daylightOpacity !== undefined || (m.transparent && m.opacity < 0.6))) mesh.castShadow = false;
+    if (originals.some(m => !lightingOf(m).castsSun)) mesh.castShadow = false;
   });
   return {
     stats: { lightmapped, probeLit, omittedTypes: [...omitted], ignoredGLSLPatches: [...ignoredPatches] },

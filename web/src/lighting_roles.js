@@ -45,6 +45,7 @@ export const SCHEMA = {
     zone: ['interior', 'exterior'],
     space: 'plan space id (plan.js spaceAt) or null',
     puddleMirror: 'appears in the planar puddle reflection',
+    fakeShadow: 'a stand-in contact shadow (the pets\' blobs): hidden while the contact-shadow pass runs',
   },
 };
 export const ROLES = SCHEMA.mesh.role;
@@ -91,7 +92,6 @@ const LEGACY = {
     if (n === 'mirror') return 'mirror';
     return null;
   },
-  presentationName: o => /^(cat-blob|dog-contact-shadow)$/.test(o.name || ''),
   plantRoot: o => /^(plants|garden|flowers)-/.test(o.userData.id || ''),
   noPuddleMirror: o => /^garden-turf/.test(o.name || ''),
 };
@@ -144,6 +144,8 @@ const lmMesh = o => o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !!o.ge
 // the nearest ancestor (or self) whose declaration has `key`
 function inherited(o, key) { for (let p = o; p; p = p.parent) { const d = declared(p); if (d[key] !== undefined) return { node: p, value: d[key] }; } return null; }
 const movingRoot = p => !!(p.userData.animate || p.userData.toggle);
+// The role an object declares, or inherits from the nearest ancestor that declares one.
+export function roleOf(o) { for (let p = o; p; p = p.parent) { const d = declared(p); if (d.role !== undefined) return d.role; if (LEGACY.plantRoot(p)) return 'plant'; } return null; }
 
 // Today's weather rule (lightmap.js): by the mesh's tight world box and its first material.
 export function weatherOf(box, m) {
@@ -177,7 +179,7 @@ function resolveMesh(o, ctx) {
     if (!movable && p.userData.movable) movable = p;
     if (!role && LEGACY.plantRoot(p)) role = 'plant';
   }
-  if (o.isReflector || LEGACY.presentationName(o) || ms.some(m => lightingOf(m).surface === 'presentation')) presentation = true;
+  if (o.isReflector || ms.some(m => lightingOf(m).surface === 'presentation')) presentation = true;
   if (presentation) role = 'presentation';
   else if (!role || role === 'furniture' || role === 'architecture') {
     if (door) role = 'door';
@@ -206,7 +208,7 @@ function resolveMesh(o, ctx) {
   const own = declared(o);
   return { resolved: 1, declared: own, role, motion, bake, why: hidden && !why ? 'hidden' : why, probeSide,
     sun: { cast: m0 ? lightingOf(m0).castsSun : true, track: plant ? 'plant' : 'static' },
-    ...placeOf(o, ctx), puddleMirror: own.puddleMirror ?? !LEGACY.noPuddleMirror(o) };
+    ...placeOf(o, ctx), puddleMirror: own.puddleMirror ?? !LEGACY.noPuddleMirror(o), fakeShadow: !!own.fakeShadow };
 }
 // What follows from where the mesh is: its after-rain class (tight world box, lightmap.js), its zone (the interior /
 // exterior material split of lighting.js: the geometry box's centre inside the house, under the ceiling, not a site-wide
@@ -303,7 +305,7 @@ export function validateLighting(root) {
 
 // ---- export --------------------------------------------------------------------------------------------------------------
 // The records as the bake reads them (glTF extras "lighting", a JSON string: Blender's importer keeps strings as they are).
-const MESH_KEYS = ['role', 'motion', 'bake', 'why', 'probeSide', 'sun', 'weather', 'zone', 'space', 'puddleMirror'];
+const MESH_KEYS = ['role', 'motion', 'bake', 'why', 'probeSide', 'sun', 'weather', 'zone', 'space', 'puddleMirror', 'fakeShadow'];
 const MATERIAL_KEYS = ['surface', 'alphaCutout', 'twoSided', 'foliage', 'wet', 'weather', 'glass', 'sheer', 'emits', 'reflection', 'clearcoat', 'castsSun', 'bake', 'contact', 'zone'];
 const pickKeys = (r, keys) => Object.fromEntries(keys.map(k => [k, r[k] ?? null]));
 export const meshRecord = o => pickKeys(meshLighting(o), MESH_KEYS);

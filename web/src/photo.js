@@ -11,14 +11,16 @@ import { photoSize } from './photo_budget.js';
 import { makeSky, photoSupport, photoExposurePolicy, parseMood, kelvin, DEFAULT_MOOD } from './sky.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
-import { emitsLight } from './materials.js';
 import { isInside } from './plan.js';
+import { lightingOf, meshLighting } from './lighting_roles.js';
 
 const visible = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+// Helpers that only exist for the walkthrough's look (the manifest's role 'presentation': overlays, glow cards, decals,
+// the pets' stand-in shadows) never reach the tracer or the bake export.
 const presentation = o => {
+  if (o.isMesh) return meshLighting(o).role === 'presentation';
   for (let p = o; p; p = p.parent) if (p.userData.presentation || p.userData.reflection) return true;
-  return /^(cat-blob|dog-contact-shadow)$/.test(o.name) || [].concat(o.material).some(m => m?.userData.presentation || m?.blending === THREE.AdditiveBlending ||
-    m?.isMeshBasicMaterial && m.transparent && !m.depthWrite && m.polygonOffset && m.color.getHex() === 0);
+  return false;
 };
 // the lightmap identity (batch.js) rides along into the bake's GLB export as node extras
 const lmTag = (o, m) => { if (o.userData.lmId) m.userData.lm = o.userData.lmId; else if (o.userData.lmSkip) m.userData.lmSkip = o.userData.lmSkip; return m; };
@@ -130,32 +132,31 @@ function splitGroups(geometry, own) {
 function traceMaterial(material, cache, own) {
   if (cache.has(material)) return cache.get(material);
   let out = material;
+  const L = lightingOf(material);
   if (material.isShaderMaterial) {
-    const flame = /flame/i.test(material.name || '');
-    if (!flame) { cache.set(material, null); return null; }
-    out = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: flame ? 0xff8a3c : 0x000000, emissiveIntensity: flame ? 6 : 0, roughness: 1 });
+    // a shader effect (the fire pit's flames) has no physical surface; the fire's light is the pit's live light
+    cache.set(material, null); return null;
   } else if (material.isMeshBasicMaterial) {
     out = new THREE.MeshStandardMaterial({ color: material.color, map: material.map, transparent: material.transparent, opacity: material.opacity, alphaTest: material.alphaTest, side: material.side, roughness: 1, emissive: 0xffffff, emissiveMap: material.map, emissiveIntensity: 0.35 });
-  } else if (material.clearcoat > 0) {
+  } else if (L.clearcoat) {
     // the tracer's clear-coat layer turns white quartz and white plastic black here; a plain glossy base reads the same
     out = material.clone(); out.clearcoat = 0; out.roughness = Math.min(out.roughness, 0.25 + 0.5 * material.clearcoatRoughness);
-  } else if (material.userData?.sheer) {
+  } else if (L.sheer) {
     // sheer voile: no glow (the walkthrough lifts emissives to 0.12 by day, which made the bunched sheers the brightest
     // thing in the room and lit it), a soft sheen, and thin rough transmission for the light its fibres scatter through
     // from the window side. The tracer's transmission lobe is a blurred refraction; at roughness 1 through a thin sheet
     // it reads as a diffuse glow. The opacity / alpha map stay as the gaps between threads. Exported to Blender as
     // KHR_materials_transmission (weight below setup.py's glass threshold).
     out = material.clone(); out.emissive.setHex(0); out.emissiveIntensity = 0; out.sheen = 0.3;
-    out.transmission = material.userData.sheer.transmit; out.roughness = 1; out.ior = 1.5; out.thickness = 0;
-  } else if (material.userData?.daylightOpacity !== undefined) {
+    out.transmission = L.sheer.transmit; out.roughness = 1; out.ior = 1.5; out.thickness = 0;
+  } else if (L.glass?.export === 'pane') {
     // window glass: clear, thin, transmissive instead of the real-time look's faded opacity
     out = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.02, metalness: 0, transmission: 1, ior: 1.5, thickness: 0, side: THREE.DoubleSide });
   }
-  // Only real light sources emit (materials.js emitsLight: lamp surfaces, screens that are on, fire; the flame shader
-  // above). The walkthrough's daytime glow on everything else (lighting.js lifts every other emissive material to 0.12,
+  // Only real light sources emit (the manifest's emits: lamp surfaces, screens that are on, fire). The walkthrough's daytime glow on everything else (lighting.js lifts every other emissive material to 0.12,
   // so cloth reads as backlit) became light of its own here and in the Blender export: the cellular shades and sheers
   // lit the rooms. Their light now comes only from what reaches them.
-  if (out.emissive && out.emissiveIntensity > 0 && out.emissive.getHex() !== 0 && !material.isShaderMaterial && !emitsLight(material)) {
+  if (out.emissive && out.emissiveIntensity > 0 && out.emissive.getHex() !== 0 && !material.isShaderMaterial && !L.emits) {
     if (out === material) out = material.clone();
     out.emissive.setHex(0); out.emissiveIntensity = 0; out.emissiveMap = null;
   }
@@ -164,18 +165,9 @@ function traceMaterial(material, cache, own) {
   return out;
 }
 
-// Inside the house (plan.isInside, as lighting.js has it): outside it, surfaces get the weather.
-
-// Where a mesh sits decides how wet it gets: 'ground' (paving, gravel, soil: darker, glossy, puddles), 'plant'
-// (leaves: a little sheen), 'outdoor' (furniture, planters: slightly darker and smoother), or null (indoors, walls).
-function weatherClass(mesh, material) {
-  const g = mesh.geometry; if (!g.boundingBox) g.computeBoundingBox();
-  const b = g.boundingBox.clone().applyMatrix4(mesh.matrixWorld), c = b.getCenter(new THREE.Vector3());
-  if (isInside(c.x, -c.z) || b.max.x - b.min.x > 40 || b.max.z - b.min.z > 40) return null;
-  if (/^garden-/.test(material.name || '') || material.alphaTest > 0) return 'plant';
-  if (b.max.y < 0.35) return 'ground';
-  return 'outdoor';
-}
+// Where a mesh sits decides how wet it gets: the manifest's weather (lighting_roles.js weatherOf, as the baked lighting
+// has it): 'ground' (paving, gravel, soil: darker, glossy, puddles), 'plant' (leaves: a little sheen), 'outdoor'
+// (furniture, planters: slightly darker and smoother), or null (indoors, walls).
 
 function wetMaterial(material, cls, wet, cache, own) {
   if (!cls || !(wet > 0) || !material.isMeshStandardMaterial || material.transmission > 0) return material;
@@ -387,7 +379,7 @@ export class PhotoMode {
       if (!mesh.material) continue;
       if (mood?.wet > 0 || mood?.puddles > 0) {
         mesh.updateMatrixWorld(true);
-        const cls = weatherClass(mesh, mesh.material);
+        const cls = meshLighting(o).weather;
         if (cls) mesh.material = wetMaterial(mesh.material, cls, mood.wet, wetCache, own);
         if (cls === 'ground') grounds.push(mesh); else if (cls) blockers.push(mesh);
       }

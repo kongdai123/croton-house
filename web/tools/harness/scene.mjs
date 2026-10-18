@@ -16,7 +16,7 @@ let cached;
 // Module-private pure helpers that the lighting audit lists are exposed by appending an export to the module source at
 // bundle time (nothing in web/src changes): the harness then calls the real function instead of a copy.
 const INTERNALS = {
-  'src/photo.js': 'presentation as __presentation, weatherClass as __weatherClass',
+  'src/photo.js': 'presentation as __presentation',
   'src/foliage_bake.js': 'isPlant as __isPlant',
   'src/puddles.js': 'wetMaterial as __wetMaterial, indoors as __indoors',
   'src/furniture/light_switch.js': 'glowing as __glowing',
@@ -69,7 +69,7 @@ export async function buildRealScene() {
       export { areaOf, isIndoor } from './src/pets/roam.js';
       export * as plan from './src/plan.js';
       export { PROBE_WALL_PIECES as probeWallPieces, probeWalls } from './src/lightmap.js';
-      export { __presentation as photoPresentation, __weatherClass as photoWeatherClass } from './src/photo.js';
+      export { __presentation as photoPresentation } from './src/photo.js';
       export { __isPlant as foliageIsPlant } from './src/foliage_bake.js';
       export { __wetMaterial as puddlesWetMaterial, __indoors as puddlesIndoors } from './src/puddles.js';
       export { __glowing as switchGlowing } from './src/furniture/light_switch.js';`, resolveDir: WEB },

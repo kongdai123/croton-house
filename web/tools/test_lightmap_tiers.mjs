@@ -8,7 +8,7 @@ import { build } from 'esbuild';
 const dir = await mkdtemp(join(tmpdir(), 'croton-tiers-'));
 const log = console.info, warn = console.warn;
 try {
-  const contact = { name: 'contact-stub', setup(b) { b.onResolve({ filter: /\/contact\.js$/ }, () => ({ path: 'contact', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const CONTACT = false; export const CONTACT_SHADER = { uniforms: {}, steps: 8, max: 16 }; export function contactPatch() {}' })); } };
+  const contact = { name: 'contact-stub', setup(b) { b.onResolve({ filter: /\/contact\.js$/ }, () => ({ path: 'contact', namespace: 'fixture' })); b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const CONTACT = false; export const CONTACT_SHADER = { uniforms: {}, steps: 8, max: 16 };' })); } };
   const lifecycle = { name: 'lifecycle-stubs', setup(b) {
     b.onLoad({ filter: /\/HDRLoader\.js$/ }, () => ({ contents: `import { Texture } from 'three';
       export class HDRLoader { setDataType() { return this; } async loadAsync(url) { return new Texture({ width: 2, height: 1, data: new Uint16Array(8) }); } }`, loader: 'js' }));

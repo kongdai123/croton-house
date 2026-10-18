@@ -108,7 +108,7 @@ function sheerMat(opacity) {
   const m = M.sheer().clone(); m.side = THREE.FrontSide; m.opacity = opacity; m.color = new THREE.Color(0xffffff);
   m.map = L.voile().map; m.alphaMap = L.voile().alpha; m.roughness = 0.95; m.sheen = 1; m.sheenRoughness = 0.5; m.sheenColor = new THREE.Color(0xffffff);
   m.emissive = new THREE.Color(0xffffff); m.emissiveIntensity = 0.03;
-  // Physical voile for the baked view (materials.js sheerProbePatch), photo mode and the Blender export (photo.js,
+  // Physical voile for the baked view (the composed shader's sheer flag, src/shaders/sheer.glsl.js), photo mode and the Blender export (photo.js,
   // bake/export/setup.py): the fibres reflect ~30% and scatter ~70% of the light from behind through to the viewer.
   // Tuned in Cycles with nothing else glowing: a bunched stack at a window reads ~0.8x the wall above it, as in the
   // listing photos (g19, g20, g23, g24); 0.4 gave ~0.7x, and more transmission barely helps (~0.79x at 0.85).

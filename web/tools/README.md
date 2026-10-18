@@ -26,3 +26,21 @@ Tests that need a browser or dev server (`_smoke`, `playtest`, `tourtest`, `pets
 - `tools/test_plan.mjs`: plan.json is fresh and valid, the validator catches broken plans, and plan.js reproduces
   `golden/plan_vectors.json`, which `bake/scripts/test_plan.py` runs against plan.py
   (`UPDATE_VECTORS=1 node tools/test_plan.mjs` after a deliberate change; review the diff).
+
+## The composed baked shader
+
+Every baked material (lightmapped copy or probe-lit) gets one shader generated from its feature flags
+(`src/shaders/`: `features.js` bakedFeatures -> flags, `sampler_plan.js` samplerPlan -> the flags within the GPU's
+fragment texture units, `compose.js` compose -> the edits of three's template, `baked_material.js` the one hook and key
+per material, `*.glsl.js` the GLSL). Nothing outside `src/shaders` edits a baked material's shader.
+
+- `tools/test_shader_golden.mjs`: the shaders of the real house per material class (`golden/README.md`, shader goldens).
+- `tools/test_shader_compose.mjs`: every reachable flag set (`harness/flag_space.mjs`) through compose(): sites, includes,
+  declarations, declaration order, sampler plan, keys.
+- `tools/test_shader_invariants.mjs`: who may edit shader text (an allow-list with reasons), no wrapper over a baked
+  material, the house's flag sets all enumerated, no recompile on a quality change, dispose restores every material.
+- `tools/test_probe_regions.mjs`: the region-aware probe lookup on the shipped noon probes (a JS transcription).
+- `node tools/shader_equiv.mjs [class]`: after a shader change, which classes changed text and whether each change is one
+  of the documented behaviour-preserving rewrites (`harness/shader_equiv.mjs`). A review tool, not a test.
+- `node tools/shader_link_test.mjs [--sample N] [--units N] [--gpu]`: links every flag set in WebGL2 (Playwright; SwiftShader
+  unless `--gpu`). Starts a browser: run it on a machine meant for that, not in `npm test`.

@@ -60,7 +60,7 @@ Recommended shared boundaries after review: a renderer-free `buildWalkthroughSce
 
 The Phase 2 plan's “needs three 0.185+” is not a requirement for this subset: r183 already provides the necessary nodes. This does not establish that its temporal upscaling, fog or every desired production effect is ready.
 
-**Custom GLSL migration inventory.** This covers every assignment/wrapper of `onBeforeCompile` found in `web/src` during this spike, plus helpers those wrappers invoke. Files are concurrently edited; regenerate the inventory with `rg -n 'onBeforeCompile' web/src` before implementation. Difficulty is port plus validation, not a claim that the equivalent is already implemented. Low is roughly 0.5–1 engineer-day, medium 1–3, high 3–7, and very high at least a week; shared work overlaps.
+**Custom GLSL migration inventory.** This covers every assignment/wrapper of `onBeforeCompile` found in `web/src` during this spike, plus helpers those wrappers invoke. (Since then the baked WebGL patches below, `probeLit`, `PROBE_GLSL`, `wetPatch`, `reflPatch`, `pcss.patch`, `contactPatch`, `patchPuddleReflection`, the foliage and slot patches, are flags of one composed shader, `web/src/shaders/compose.js`; the rows still describe what each feature does.) Files are concurrently edited; regenerate the inventory with `rg -n 'onBeforeCompile' web/src` before implementation. Difficulty is port plus validation, not a claim that the equivalent is already implemented. Low is roughly 0.5–1 engineer-day, medium 1–3, high 3–7, and very high at least a week; shared work overlaps.
 
 | File / patch | TSL equivalent or disposition | Difficulty / spike status |
 |---|---|---|

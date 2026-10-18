@@ -3,7 +3,7 @@
 # json: {"cameras": "cameras.json", "state": "sunrise" | "noon" | "golden" | "dusk_allon", "out": "<cycles dir>",
 #        "render_py": "<the scene's export/render.py>", "res": [960, 540], "samples": 256, "only": [ids], "limit": n}
 # Writes <out>/<state>/<camera>.png and <camera>.json (its cache key). The key hashes the .blend (size and mtime),
-# render.py, this script, the slot config, the camera and the render settings: a frame whose key matches is skipped,
+# render.py, REF_VERSION below, the slot config, the camera and the render settings: a frame whose key matches is skipped,
 # so a rerun after a scene change renders only what changed (all of it, after a rebake's new scene).
 # Lamps: render.py sets every lamp at the slot's level (sunrise 0.25, noon 0, golden 0.7, dusk 1), which is the site's
 # all-switches-on state at that level, not its per-slot default switches: compare dusk_allon with "dusk_allon"; the
@@ -16,6 +16,8 @@ arg = sys.argv[sys.argv.index('--') + 1]
 cfg = json.load(open(arg)) if arg.endswith('.json') else json.loads(arg)
 state = cfg['state']; slot = state.split('_')[0]
 cams = json.load(open(cfg['cameras']))['cameras']
+# a camera that changes a door for its shot has no reference: the Cycles scene holds the bake's door poses
+cams = [c for c in cams if not c.get('doors')]
 if cfg.get('only'): cams = [c for c in cams if c['id'] in cfg['only']]
 if cfg.get('limit'): cams = cams[:cfg['limit']]
 res, samples = cfg.get('res', [960, 540]), cfg.get('samples', 256)
@@ -23,7 +25,8 @@ out = os.path.join(cfg['out'], state); os.makedirs(out, exist_ok=True)
 render_py = cfg['render_py']
 blend = bpy.data.filepath; st = os.stat(blend)
 base = hashlib.sha1()
-for part in (f'{os.path.basename(blend)}:{st.st_size}:{int(st.st_mtime)}', open(render_py).read(), open(os.path.abspath(__file__)).read(),
+REF_VERSION = 1   # bump when this script changes what a reference looks like
+for part in (f'{os.path.basename(blend)}:{st.st_size}:{int(st.st_mtime)}', open(render_py).read(), f'cycles_refs v{REF_VERSION}',
              json.dumps({'slot': slot, 'res': res, 'samples': samples}, sort_keys=True)):
     base.update(part.encode())
 key = lambda c: hashlib.sha1(base.hexdigest().encode() + json.dumps(c, sort_keys=True).encode()).hexdigest()[:16]

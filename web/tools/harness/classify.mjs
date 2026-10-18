@@ -20,16 +20,12 @@ export const QUOTED = [
   ['glass.unwrap', 'web/src/photo.js:141-149 traceMaterial + bake/scripts/unwrap.py:77 (KHR_materials_transmission)', '!isShaderMaterial && (userData.sheer || userData.daylightOpacity !== undefined || transmission > 0)'],
   ['glass.cycles', 'bake/export/setup.py:42 (Transmission Weight > 0.5 and no sheer key; glass exported by photo.js:149 has transmission 1)', '(daylightOpacity !== undefined || transmission > 0.5) && !sheer'],
   ['mirror.layout', 'web/src/layout.js:466 addMirrors (same test as lightmap.js:1143 isMirror, which is called for mirror.lightmap)', "mat?.name === 'mirror'"],
-  ['probe.sheer', 'web/src/lightmap.js:1290', '!!material.userData.sheer'],
-  ['probe.occl', 'web/src/lightmap.js:1288 (foliageBake absent in the headless scene)', 'foliage && !material.foliageBake'],
-  ['mesh.sided', 'web/src/lightmap.js:743 (material of a mesh under a door root or an animated root with a toggle)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh under dynamic roots'],
-  ['mesh.doorPart', 'web/src/lightmap.js:660-664', "root.userData.door && kind not in {french, slider}: every mesh whose parent is not the door root"],
+  ['mesh.sided', 'web/src/lightmap.js applyLightmaps sided (manifest probeSide face)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh whose record says probeSide face'],
   ['mesh.interior', 'web/src/lighting.js collectMaterials region (plan.isInside)', 'plan.isInside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)'],
   ['mesh.isPlantRoot', 'web/src/lightmap.js:193', "any ancestor userData.id matches /^(plants|garden|flowers)-/"],
-  ['mesh.pcssPlant', 'web/src/lightmap.js:201', 'any material foliage || isPlantRoot'],
   ['mesh.contactExcluded', 'web/src/contact.js:171-173 depthOf', 'm.transparent || m.transmission > 0 || m.isShaderMaterial || m.alphaTest > 0 || /^(garden-|plant)/.test(m.name) (first of the mesh materials that triggers)'],
   ['mesh.puddleTier', 'web/src/puddles.js:193 (indoors() is called from the real module)', 'instanced || any material foliage ? 1 : indoors(box) ? 2 : 0'],
-  ['mesh.lit', 'web/src/lightmap.js:773-778 stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "transmission > 0 || transparent ? 'glass' : foliage ? 'plant' : doorPart ? 'door' : lmSkip ?? (!lmId ? 'dynamic' : 'lightmap')"],
+  ['mesh.lit', 'web/src/lightmap.js applyLightmaps stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "manifest why ('plant/glass' split by the first material's foliage) ?? (!lmId ? 'dynamic' : 'lightmap')"],
   ['mesh.unwrapGroundFar', 'bake/scripts/unwrap.py:118', 'area > 300 || abs(cx) > 14 || -cz > 18 || -cz < -14, centroid = mean of world vertices, glTF frame (x, y, z) = scene frame'],
   ['mesh.unwrapSkip', 'bake/scripts/unwrap.py:73-78 over all materials', 'every material plant.unwrapSkip'],
   ['mesh.batchable', 'web/src/batch.js:49 lmMesh / :68 mergeable', 'isMesh && !instanced && !skinned && position'],
@@ -39,7 +35,7 @@ export const QUOTED = [
 // Called from the real source (see scene.mjs INTERNALS): lightmap.js weatherClass / isMirror, plan.js isInside, photo.js presentation /
 // weatherClass, foliage_bake.js isPlant, puddles.js wetMaterial / indoors, light_switch.js glowing,
 // materials.js emitsLight, pets/roam.js areaOf / isIndoor, plan.js roomName, lighting.indoorWeight.
-export const CALLED = ['emitsLight', 'lightmapIsMirror', 'lightmapWeatherClass', 'plan.isInside', 'photoPresentation', 'photoWeatherClass', 'foliageIsPlant',
+export const CALLED = ['emitsLight', 'roles.lightingOf (mirror, probe, occl)', 'roles.meshLighting (weather, doorPart, pcssPlant)', 'plan.isInside', 'photoPresentation', 'photoWeatherClass', 'foliageIsPlant',
   'puddlesWetMaterial', 'puddlesIndoors', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
 
 const FOLIAGE = m => m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '');
@@ -50,25 +46,24 @@ const UNWRAP_SKIP = m => m.alphaTest > 0 || (m.name || '').startsWith('garden-')
 const prune = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== false && v !== null && v !== undefined));
 
 export function materialClassify(w, m, fakeMesh) {
+  const L = w.roles.lightingOf;
   return prune({
     foliage: FOLIAGE(m), leafSide: LEAF(m), wetEligible: !LEAF(m) && !(m.alphaTest > 0), wetPuddles: !!w.puddlesWetMaterial(m), unwrapSkip: UNWRAP_SKIP(m),
     glassShadow: !!(m.transmission > 0 || m.userData?.daylightOpacity !== undefined || (m.transparent && m.opacity < 0.6)),
     glassOverlay: m.userData?.daylightOpacity !== undefined || m.transmission > 0, glassStats: !!(m.transmission > 0 || m.transparent), glassUnwrap: GLASS_UNWRAP(m), glassCycles: GLASS_CYCLES(m),
-    emitsLight: w.emitsLight(m), emitsKind: m.userData?.emits, glowing: !!w.switchGlowing(fakeMesh(m)), mirror: w.lightmapIsMirror(m), mirrorLayout: m?.name === 'mirror',
-    sheer: !!m.userData?.sheer, occl: FOLIAGE(m) && !m.foliageBake,
-    // what probeLit(material) would put in the shader (lightmap.js:1283-1296), without `sided` (mesh level)
-    probe: m.isMeshStandardMaterial ? [LEAF(m) ? 'leafSide' : '', FOLIAGE(m) ? 'foliage' : '', !LEAF(m) && !(m.alphaTest > 0) ? 'wet' : '', m.userData?.sheer ? 'sheer' : '', w.lightmapIsMirror(m) ? 'mirror' : ''].filter(Boolean).join(',') || undefined : undefined,
+    emitsLight: w.emitsLight(m), emitsKind: m.userData?.emits, glowing: !!w.switchGlowing(fakeMesh(m)), mirror: L(m).reflection === 'mirror', mirrorLayout: m?.name === 'mirror',
+    sheer: !!m.userData?.sheer, occl: !!L(m).foliage?.groundOcclusion && !m.foliageBake,
+    // what probeLit(material) puts in the shader (lightmap.js, from the manifest record), without `sided` (mesh level)
+    probe: m.isMeshStandardMaterial ? [L(m).twoSided === 'faceDirection' ? 'leafSide' : '', L(m).foliage ? 'foliage' : '', L(m).wet === 'auto' ? 'wet' : '', L(m).sheer ? 'sheer' : '', L(m).reflection === 'mirror' ? 'mirror' : ''].filter(Boolean).join(',') || undefined : undefined,
   });
 }
 
 export function captureClassify(w, ix) {
   const { T, scene, layout, house } = w;
   const fake = m => ({ isMesh: true, material: m });
-  // the set `sided` is built from (lightmap.js:743)
-  const sided = new Set();
-  for (const root of ix.dynamicRoots) root.traverse(o => { if (o.isMesh) for (const m of mats(o)) if (!m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
-  const doorParts = new Set();
-  for (const root of ix.dynamicRoots) { const d = root.userData.door; if (!d || d.kind === 'french' || d.kind === 'slider') continue; root.traverse(o => { if (o.isMesh && o.parent !== root) doorParts.add(o); }); }
+  // the set `sided` is built from (lightmap.js applyLightmaps)
+  const R = w.roles.meshLighting, sided = new Set();
+  scene.traverse(o => { if (o.isMesh && R(o).probeSide === 'face') for (const m of mats(o)) if (!m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
   const isPlantRoot = o => { for (let p = o; p; p = p.parent) if (/^(plants|garden|flowers)-/.test(p.userData.id || '')) return true; return false; };
 
   const materials = {}, seen = new Map();
@@ -80,10 +75,10 @@ export function captureClassify(w, ix) {
     const ms = mats(o); ms.forEach(matKey);
     box.makeEmpty(); box.expandByObject(o, true); const empty = box.isEmpty();
     const first = ms[0] ?? {};
-    const foliage = ms.some(FOLIAGE), glass0 = first.transmission > 0 || first.transparent;
+    const foliage = ms.some(FOLIAGE);
     const o2 = {};
     if (!empty) {
-      o2.weather = w.lightmapWeatherClass(box, first);
+      o2.weather = R(o).weather;
       // photo.js weatherClass reads the mesh's geometry box through its world matrix
       o2.weatherPhoto = w.photoWeatherClass(o, first);
       box.getCenter(c);
@@ -98,9 +93,9 @@ export function captureClassify(w, ix) {
     o2.presentation = !!w.photoPresentation(o);
     o2.bakedFoliagePlant = !!w.foliageIsPlant(o);
     o2.sided = ms.some(m => sided.has(m));
-    o2.doorPart = doorParts.has(o);
+    o2.doorPart = R(o).why === 'door';
     o2.plantRoot = isPlantRoot(o);
-    o2.pcssPlant = foliage || o2.plantRoot;
+    o2.pcssPlant = R(o).sun.track === 'plant';
     o2.emits = ms.some(m => w.emitsLight(m));
     o2.glowing = !!w.switchGlowing(o);
     o2.mirrorFace = ms.some(m => m?.name === 'mirror');
@@ -121,7 +116,8 @@ export function captureClassify(w, ix) {
       o2.groundFar = area > 300 || Math.abs(cx) > 14 || -cz > 18 || -cz < -14;
     }
     // lightmap.js:773-778, without the sidecar branches
-    o2.lit = glass0 ? 'glass' : foliage ? 'plant' : o2.doorPart ? 'door' : o.userData.lmSkip ?? (!o.userData.lmId ? 'dynamic' : 'lightmap');
+    const why = R(o).why;
+    o2.lit = why === 'plant/glass' ? (first.userData && w.roles.lightingOf(first).foliage ? 'plant' : 'glass') : why ?? (!o.userData.lmId ? 'dynamic' : 'lightmap');
     // contact.js:171-173
     const m0 = ms.find(m => m.transparent || m.transmission > 0 || m.isShaderMaterial || m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || ''));
     o2.contactExcluded = !!m0;

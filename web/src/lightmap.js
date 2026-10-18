@@ -29,19 +29,15 @@ import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
 import { sheerProbePatch, emitsLight } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
-import { isInside, insideGLSL, pieces as planPieces, plan } from './plan.js';
+import { insideGLSL, pieces as planPieces, plan } from './plan.js';
+import { lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
 
 // After rain, outdoors (the same rules as the Blender scene, scripts setup.py): ground darker and glossy with puddles
-// where a world-space noise dips, plants with a little sheen, outdoor furniture slightly darker and smoother.
-function weatherClass(box, m) {
-  const cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
-  if (isInside(cx, -cz) || box.max.x - box.min.x > 40 || box.max.z - box.min.z > 40) return null;
-  if (/^garden-/.test(m.name || '') || m.alphaTest > 0) return 'plant';
-  return box.max.y < 0.35 ? 'ground' : 'outdoor';
-}
+// where a world-space noise dips, plants with a little sheen, outdoor furniture slightly darker and smoother. Each
+// mesh's class is its manifest record's weather (lighting_roles.js weatherOf).
 // per-pixel wet ground and puddles for any lit material (world position, up-facing, low, outside the house)
 function wetPatch(sh, wet) {
   sh.uniforms.uWet = { value: wet };
@@ -189,7 +185,6 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   // tracked casters (checked every frame): under a tracked root, skinned, or promoted by the slow scan. The hot ones
   // carry a scene layer, which the moving-caster pass draws alone.
   const rootOf = o => { for (let p = o; p; p = p.parent) if (roots.has(p)) return p; return null; };
-  const isPlantRoot = o => { for (let p = o; p; p = p.parent) if (/^(plants|garden|flowers)-/.test(p.userData.id || '')) return true; return false; };
   const heat = (o, e, hot) => { e.hot = hot; e.cold = false; if (hot) o.layers.enable(DYN_LAYER); else o.layers.disable(DYN_LAYER); };
   const classify = () => {
     classifyDirty = false; dynamic = []; statics = [];
@@ -197,7 +192,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     scene.traverse(o => {
       if (!o.isMesh) return;
       if (!o.castShadow) { o.layers.disable(DYN_LAYER); return; }
-      let e = entries.get(o); if (!e) { e = {}; entries.set(o, e); changed(o, e); e.plant = [].concat(o.material).some(m => m?.alphaTest > 0 || /^(garden-|plant)/.test(m?.name || '')) || isPlantRoot(o); }
+      let e = entries.get(o); if (!e) { e = {}; entries.set(o, e); changed(o, e); e.plant = meshLighting(o).sun.track === 'plant'; }
       const root = rootOf(o);
       e.always = o.isSkinnedMesh || always.has(root);
       if (root || e.always || promoted.has(o)) { dynamic.push(o); heat(o, e, e.always || (!!e.hot && !e.ambient)); } else { statics.push(o); heat(o, e, false); }
@@ -655,12 +650,10 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   // sided). The bake fits only the pose they were exported in (a swung leaf carried the closet's dark into the room),
   // and their thin raised panels and louvre slats bake with dark rims at lightmap resolution that Cycles does not show;
   // the probes match the Cycles renders of these doors closer, open and closed. The glazed garden doors (french,
-  // sliders) keep the bake: their frames stand in open sunlight the coarse outdoor probes underestimate.
+  // sliders) keep the bake: their frames stand in open sunlight the coarse outdoor probes underestimate. The manifest
+  // says which (lighting_roles.js: why 'door').
   const doorParts = new Set(), sharedUV = new Set();
-  for (const root of dynamic) {
-    const d = root.userData.door; if (!d || d.kind === 'french' || d.kind === 'slider') continue;
-    root.traverse(o => { if (o.isMesh && o.parent !== root) doorParts.add(o); });
-  }
+  for (const o of meshes) if (meshLighting(o).why === 'door') doorParts.add(o);
   for (const o of doorParts) if (pairs.has(o)) { pairs.get(o).used = false; pairs.delete(o); }
   // The exporter writes one glTF mesh for meshes that share geometry and material, and an unwrap that kept the
   // lightmap UVs on that shared primitive left Blender only the last unit's layout: all of them baked into one chart,
@@ -678,7 +671,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     // baked light only the live sun's direct light remains, and the shell must stop it at the walls and roof
     o.castShadow = true;
     o.geometry = relayout(o.geometry, u);
-    const cls = weatherClass(box, [].concat(o.material)[0] ?? {});
+    const cls = meshLighting(o).weather;
     const lm = m => {
       if (!m?.isMeshStandardMaterial) return m;
       const key = m.uuid + (cls ?? '');
@@ -693,7 +686,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       c.lightMap = target.texture; c.lightMapIntensity = lightMapIntensity;
       // reflections dimmed by the baked light reaching the spot (specular occlusion): a dim room reflects little of the
       // bright sky environment, a sunlit terrace keeps it all. OPEN_SKY is the irradiance of open ground in the bake.
-      const prev = m.bakedHooks?.compile ?? m.onBeforeCompile, prevKey = m.bakedHooks?.key ?? shaderKey(m), mirror = isMirror(m);
+      const prev = m.bakedHooks?.compile ?? m.onBeforeCompile, prevKey = m.bakedHooks?.key ?? shaderKey(m), mirror = lightingOf(m).reflection === 'mirror';
       c.bakedHooks = { compile: prev, key: prevKey };
       c.onBeforeCompile = (sh, renderer) => shaderPatch(sh, 'lightmap ' + prevKey, s => {
         prev.call(c, s, renderer);
@@ -729,7 +722,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     o.material = Array.isArray(o.material) ? o.material.map(lm) : lm(o.material);
   }
   // glass must not block the sun (in the bake shadow rays pass through it, as through real glass)
-  scene.traverse(o => { if (!o.isMesh) return; const m = [].concat(o.material)[0]; if (m && (m.transmission > 0 || m.userData?.daylightOpacity !== undefined || (m.transparent && m.opacity < 0.6))) { shadowCasters.set(o, o.castShadow); o.castShadow = false; } });
+  scene.traverse(o => { if (o.isMesh && o.material && !meshLighting(o).sun.cast) { shadowCasters.set(o, o.castShadow); o.castShadow = false; } });
   lighting.sun.shadow.needsUpdate = true;
   // the live lights the bake now carries
   for (const l of [...lighting.windowLights, ...lighting.fixtures.children]) if (l.isLight) { lightVisibility.set(l, l.visible); l.visible = false; }
@@ -738,8 +731,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let probeLitCount = 0, foliage = null, envTarget = null, windows = null, stats = null;
   const hooks = new Map(), envs = new Map(), sided = new Set();
   // doors and toggles (blinds, curtains, the garage door) sit in walls and windows: lit from the side each face looks at
-  // (not their glass: its reflection keeps the occlusion of the cell it sits in, as every other pane)
-  for (const root of dynamic) root.traverse(o => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && !m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
+  // (manifest probeSide 'face'; not their glass: its reflection keeps the occlusion of the cell it sits in, as every other pane)
+  scene.traverse(o => { if (o.isMesh && meshLighting(o).probeSide === 'face') for (const m of [].concat(o.material)) if (m && !m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
   const register = object => {
     if (!object || disposed) return;
     object.traverse(o => {
@@ -767,14 +760,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     volume.fill(lampLevel); register(scene);
   }
   volumeRef = volume;
-  // every visible lit mesh left without a lightmap, by why: plant, glass, movable, dynamic (animated or toggled: no id),
-  // skipped by unwrap.py (ground, far), unmatched (an id the sidecar does not know: the bake is older than the scene)
+  // every visible lit mesh left without a lightmap, by why: the manifest's reason (plant, glass, door, movable, dynamic:
+  // animated or toggled), sharedUV, skipped by unwrap.py (ground, far), unmatched (an id the sidecar does not know: the
+  // bake is older than the scene), nobake (a sidecar without ids)
   const unlit = {}, skipped = header.skipped ?? {}, shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
   for (const o of meshes) {
     const ms = [].concat(o.material); if (!shown(o) || !ms.some(m => m?.isMeshStandardMaterial && !m.lightMap)) continue;
-    const m = ms[0] ?? {}, id = o.userData.lmId;
-    const why = m.transmission > 0 || m.transparent ? 'glass' : m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '') ? 'plant'
-      : doorParts.has(o) ? 'door' : sharedUV.has(o) ? 'sharedUV' : o.userData.lmSkip ?? (!id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
+    const r = meshLighting(o), id = o.userData.lmId;
+    const why = r.why === 'plant/glass' ? (lightingOf(ms[0])?.foliage ? 'plant' : 'glass') : r.why ?? (sharedUV.has(o) ? 'sharedUV' : !id ? 'dynamic' : skipped[id] ?? (header.units.some(u => u.id) ? 'unmatched' : 'nobake'));
     unlit[why] = (unlit[why] ?? 0) + 1;
   }
   // main calls after layout.animate, garden wind and all interaction/parent transform updates.
@@ -1137,9 +1130,9 @@ vec3 reflProbe( vec3 P, vec3 R, float rough ) {
 // three's clearcoat image-based light (lights_fragment_maps): unpatched, it adds the open sunrise sky to every clearcoated
 // surface indoors (the quartz counters read 0.57 linear with the lamps off, Cycles 0.009)
 const CLEARCOAT_IBL = 'clearcoatRadiance += getIBLRadiance( geometryViewDir, geometryClearcoatNormal, material.clearcoatRoughness );';
-// A mirror shows the room's probe at full strength: the probe already holds the room's light and occlusion, and the
-// specular-occlusion guess (baked irradiance at the glass) would darken it to near black in a dim bathroom.
-const isMirror = m => m?.name === 'mirror';
+// A mirror (manifest reflection 'mirror') shows the room's probe at full strength: the probe already holds the room's
+// light and occlusion, and the specular-occlusion guess (baked irradiance at the glass) would darken it to near black in
+// a dim bathroom.
 function reflPatch(sh, refl, occlusion, mirror = false) {
   Object.assign(sh.uniforms, refl.uniforms);
   if (!sh.vertexShader.includes('varying vec3 vReflWorld')) sh.vertexShader = 'varying vec3 vReflWorld;\n' + rep(sh.vertexShader, '#include <project_vertex>', `#include <project_vertex>
@@ -1283,11 +1276,12 @@ const PROBE_SIDE = ', 0.5';
 function probeLit(material, volume, pcss, sided = false) {
   if (material.userData.probeLit) return;
   material.userData.probeLit = true;
-  const leafSide = /^garden-/.test(material.name || '') ? ' * faceDirection' : '';
-  const foliage = material.alphaTest > 0 || /^(garden-|plant)/.test(material.name || '');
-  const occl = foliage && !material.foliageBake ? ' * mix( 0.45, 1.0, smoothstep( 0.0, 1.2, vProbeWorld.y ) )' : '';
-  const wet = (volume.multi || volume.wet > 0) && !/^garden-/.test(material.name || '') && !(material.alphaTest > 0);
-  const refl = volume.refl, sheer = !!material.userData.sheer, fol = material.foliageBake, mirror = isMirror(material);
+  // the material's manifest record (lighting_roles.js): leaf cards, the plant treatment, wet ground, sheer cloth, mirrors
+  const L = lightingOf(material);
+  const leafSide = L.twoSided === 'faceDirection' ? ' * faceDirection' : '';
+  const occl = L.foliage?.groundOcclusion && !material.foliageBake ? ' * mix( 0.45, 1.0, smoothstep( 0.0, 1.2, vProbeWorld.y ) )' : '';
+  const wet = (volume.multi || volume.wet > 0) && L.wet === 'auto';
+  const refl = volume.refl, sheer = !!L.sheer, fol = material.foliageBake, mirror = L.reflection === 'mirror';
   const side = sided && !sheer && !fol && !leafSide ? PROBE_SIDE : '';   // doors and toggles: lit from the side they face
   const prev = material.bakedHooks?.compile ?? material.onBeforeCompile, prevKey = material.bakedHooks?.key ?? shaderKey(material);
   material.bakedHooks = { compile: prev, key: prevKey };
@@ -1347,7 +1341,7 @@ function addWindowReflections(scene, sky, refl) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
   });
   const panes = [], add = [];
-  scene.traverse(o => { if (o.isMesh && !o.userData.reflection && [].concat(o.material).some(m => m?.userData?.daylightOpacity !== undefined || m?.transmission > 0)) add.push(o); });
+  scene.traverse(o => { if (o.isMesh && !o.userData.reflection && [].concat(o.material).some(m => m && lightingOf(m).glass?.overlay)) add.push(o); });
   // a pane in a static subtree never recomposes its children's matrices (batch.js), so the overlay takes its world
   // matrix once here; left at identity it would float at the world origin (the pale rectangle on the kitchen island)
   for (const o of add) { const r = new THREE.Mesh(o.geometry, material); r.userData.reflection = true; r.renderOrder = (o.renderOrder || 0) + 1; r.raycast = () => {}; o.add(r); r.updateMatrixWorld(true); panes.push(r); }

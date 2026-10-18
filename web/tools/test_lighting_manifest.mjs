@@ -32,19 +32,13 @@ const MATERIAL = [
   ['glassOverlay', c => !!c.glassOverlay, m => !!L(m).glass?.overlay],
   ['glassCycles', c => !!c.glassCycles, m => L(m).glass?.export === 'pane'],
   ['emitsLight', c => !!c.emitsLight, m => !!L(m).emits],
-  ['mirror', c => !!c.mirror, m => L(m).reflection === 'mirror'],
   ['sheer', c => !!c.sheer, m => !!L(m).sheer],
-  ['occl', c => !!c.occl, m => !!L(m).foliage?.groundOcclusion],
 ];
 const MESH = [
-  ['weather', c => c.weather ?? null, o => R(o).weather],
   ['interior', c => !!c.interior, o => R(o).zone === 'interior' && !mats(o).some(m => L(m).zone === 'exterior')],
   ['puddleTier', c => c.puddleTier ?? 0, (o, c) => c.puddleTier === undefined ? 0 : o.isInstancedMesh || mats(o).some(m => L(m).foliage) ? 1 : w.puddlesIndoors(boxOf(o)) ? 2 : 0],
   ['presentation', (c, o) => !!c.presentation || !!o.isReflector, o => R(o).role === 'presentation'],
   ['bakedFoliagePlant', c => !!c.bakedFoliagePlant, o => o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && !!o.geometry?.attributes.position && !!L(o.material)?.foliage?.bakedPerVertex],
-  ['sided', c => !!c.sided, o => mats(o).some(m => sided.has(m))],
-  ['doorPart', c => !!c.doorPart, o => R(o).why === 'door'],
-  ['pcssPlant', c => !!c.pcssPlant, o => R(o).sun.track === 'plant'],
   ['mirrorFace', c => !!c.mirrorFace, o => mats(o).some(m => L(m).reflection === 'mirror')],
   ['unwrapSkip', c => !!c.unwrapSkip, o => mats(o).length > 0 && mats(o).every(m => L(m).bake === 'probe')],
   ['contactExcluded', c => !!c.contactExcluded, o => mats(o).some(m => !L(m).contact)],
@@ -52,15 +46,13 @@ const MESH = [
   // invisible helpers (switch hit proxies) are never exported: only what is drawn
   ['lmId', (c, o) => !!o.userData.lmId && shown(o), o => !!o.userData.lmId && shown(o) && ['static', 'still', 'door'].includes(R(o).motion)],
 ];
+// A decision leaves these tables when its consumer reads the manifest: classify.json then records the manifest's answer.
 // Decisions changed on purpose: [decision, count of materials / meshes whose answer changed, why].
 const CHANGED = {
-  'mesh.pcssPlant': [1, "a cell's merged mesh of potted-plant parts reads its members' role (plant); it holds still, so the PCSS promotion it guards never applies"],
 };
 
 const T = w.T, box = new T.Box3();
 const boxOf = o => { box.makeEmpty(); box.expandByObject(o, true); return box; };
-const sided = new Set();
-for (const { node: o } of ix.meshes) if (R(o).probeSide === 'face') for (const m of mats(o)) if (!m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m);
 const shown = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
 const labelled = o => o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !!o.geometry?.attributes.position;
 

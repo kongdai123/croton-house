@@ -268,10 +268,12 @@ class Box {
       for (const x of [lb.min.x, lb.max.x]) for (const y of [lb.min.y, lb.max.y]) for (const z of [lb.min.z, lb.max.z]) w(x, y, z, gb);
       return { tight: t, geometry: gb };
     }
-    for (let i = 0; i < p.count; i++) w(p.getX(i), p.getY(i), p.getZ(i), t);
     if (!g.boundingBox) g.computeBoundingBox();
     const lb = g.boundingBox, gb = { min: { x: Infinity, y: Infinity, z: Infinity }, max: { x: -Infinity, y: -Infinity, z: -Infinity } };
     for (const x of [lb.min.x, lb.max.x]) for (const y of [lb.min.y, lb.max.y]) for (const z of [lb.min.z, lb.max.z]) w(x, y, z, gb);
+    // a skinned body (the pets: 300k vertices) moves with its bones: its bind-pose box is as good as its vertices
+    if (o.isSkinnedMesh) return { tight: gb, geometry: gb };
+    for (let i = 0; i < p.count; i++) w(p.getX(i), p.getY(i), p.getZ(i), t);
     return { tight: t, geometry: gb };
   }
 }

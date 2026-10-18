@@ -3,7 +3,7 @@
 // onBeforeCompile and one cache key per material, the key derived from the planned flags. Nothing else wraps a baked
 // material's hook: what other modules add (contact casters, the planar puddle, the puddle reflection's diffuse copies,
 // TAA, the mirrors' merged geometry) are flags and uniforms here.
-import { ShaderLib, Material } from 'three';
+import { ShaderLib, Material, UniformsUtils } from 'three';
 import { shaderPatch, shaderReplace as rep } from './patch.js';
 import { compose, applyComposed, TAA_MAPS } from './compose.js';
 import { flagsKey } from './features.js';
@@ -119,4 +119,11 @@ export function uninstallBaked(material) {
   material.onBeforeCompile = p.compile; material.customProgramCacheKey = p.key;
   if (p.ownShader) material.ownShader = p.ownShader; else delete material.ownShader;
   return true;
+}
+
+// Compile a baked (or sun-depth) material's hook once on three's stock template, outside three: a failing edit shows
+// under the loading screen (shaderPatch records it; lightmap.js checks), not on the material's first draw.
+export function dryCompile(m, renderer) {
+  const lib = m.isMeshDepthMaterial ? ShaderLib.depth : m.isMeshPhysicalMaterial ? ShaderLib.physical : ShaderLib.standard;
+  m.onBeforeCompile({ uniforms: UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader }, renderer);
 }

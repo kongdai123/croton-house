@@ -33,7 +33,7 @@ import { PCSS_TAPS } from './shaders/pcss.glsl.js';
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
 import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
-import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader } from './shaders/baked_material.js';
+import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader, dryCompile } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -858,11 +858,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   api.nextSlot = () => nextSlot(slots?.desired ?? slot, availableSlots);
   try {
     const materials = new Set([...mats.values(), ...hooks.keys(), ...pcss.depthEntries().map(e => e.material)]);
-    for (const m of materials) {
-      const lib = m.isMeshDepthMaterial ? THREE.ShaderLib.depth : m.isMeshPhysicalMaterial ? THREE.ShaderLib.physical : THREE.ShaderLib.standard;
-      m.onBeforeCompile({ uniforms: THREE.UniformsUtils.clone(lib.uniforms), vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader }, renderer);
-      checkPatches(); await shaderYield();
-    }
+    for (const m of materials) { dryCompile(m, renderer); checkPatches(); await shaderYield(); }
   } catch (err) { dispose(); throw err; }
   return api;
 }

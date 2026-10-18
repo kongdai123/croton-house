@@ -15,3 +15,5 @@ docs/promo/*.mp4
 # baked-lighting pipeline: Slurm wrappers for one particular cluster, and the bake outputs
 bake/cluster/
 bake/work/
+# the shader link test's page bundle and report (web/tools/shader_link_test.mjs)
+web/tools/out/

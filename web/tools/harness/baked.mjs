@@ -16,7 +16,9 @@ const EXTRA = `
   export { createPet as createDog } from './src/pets/dog.js';
   export { Human } from './src/human.js';
   export * as samplerBudget from './src/sampler_budget.js';
-  export { materialOptions } from './src/shaders/baked_material.js';`;
+  export { materialOptions } from './src/shaders/baked_material.js';
+  export { bakedFeatures, flagsKey } from './src/shaders/features.js';
+  export { samplerPlan } from './src/shaders/sampler_plan.js';`;
 // HDR decoding is the one loader that would need real pixels; every panorama becomes the same 2 x 1 image.
 const hdrStub = { name: 'hdr-stub', setup(b) {
   b.onLoad({ filter: /\/HDRLoader\.js$/ }, () => ({ loader: 'js', contents: `import { Texture } from 'three';

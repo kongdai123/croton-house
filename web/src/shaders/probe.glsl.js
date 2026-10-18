@@ -20,10 +20,32 @@ vec4 probeSH( vec3 uvw, float ch ) { return uProbeBlend > 0.0 ? mix( probeTex( u
 `;
 // One fetch per pixel: the three colours' SH at a point, shared by the irradiance, the specular and reflection occlusion
 // and the foliage bake's mean (probeFetch), evaluated per normal (probeEval).
+// Region-aware: the hardware's filter blends the 2 x 2 cells around the point (and two heights), and across the house's
+// outline that mixed a garden cell into a room (at noon ~100x brighter: a few percent of it streaked the open front door
+// black, red and yellow) or a room into the garden. Each cell is inside or outside by the plan's outline at its centre
+// (house.glsl.js: the same test as everything else that asks "inside the house"), and a lookup reads only the cells on
+// its own side: where the four cells it blends agree (everywhere but within a cell of the outline) that is the
+// hardware's filter, as before; next to the outline the cells across it are left out and the rest renormalised
+// (bilinear in plan, the height still filtered by the hardware); a point whose four cells are all across (a thin spot of
+// the plan) keeps the plain blend.
 export const PROBE_FETCH = `struct BakedProbe { vec4 r; vec4 g; vec4 b; };
+void probeAdd( inout BakedProbe s, float w, vec2 cell, float height ) {
+  if ( w <= 0.0 ) return;
+  vec3 q = vec3( ( cell + 0.5 ) / uProbeDims.xz, height );
+  s.r += w * probeSH( q, 0.0 ); s.g += w * probeSH( q, 1.0 ); s.b += w * probeSH( q, 2.0 );
+}
 BakedProbe probeFetch( vec3 p ) {
-  vec3 uvw = probeUVW( p );
-  return BakedProbe( probeSH( uvw, 0.0 ), probeSH( uvw, 1.0 ), probeSH( uvw, 2.0 ) );
+  vec3 uvw = probeUVW( p ), g = ( p - uProbeOrigin ) * uProbeScale;     // grid units: x, height, z (north)
+  vec2 cell = floor( g.xz ), f = g.xz - cell, hi = uProbeDims.xz - 1.0, plan0 = vec2( uProbeOrigin.x, - uProbeOrigin.z ), step = vec2( 1.0 / uProbeScale.x );
+  vec2 c0 = clamp( cell, vec2( 0.0 ), hi ), c1 = clamp( cell + vec2( 1.0, 0.0 ), vec2( 0.0 ), hi ), c2 = clamp( cell + vec2( 0.0, 1.0 ), vec2( 0.0 ), hi ), c3 = clamp( cell + 1.0, vec2( 0.0 ), hi );
+  float side = outsideHouse( vec2( p.x, - p.z ) );
+  vec4 same = vec4( equal( vec4( outsideHouse( plan0 + c0 * step ), outsideHouse( plan0 + c1 * step ), outsideHouse( plan0 + c2 * step ), outsideHouse( plan0 + c3 * step ) ), vec4( side ) ) );
+  vec4 w = vec4( ( 1.0 - f.x ) * ( 1.0 - f.y ), f.x * ( 1.0 - f.y ), ( 1.0 - f.x ) * f.y, f.x * f.y );
+  if ( dot( w, 1.0 - same ) <= 0.0 || dot( w, same ) <= 0.0 ) return BakedProbe( probeSH( uvw, 0.0 ), probeSH( uvw, 1.0 ), probeSH( uvw, 2.0 ) );
+  w *= same / dot( w, same );
+  BakedProbe s = BakedProbe( vec4( 0.0 ), vec4( 0.0 ), vec4( 0.0 ) );
+  probeAdd( s, w.x, c0, uvw.z ); probeAdd( s, w.y, c1, uvw.z ); probeAdd( s, w.z, c2, uvw.z ); probeAdd( s, w.w, c3, uvw.z );
+  return s;
 }
 vec3 probeEval( BakedProbe s, vec3 n ) {
   vec4 basis = vec4( 0.886227, 1.023328 * n.y, 1.023328 * n.z, 1.023328 * n.x );

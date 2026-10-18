@@ -17,6 +17,7 @@ import { shaderReplace as rep } from './patch.js';
 import { WORLD_VARYING, WORLD_VERTEX } from './world.glsl.js';
 import { PROBE_VOLUME, probeSHGLSL, PROBE_FETCH, PROBE_SIDE_POINT, PROBE_SIDE } from './probe.glsl.js';
 import { WET_PARS, WET_MASK, WET_SURFACE } from './wet.glsl.js';
+import { HOUSE_GLSL } from './house.glsl.js';
 import { reflGLSL, CLEARCOAT_IBL } from './reflection.glsl.js';
 import { PCSS_GLSL, PCSS_LOOKUP, PCSS_CALL } from './pcss.glsl.js';
 import { contactSunGLSL, contactAOGLSL } from './contact.glsl.js';
@@ -130,6 +131,7 @@ export function compose(f) {
 
   const fpars = [world && WORLD_VARYING,
     !probe && lightmapPars({ encoding: f.lmEncoding, filter: f.lmFilter, lampGroups: f.lampGroups, multi: f.multi, fade: f.slotFade }),
+    (probe || f.wet) && HOUSE_GLSL,
     probe && PROBE_VOLUME + probeSHGLSL(f.slotFade) + PROBE_FETCH + (f.sided ? PROBE_SIDE_POINT : ''),
     f.wet && WET_PARS,
     f.refl && reflGLSL(f.refl.count, f.refl.slots, f.mirror, f.refl.lamps),

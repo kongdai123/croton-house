@@ -51,7 +51,7 @@ manifest records:
 | classifier | original | expression |
 |---|---|---|
 | `glass.unwrap` | web/src/photo.js traceMaterial: what the export turns into KHR_materials_transmission | `!isShaderMaterial && (sheer \|\| glass.export pane \|\| transmission > 0)` |
-| `mesh.sided` | web/src/lightmap.js applyLightmaps | materials (not lightmapped, not transparent, no transmission) of the meshes whose record says probeSide face |
+| `mesh.sided` | web/src/lightmap.js applyLightmaps | the meshes whose record says probeSide face, with a material not lightmapped, transparent or transmissive (shared materials are copied for them) |
 | `mesh.puddleTier` | web/src/puddles.js sources tier | `instanced \|\| any material foliage ? 1 : indoors(box) ? 2 : 0` |
 | `mesh.lit` | web/src/lightmap.js stats ladder, minus the sidecar branches | `why ('plant/glass' split: plant, cutout, glass) ?? (!lmId ? 'dynamic' : 'lightmap')` |
 | `mesh.unwrapGroundFar` | bake/scripts/unwrap.py ground/far | area over `plan.json volumes.lightmap.maxArea` or centroid outside its box |

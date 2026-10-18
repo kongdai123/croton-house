@@ -11,7 +11,7 @@ const mats = o => [].concat(o.material ?? []).filter(Boolean);
 // Quoted classifiers: [name, where the original lives, the original expression]
 export const QUOTED = [
   ['glass.unwrap', 'web/src/photo.js traceMaterial: what the export turns into KHR_materials_transmission', '!isShaderMaterial && (manifest sheer || glass.export pane || transmission > 0)'],
-  ['mesh.sided', 'web/src/lightmap.js applyLightmaps sided (manifest probeSide face)', '!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh whose record says probeSide face'],
+  ['mesh.sided', 'web/src/lightmap.js applyLightmaps sided (manifest probeSide face, per mesh: shared materials are copied)', "probeSide face && any material !lightMap && !transparent && !(transmission > 0)"],
   ['mesh.puddleTier', 'web/src/puddles.js sources tier (indoors() is called from the real module)', 'instanced || any material manifest foliage ? 1 : indoors(box) ? 2 : 0'],
   ['mesh.lit', 'web/src/lightmap.js applyLightmaps stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched)', "manifest why ('plant/glass' split by the first material: plant, cutout, glass) ?? (!lmId ? 'dynamic' : 'lightmap')"],
   ['mesh.unwrapGroundFar', 'bake/scripts/unwrap.py ground/far (plan.json volumes.lightmap)', 'area > maxArea || centroid outside x0..x1, y0..y1 (plan y = -z), centroid = mean of world vertices'],
@@ -42,9 +42,8 @@ export function materialClassify(w, m, fakeMesh) {
 export function captureClassify(w, ix) {
   const { T, scene } = w;
   const fake = m => ({ isMesh: true, material: m });
-  // the set `sided` is built from (lightmap.js applyLightmaps)
-  const R = w.roles.meshLighting, sided = new Set();
-  scene.traverse(o => { if (o.isMesh && R(o).probeSide === 'face') for (const m of mats(o)) if (!m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
+  // lightmap.js applyLightmaps: a face mesh's probe-lit materials take the sided lookup (copied when another mesh shares them)
+  const R = w.roles.meshLighting, sidedOf = m => !m.lightMap && !m.transparent && !(m.transmission > 0);
 
   const materials = {}, seen = new Map();
   const matKey = m => { let k = seen.get(m); if (!k) { k = materialKey(m); seen.set(m, k); materials[k] ??= materialClassify(w, m, fake); } return k; };
@@ -70,7 +69,7 @@ export function captureClassify(w, ix) {
     }
     o2.presentation = !!w.photoPresentation(o);
     o2.bakedFoliagePlant = !!w.foliageIsPlant(o);
-    o2.sided = ms.some(m => sided.has(m));
+    o2.sided = R(o).probeSide === 'face' && ms.some(sidedOf);
     o2.doorPart = R(o).why === 'door';
     o2.plantRoot = R(o).role === 'plant';
     o2.pcssPlant = R(o).sun.track === 'plant';

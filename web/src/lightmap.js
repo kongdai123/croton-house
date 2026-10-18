@@ -731,8 +731,24 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let probeLitCount = 0, foliage = null, envTarget = null, windows = null, stats = null;
   const hooks = new Map(), envs = new Map(), sided = new Set();
   // doors and toggles (blinds, curtains, the garage door) sit in walls and windows: lit from the side each face looks at
-  // (manifest probeSide 'face'; not their glass: its reflection keeps the occlusion of the cell it sits in, as every other pane)
-  scene.traverse(o => { if (o.isMesh && meshLighting(o).probeSide === 'face') for (const m of [].concat(o.material)) if (m && !m.lightMap && !m.transparent && !(m.transmission > 0)) sided.add(m); });
+  // (manifest probeSide 'face'; not their glass: its reflection keeps the occlusion of the cell it sits in, as every other pane).
+  // The lookup is the mesh's, but probeLit patches a material: a face mesh whose probe-lit material another mesh also
+  // uses (a door leaf in the frame's trim white) gets its own copy, so that mesh keeps the plain lookup.
+  const sidedOf = m => m && !m.lightMap && !m.transparent && !(m.transmission > 0), faceUse = new Map();
+  scene.traverse(o => { if (o.isMesh) { const face = meshLighting(o).probeSide === 'face'; for (const m of [].concat(o.material)) if (sidedOf(m)) faceUse.set(m, (faceUse.get(m) ?? 0) | (face ? 1 : 2)); } });
+  const faceCopies = new Map(), faceSwaps = new Map();
+  const faceCopy = m => {
+    if (faceUse.get(m) !== 3) return m;
+    let c = faceCopies.get(m);
+    if (!c) { c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; c.onBeforeRender = m.onBeforeRender; c.customProgramCacheKey = m.customProgramCacheKey; if (m.bakedHooks) c.bakedHooks = m.bakedHooks; faceCopies.set(m, c); }
+    return c;
+  };
+  scene.traverse(o => {
+    if (!o.isMesh || meshLighting(o).probeSide !== 'face') return;
+    const next = Array.isArray(o.material) ? o.material.map(faceCopy) : faceCopy(o.material);
+    if (next !== o.material && (!Array.isArray(next) || next.some((m, i) => m !== o.material[i]))) { faceSwaps.set(o, o.material); o.material = next; }
+    for (const m of [].concat(o.material)) if (sidedOf(m)) sided.add(m);
+  });
   const register = object => {
     if (!object || disposed) return;
     object.traverse(o => {
@@ -890,6 +906,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     for (const [m, h] of hooks) { m.onBeforeCompile = h.compile; m.customProgramCacheKey = h.key; m.emissiveIntensity = h.emission; delete m.userData.probeLit; if (h.bakedHooks) m.bakedHooks = h.bakedHooks; else delete m.bakedHooks; m.needsUpdate = true; }
     foliage?.dispose();
     for (const [o, s] of originalMeshes) { o.geometry.dispose(); o.geometry = s.geometry; o.material = s.material; o.castShadow = s.castShadow; }
+    for (const [o, m] of faceSwaps) o.material = m;
+    for (const c of faceCopies.values()) c.dispose();
     for (const [o, v] of shadowCasters) if (!originalMeshes.has(o)) o.castShadow = v;
     for (const [l, v] of lightVisibility) l.visible = v;
     for (const m of mats.values()) m.dispose();

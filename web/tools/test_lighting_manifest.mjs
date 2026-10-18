@@ -24,6 +24,8 @@ else console.log('ok   validator: every visible mesh and material resolved');
 // PURPOSE (an inconsistency of docs/audit/lighting-roles.md fixed), the old rule stays here with the number of materials /
 // meshes whose answer changed and why: the count is checked, so a later change to either side shows up.
 //   [kind, decision, old rule (material or mesh), manifest's rule, expected changes, why]
+const faceShared = new Set();   // the old rule: the probe-lit materials of every face mesh, for every mesh using them
+w.scene.traverse(o => { if (o.isMesh && roles.meshLighting(o).probeSide === 'face') for (const m of [].concat(o.material ?? [])) if (m && !m.lightMap && !m.transparent && !(m.transmission > 0)) faceShared.add(m); });
 const L = roles.lightingOf, R = roles.meshLighting, plantSurface = m => ['foliage', 'leafCard'].includes(L(m).surface);
 const FIXES = [
   // 1. an alpha mask is not a plant (audit section 3, item 1: alphaTest > 0 counted as foliage everywhere)
@@ -36,6 +38,9 @@ const FIXES = [
   ['material', 'lightmap', m => !(m.alphaTest > 0 || ['foliage', 'leafCard'].includes(L(m).surface) || (!m.isShaderMaterial && (!!m.userData.sheer || m.userData.daylightOpacity !== undefined || m.transmission > 0))), m => L(m).bake === 'lightmap', 11, 'every glass is probe-lit, not only what the export made transmissive'],
   ['material', 'windowOverlay', m => m.userData.daylightOpacity !== undefined || m.transmission > 0, m => !!L(m).glass?.overlay, 0, 'only window panes take the overlay'],
   ['material', 'clearGlass', m => m.userData.daylightOpacity !== undefined, m => L(m).glass?.export === 'pane', 0, 'only window panes become clear glass in the bake'],
+  // 3. the sided probe lookup is a mesh's (audit section 3, item 9: per material, a door leaf's material shared with a static
+  // mesh switched both to the 0.5 m outward lookup)
+  ['mesh', 'sided', o => [].concat(o.material ?? []).some(m => m && faceShared.has(m)), o => R(o).probeSide === 'face' && [].concat(o.material ?? []).some(m => m && !m.lightMap && !m.transparent && !(m.transmission > 0)), 946, 'only door leaves, blinds and curtains take the outward lookup: 946 meshes sharing their materials no longer do (frames, trim, baseboards; most are lightmapped, where the flag never applied)'],
 ];
 const items = { material: [], mesh: ix.meshes.map(({ key, node }) => [key, node]) };
 { const seen = new Set(); for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seen.has(m)) { seen.add(m); items.material.push([materialKey(m), m]); } }

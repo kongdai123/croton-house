@@ -186,6 +186,36 @@ invariant('switches-map-to-groups', 'every switch in one lamp group, every group
   invariant('reflection-probes-match-layout', 'committed refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points 1 cm, boxes 5 cm)', off);
 }
 
+// ---- 8b. reflection probes inside the house stand in free air, not inside furniture ----------------------------------------------
+// reflprobe_layout.py clears the plan's walls only; probe 4 stood inside the kitchen's pantry tower (81% of its panorama black).
+// From each layout point under the roof: 8 level rays and one up and down through the real scene (every mesh both sides,
+// see-through surfaces passed, as reflprobe.py's scene check): inside something when 2 or more first hits are back faces, or
+// a level ray hits within 0.15 m. (reflprobe.py stops the layout on the same test in the Cycles scene.)
+{
+  const layout = JSON.parse(execFileSync('python3', ['-I', join(REPO, 'bake/scripts/capture_spatial.py'), '--reflection-layout'], { encoding: 'utf8' }));
+  const off = [], meshes = [], sides = new Map();
+  scene.traverse(o => { if (o.isMesh && !o.userData.batch && o.geometry?.attributes?.position) meshes.push(o); });
+  for (const o of meshes) for (const m of mats(o)) if (!sides.has(m)) { sides.set(m, m.side); m.side = T.DoubleSide; }
+  const seeThrough = (o, hit) => { const ms = [].concat(o.material); const m = ms[hit.face?.materialIndex ?? 0] ?? ms[0];
+    const r = m && w.roles.resolveMaterial(m); return !!r && (r.surface === 'glass' || r.sheer != null || !!r.alphaCutout); };
+  const rc = new T.Raycaster(); rc.firstHitOnly = false;
+  const cast = (p, d) => { rc.set(p, d); rc.far = 3; for (const h of rc.intersectObjects(meshes, false)) {
+    if (seeThrough(h.object, h)) continue; const n = h.face.normal.clone().transformDirection(h.object.matrixWorld); return { t: h.distance, back: n.dot(d) > 0, o: h.object }; } return null; };
+  layout.forEach((l, i) => {
+    const [x, h, z] = l.p; if (!w.plan.isInside(x, -z, 0)) return;
+    const p = new T.Vector3(x, h, z); let back = 0, near = Infinity, what = null;
+    for (let k = 0; k < 10; k++) {
+      const d = k < 8 ? new T.Vector3(Math.cos(k * Math.PI / 4), 0, -Math.sin(k * Math.PI / 4)) : new T.Vector3(0, k === 8 ? 1 : -1, 0);
+      const hit = cast(p, d); if (!hit) continue;
+      if (hit.back) { back++; what = hit.o; }
+      if (k < 8 && hit.t < near) { near = hit.t; if (!what) what = hit.o; }
+    }
+    if (back >= 2 || near < 0.15) off.push(`probe ${i} at (${x.toFixed(2)}, ${(-z).toFixed(2)}): ${back} back faces, nearest ${near.toFixed(2)} m (${fixtureOf(what)?.userData.placement?.i ?? what?.name ?? '?'})`);
+  });
+  for (const [m, side] of sides) m.side = side;
+  invariant('reflection-probes-in-free-air', 'every reflection probe under the roof stands in free air (fewer than 2 back faces around it, 0.15 m clear level)', off);
+}
+
 // ---- 9. the plan model is the single source of room / inside / annex geometry --------------------------------------------
 // Grep the tracked sources for the shapes the old hand-typed copies had. Only the plan's builder and readers (and the
 // data, the docs, the goldens and the harness's quotes of the old classifiers) may hold them.

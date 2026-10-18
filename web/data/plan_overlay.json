@@ -17,7 +17,7 @@
   "daylight": { "why": "window-light volume baked into web/data/daylight.bin at this size: change only with a daylight rebake", "x0": -8.1, "x1": 8.1, "y0": -5.94, "y1": 5.62, "z0": 0, "z1": 2.44 }
  },
  "spaces": [
-  { "id": "kitchen", "kind": "room", "zone": "interior", "label": { "en": "Kitchen", "zh": "厨房" }, "from": { "note": "5c6ac3f0ca" }, "lampGroup": "kitchen" },
+  { "id": "kitchen", "reflProbe": [{"at": [-2.3, 0.0], "replaces": [-2.8, 0.0], "why": "probe 4: the grid point stood inside the microwave & pantry tower (kitchen-west-run-c, x -3.37..-2.71, floor to ceiling): 81% of its panorama black in every slot; the aisle between the tower and the island"}], "kind": "room", "zone": "interior", "label": { "en": "Kitchen", "zh": "厨房" }, "from": { "note": "5c6ac3f0ca" }, "lampGroup": "kitchen" },
   { "id": "living", "reflProbe": [{"at": [3.3, -3.6], "replaces": [4.0, -3.6], "why": "probe 9: the grid point was inside the living / front-bedroom partition: the living room's east end"}], "kind": "room", "zone": "interior", "label": { "en": "Living room", "zh": "客厅" }, "from": { "note": "68831f5eea" }, "lampGroup": "living",
     "polygon": [[-0.754, -4.606], [3.9699, -4.606], [3.9699, 0.69], [3.3489, 0.69], [3.3489, 0.8], [3.9699, 0.8], [3.9699, 1.7081], [-0.754, 1.7081]],
     "why": "niche patch (house.js, RedNote 6acbf22b00): the scanned alcove wall at y 0.85..0.96 is replaced by the pier at y 0.69..0.80 and the cavity behind it opens west into the room" },

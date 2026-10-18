@@ -7,6 +7,7 @@
 #   pack (any Python with numpy + Pillow): every group -> lampgroups/ for web/assets/lightmaps/v2/
 #     python scripts/lamp_groups_pack.py pack <groups.json> <bakes> <coverage.npy> <out> [--probes scene/probes.json]
 #       [--gains kitchen=2,hall=0.5]   (a group's fixture wattage relative to the bake; the site multiplies its level)
+#       [--units lightmap_uv2.bin.gz]  (chart-aware half / quarter tiers, downscale_atlas.py chart_downscale)
 #     Three groups per lossless RGB WebP (one per channel), each through the bake's tone curve y = sqrt(x / (x + K))
 #     with its own K; full size split in two row halves (15 MB publishing cap), half and quarter tiers averaged over the
 #     covered area in linear light as downscale_atlas.py does (coverage.npy: composite_v2.py's top-first mask).
@@ -69,11 +70,12 @@ def tone_K(lum):
     lit = lum[lum > 1e-4]
     return float(np.clip(max(np.median(lit), np.percentile(lit, 99.9) / 15.5) if lit.size else 0.15, 0.01, 2.0))
 
-def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}):
+def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}, units=None):
     from PIL import Image
-    from downscale_atlas import downscale, dilate, PAD
+    from downscale_atlas import dilate, PAD, tier, unit_rasters
     groups = json.load(open(groups_json))['groups']; G = len(groups); T = math.ceil(G / 3)
     cov = np.load(coverage).astype(bool); H, W = cov.shape
+    rasters = unit_rasters(units, W, H) if units else None   # chart-aware tiers, as downscale_atlas.py --units
     os.makedirs(out, exist_ok=True)
     meta = {'version': 1, 'curve': 'sqrt(x/(x+K))', 'lampK': 3000, 'textures': T, 'size': [W, H], 'groups': []}
     lums = []
@@ -99,7 +101,7 @@ def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}
             sizes[os.path.basename(p)] = os.path.getsize(p)
         del q
         for tier, factor in (('half', 2), ('quarter', 4)):
-            small, covered = downscale(stack, cov, factor); small = dilate(small, covered, PAD)
+            small, covered = tier(stack, cov, factor, rasters); small = dilate(small, covered, PAD)
             q = np.round(np.sqrt(small / (small + K)) * 255).astype(np.uint8); u = grown(covered, PAD); q[u] = np.maximum(q[u], 1); os.makedirs(os.path.join(out, tier), exist_ok=True)
             p = os.path.join(out, tier, f'lampgroups_{t}.webp'); Image.fromarray(q).save(p, format='WEBP', lossless=True, quality=100, method=6)
             sizes[f'{tier}/{os.path.basename(p)}'] = os.path.getsize(p); meta.setdefault('tiers', {})[tier] = list(q.shape[1::-1])
@@ -162,5 +164,6 @@ if __name__ == '__main__':
     elif args[0] == 'pack':
         probes = args[args.index('--probes') + 1] if '--probes' in args else 'scene/probes.json'
         gains = dict((k, float(v)) for k, v in (kv.split('=') for kv in args[args.index('--gains') + 1].split(','))) if '--gains' in args else {}
-        pack(*args[1:5], probes=probes, gains=gains)
+        units = args[args.index('--units') + 1] if '--units' in args else None
+        pack(*args[1:5], probes=probes, gains=gains, units=units)
     else: raise SystemExit('usage: merge <group dir> [guides] | pack <groups.json> <bakes> <coverage.npy> <out> [--probes path] | refl <groups.json> <lamp refl dir> <out>')

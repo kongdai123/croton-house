@@ -1,5 +1,5 @@
 # Covered-area averages in linear light, then fresh padding and the full atlas's tone curve / K.
-# usage: CROTON_SITE_PACKAGES=... blender -b --python-exit-code 1 -P scripts/downscale_atlas.py -- bakes/v2/sunrise
+# usage: CROTON_SITE_PACKAGES=... blender -b --python-exit-code 1 -P scripts/downscale_atlas.py -- bakes/v2/sunrise [--mask coverage.npy] [--units lightmap_uv2.bin.gz]
 # All arrays here are top-first; Blender's bottom-first image buffer is flipped exactly once on load.
 import sys, os, glob, json, math, argparse
 if os.environ.get('CROTON_SITE_PACKAGES'): sys.path.append(os.environ['CROTON_SITE_PACKAGES'])
@@ -52,6 +52,44 @@ def downscale(rgb, cov, factor):
     covered = a[..., 3] > 0
     a[..., :3] /= np.maximum(a[..., 3:], np.finfo(np.float32).tiny)
     return a[..., :3].copy(), covered
+
+def chart_downscale(rgb, cov, factor, ids, ids_t):
+    # Chart-aware tiers: a tier texel that a unit's charts cover (ids_t: atlas_units.rasterize at the tier's size, the texels
+    # the site samples for that unit) averages only that unit's texels of the full atlas in its footprint (ids: the same
+    # raster at full size, the texels the full tier shows for the unit, chart edges included), or takes the unit's mean
+    # when its footprint holds none (a chart thinner than the tier's texel). Plain covered-area averaging mixed in the
+    # neighbouring charts of other units, and the dilation filled a thin chart's empty tier texels from them: small dim
+    # units read 2-10x brighter at half and quarter (bake QA tiers-consistency; on the final bake's sunrise slot 3 units at
+    # half and 7 at quarter, none chart-aware). Texels no unit covers keep downscale().
+    out, covered = downscale(rgb, cov, factor)
+    h, w = cov.shape; th, tw = ids_t.shape; C = rgb.shape[-1]
+    if ids.shape != (h, w): raise ValueError('unit raster and atlas dimensions differ')
+    tindex = ((np.arange(h) * th // h)[:, None] * tw + (np.arange(w) * tw // w)[None, :]).ravel()
+    f_ids = ids.ravel(); owner = ids_t.ravel()
+    sel = np.flatnonzero((f_ids > 0) & (f_ids == owner[tindex])); t = tindex[sel]
+    flat = rgb.reshape(-1, C); n = th * tw
+    cnt = np.bincount(t, minlength=n)
+    sums = np.stack([np.bincount(t, weights=flat[sel, c], minlength=n) for c in range(C)], -1)
+    U = int(max(f_ids.max(), owner.max()))
+    su = np.flatnonzero(f_ids > 0); uc = np.bincount(f_ids[su], minlength=U + 1)
+    um = np.stack([np.bincount(f_ids[su], weights=flat[su, c], minlength=U + 1) for c in range(C)], -1) / np.maximum(uc, 1)[:, None]
+    o = out.reshape(-1, C); cv = covered.ravel()
+    has = (owner > 0) & (cnt > 0); o[has] = sums[has] / cnt[has][:, None]
+    fb = (owner > 0) & (cnt == 0) & (uc[owner] > 0); o[fb] = um[owner[fb]]
+    cv |= has | fb
+    return o.reshape(th, tw, C).astype(np.float32), cv.reshape(th, tw)
+
+def unit_rasters(units_path, W, H):
+    # {(W, H): raster} at full size and both tier sizes (atlas_units.py, as bake QA rasterises them)
+    from atlas_units import read_units, rasterize
+    units = read_units(units_path)['units']
+    return {s: rasterize(units, *s) for s in ((W, H), (math.ceil(W / 2), math.ceil(H / 2)), (math.ceil(W / 4), math.ceil(H / 4)))}
+
+def tier(rgb, cov, factor, rasters=None):
+    # one tier of an atlas: chart-aware when the unit rasters are given (--units), else plain covered-area averaging
+    if rasters is None: return downscale(rgb, cov, factor)
+    h, w = cov.shape
+    return chart_downscale(rgb, cov, factor, rasters[(w, h)], rasters[(math.ceil(w / factor), math.ceil(h / factor))])
 
 def dilate(rgb, cov, steps):
     # Copy a neighbour rather than mixing unrelated charts. No wrap at atlas edges; covered (even black) stays fixed.
@@ -112,11 +150,20 @@ def self_test():
     np.testing.assert_array_equal(encode(np.array([0, 0.2, 0.6], np.float32), 0.2), [0, 180, 221])
     np.testing.assert_array_equal(encode(np.zeros((1, 3, 3), np.float32), 0.2, np.array([[True, False, True]]))[0, :, 0], [1, 0, 1])
     assert padded_charts(np.eye(3, dtype=bool)[:1], 1).sum() == 2
-    print('self-test passed: covered area, odd dimensions, black charts, padding, tone curve')
+    # chart-aware: a dim one-texel-wide chart beside a bright one keeps its own light at half size
+    rgb = np.zeros((8, 8, 3), np.float32); cov = np.zeros((8, 8), bool); ids = np.zeros((8, 8), np.int32)
+    rgb[:, 0] = 0.01; cov[:, 0] = True; ids[:, 0] = 1; rgb[:, 1:4] = 1.0; cov[:, 1:4] = True; ids[:, 1:4] = 2
+    ids_t = np.zeros((4, 4), np.int32); ids_t[:, 0] = 1; ids_t[:, 1] = 2
+    plain, _ = downscale(rgb, cov, 2); aware, cv = chart_downscale(rgb, cov, 2, ids, ids_t)
+    assert plain[0, 0, 0] > 0.5 and abs(aware[0, 0, 0] - 0.01) < 1e-6 and abs(aware[0, 1, 0] - 1.0) < 1e-6 and cv[:, :2].all()
+    ids_t[0, 2] = 1   # a tier texel the dim unit owns but whose footprint holds none of its texels: the unit's mean
+    aware, _ = chart_downscale(rgb, cov, 2, ids, ids_t); assert abs(aware[0, 2, 0] - 0.01) < 1e-6
+    print('self-test passed: covered area, odd dimensions, black charts, padding, tone curve, chart-aware tiers')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('folder', nargs='?'); parser.add_argument('--mask', help='optional top-first boolean coverage .npy')
+    parser.add_argument('--units', help='lightmap_uv2.bin.gz: chart-aware tiers (chart_downscale)')
     parser.add_argument('--self-test', action='store_true')
     args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:])
     if args.self_test: self_test(); return
@@ -126,7 +173,7 @@ def main():
     with open(os.path.join(folder, 'encoding.json')) as f: meta = json.load(f)
     meta.pop('rows', None)   # lower tiers are single WebPs, even when the full atlas is split for transport
     if meta.get('curve') != 'sqrt(x/(x+K))': raise ValueError('unsupported tone curve')
-    cov = None; sizes = {}
+    cov = None; sizes = {}; rasters = None
     for name in ('slot', 'lamps'):
         K = float(meta['K'][name])
         if not math.isfinite(K) or K <= 0: raise ValueError(f'{name}: invalid K')
@@ -138,15 +185,16 @@ def main():
         if cov.shape != rgb.shape[:2]: raise ValueError('coverage dimensions differ')
         if not cov.any(): raise ValueError('empty coverage')
         sizes['full'] = list(rgb.shape[1::-1])
-        for tier, factor in (('half', 2), ('quarter', 4)):
-            out, covered = downscale(rgb, cov, factor); out = dilate(out, covered, PAD); q = encode(out, K, padded_charts(covered, PAD))
-            dst = os.path.join(folder, tier); os.makedirs(dst, exist_ok=True)
+        if args.units and rasters is None: rasters = unit_rasters(args.units, rgb.shape[1], rgb.shape[0]); print('chart-aware tiers:', args.units, flush=True)
+        for tname, factor in (('half', 2), ('quarter', 4)):
+            out, covered = tier(rgb, cov, factor, rasters); out = dilate(out, covered, PAD); q = encode(out, K, padded_charts(covered, PAD))
+            dst = os.path.join(folder, tname); os.makedirs(dst, exist_ok=True)
             np.save(os.path.join(dst, f'{name}_tone.npy'), q)
             Image.fromarray(q, 'RGB').save(os.path.join(dst, f'{name}.webp'), format='WEBP', lossless=True, quality=100, method=6)
             np.save(os.path.join(dst, 'coverage.npy'), covered)
             with open(os.path.join(dst, 'encoding.json'), 'w') as f: json.dump(meta, f)
-            h, w = q.shape[:2]; sizes[tier] = [w, h]
-            print(f'{name} {tier}: {w}x{h}, coverage {covered.mean():.4f}, K {K}, two layers + mips {memory(w, h):.2f} MiB', flush=True)
+            h, w = q.shape[:2]; sizes[tname] = [w, h]
+            print(f'{name} {tname}: {w}x{h}, coverage {covered.mean():.4f}, K {K}, two layers + mips {memory(w, h):.2f} MiB', flush=True)
             del out, covered, q
         del rgb
     report = {'source': sizes['full'], 'rows': 'top-first', 'padding_full': 4,

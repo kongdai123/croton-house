@@ -12,35 +12,8 @@
     "primaryBathCloset (Linen closet)"
    ]
   },
-  "probe-lit-has-reason": {
-   "title": "no visible static mesh is left without a lightmap id unless glass, plant, door, movable, moving part, instanced",
-   "count": 21,
-   "offenders": [
-    "wall-switch-bathB/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-bedroom3/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-bedroom3Lamps/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-bedroomB/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-bedroomBLamps/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-closet/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-dining/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-family/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-garage/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-hall/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-hallBath/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-kitchen/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-kitchenCabinet/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-kitchenPendant/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-living/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-livingCenter/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-livingNiche/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-porch/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-primary/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-primaryBath/Mesh[1] [MeshStandardMaterial]",
-    "wall-switch-primaryLamps/Mesh[1] [MeshStandardMaterial]"
-   ]
-  },
   "encoding-matches-lamp-groups-order": {
-   "title": "committed lampgroups/encoding.json groups (15) equal lamp_groups.py ORDER (22)",
+   "title": "committed lampgroups/encoding.json groups (15) equal the manifest's lamp groups (22)",
    "count": 7,
    "offenders": [
     "missing from encoding.json: bathB",

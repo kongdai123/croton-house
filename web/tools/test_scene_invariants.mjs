@@ -47,31 +47,27 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   }
   if (plates.length !== declaredPlates.size) off.push(`${declaredPlates.size} plates declared, ${plates.length} made`);
   for (const [g, n] of groups) if (n > 1) off.push(`group ${g}: ${n} plates`);
-  // on solid wall (house.json walls), clear of every door and its casing on that wall
+  // on solid wall (the plan's walls, annex included), clear of every opening and its casing on that wall
   for (const p of plates) {
     const ry = p.rotation.y, x = p.position.x, y = -p.position.z, dx = -Math.sin(ry) * 0.02, dy = Math.cos(ry) * 0.02;
-    const wall = w.house.walls.find(q => x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1);
+    const wall = w.plan.walls.find(q => x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1);
     if (!wall) { off.push(`plate ${p.name}: no wall behind it`); continue; }
-    if (w.house.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065))) off.push(`plate ${p.name}: in a door or its casing`);
+    if (w.plan.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065))) off.push(`plate ${p.name}: in a door or its casing`);
   }
   invariant('switch-plates-map-to-fixtures', 'every wall plate drives a fixture of its own lamp group, every declared plate was made (one per group), on solid wall clear of doors', off);
 }
 
-// ---- 3. no static mesh is probe-lit without a reason category ----------------------------------------------------------------
+// ---- 3. no static mesh is probe-lit without a reason ------------------------------------------------------------------------------
+// The lighting manifest says why a mesh takes the probe volume (lighting_roles.js why: instanced, movable, dynamic, door,
+// plant/glass, presentation, hidden); a visible lit mesh the manifest calls lightmapped must carry a lightmap id.
 {
-  // lightmap.js:773-778 ladder (glass, plant, door, movable, dynamic) with the explained 'dynamic' cases made explicit
-  const doorParts = new Set();
-  for (const d of doors) { if (d.kind === 'french' || d.kind === 'slider') continue; d.group.traverse(o => { if (o.isMesh && o.parent !== d.group) doorParts.add(o); }); }
   const off = [];
   for (const { node: o } of ix.meshes) {
     const ms = mats(o); if (!visible(o) || !ms.some(m => m.isMeshStandardMaterial)) continue;
-    if (o.userData.lmId || o.userData.lmSkip || doorParts.has(o) || o.isInstancedMesh || o.isSkinnedMesh) continue;
-    const m = ms[0]; if (m.transmission > 0 || m.transparent || m.alphaTest > 0 || /^(garden-|plant)/.test(m.name || '')) continue;
-    let dyn = false; for (let p = o; p && !dyn; p = p.parent) dyn = ix.anchors.has(p) || ix.animated.has(p) || ix.dynamicRoots.has(p) || !!p.userData.toggle || !!p.userData.movable;
-    if (dyn) continue;
-    off.push(ix.pathOf(o) + ' [' + (m.name || m.type) + ']');
+    const r = w.roles.meshLighting(o);
+    if (r.bake === 'lightmap' && !o.userData.lmId) off.push(ix.pathOf(o) + ' [' + (ms[0].name || ms[0].type) + ']');
   }
-  invariant('probe-lit-has-reason', 'no visible static mesh is left without a lightmap id unless glass, plant, door, movable, moving part, instanced', off);
+  invariant('probe-lit-has-reason', 'every visible lit mesh the manifest lightmaps has a lightmap id (the others have a manifest reason)', off);
 }
 
 // ---- 4. lmIds unique ---------------------------------------------------------------------------------------------------------

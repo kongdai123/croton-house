@@ -190,6 +190,7 @@ function resolveMesh(o, ctx) {
   if (moving) motion = moving.userData.movable ? 'moving' : ctx.still.has(o) ? 'still' : 'moving';
   else if (movable) motion = 'movable';
   else if (door) motion = o.parent === door ? 'still' : 'door';
+  if (declared(o).motion) motion = declared(o).motion;   // a part that moves on its own (a wall switch's rocker)
   // bake: the lightmap for what holds still; the probe volume for the rest, with the reason unwrap.py and the site report
   const leaves = door ? declared(door).leaves ?? 'probe' : null;   // the door declares how its leaves are lit (house.js)
   let why = null;

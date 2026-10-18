@@ -10,7 +10,7 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { composerConfig } from './render_targets.js';
-import { M, emitsLight } from './materials.js';
+import { M } from './materials.js';
 import { collectLightSwitches } from './furniture/light_switch.js';
 import { createHQ } from './hq.js';
 import { bakeDaylight } from './daylight.js';
@@ -306,7 +306,7 @@ export function createLighting(renderer, scene, camera, house, preset) {
           uses.set(materialRegion, local); materialRegion.add(local);
           if (local.userData.daylightOpacity !== undefined && materialRegion === interiorMaterials) glass.set(local, local.opacity);
         }
-        if (local.emissive && local.emissiveIntensity > 0 && !local.userData.lightGlow) emissives.set(local, local.emissiveIntensity);
+        if (local.emissive && local.emissiveIntensity > 0 && !lightingOf(local).emits?.switched) emissives.set(local, local.emissiveIntensity);
         return local;
       };
       o.material = Array.isArray(o.material) ? o.material.map(assign) : assign(o.material);
@@ -314,10 +314,10 @@ export function createLighting(renderer, scene, camera, house, preset) {
   }
 
   // Baked lighting (lightmap.js) carries the light through cloth already: only real light sources keep their glow
-  // (materials.js emitsLight), the rest go dark and leave the daytime rule above for good.
+  // (the lighting manifest's emits), the rest go dark and leave the daytime rule above for good.
   function physicalEmission() {
     const previous = new Map(emissives), levels = new Map([...emissives.keys()].map(m => [m, m.emissiveIntensity]));
-    for (const material of [...emissives.keys()]) if (!emitsLight(material)) { material.emissiveIntensity = 0; emissives.delete(material); }
+    for (const material of [...emissives.keys()]) if (!lightingOf(material).emits) { material.emissiveIntensity = 0; emissives.delete(material); }
     return () => { for (const [m, v] of previous) emissives.set(m, v); for (const [m, v] of levels) m.emissiveIntensity = v; };
   }
 

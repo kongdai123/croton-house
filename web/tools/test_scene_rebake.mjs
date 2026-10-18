@@ -15,13 +15,14 @@ try {
     export { items as decor } from './src/furniture/decor.js'; export { items as outdoor } from './src/furniture/outdoor.js';
     export { pillowBody } from './src/furniture/living.js'; export { puffGeo, ruffle } from './src/furniture/bedrooms_parts.js';
     export { collectLightSwitches, WALL_SWITCHES } from './src/furniture/light_switch.js'; export { defaultOn, lampGroupGLSL, createLampGroups } from './src/lamp_groups.js';
-    export { emitsLight, sheerProbePatch } from './src/materials.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
+    export { sheerProbePatch } from './src/materials.js';
+    export { lightingOf } from './src/lighting_roles.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
     bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
   globalThis.location = { search: '' };
   const context = new Proxy({}, { get: (o, k) => o[k] ?? (() => {}) });
   globalThis.document = { createElement: () => ({ getContext: () => context }) };
-  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, WALL_SWITCHES, defaultOn, lampGroupGLSL, createLampGroups, emitsLight, sheerProbePatch } = await import(pathToFileURL(file));
+  const { T, PLACEMENTS, decor, outdoor, pillowBody, puffGeo, ruffle, collectLightSwitches, WALL_SWITCHES, defaultOn, lampGroupGLSL, createLampGroups, lightingOf, sheerProbePatch } = await import(pathToFileURL(file));
   const py = "import ast,sys,json; t=ast.parse(open(sys.argv[1]).read()); print(json.dumps(next(ast.literal_eval(n.value) for n in t.body if isinstance(n, ast.Assign) and getattr(n.targets[0], 'id', '') == 'ORDER')))";
   const names = JSON.parse(execFileSync('python3', ['-c', py, fileURLToPath(new URL('../../bake/scripts/lamp_groups.py', import.meta.url))], { encoding: 'utf8' }));
   assert.deepEqual(new Set(WALL_SWITCHES.map(s => s[0])), new Set(names.filter(n => n !== 'always')));
@@ -71,7 +72,7 @@ try {
     const shade = make(), materials = new Set(); shade.traverse(o => { if (o.material?.userData.sheer) materials.add(o.material); });
     assert.equal(materials.size, 1);
     for (const m of materials) {
-      assert.deepEqual(m.userData.sheer, { reflect: 0.65, transmit: 0.35 }); assert.equal(emitsLight(m), false); assert.equal(m.emissiveIntensity * m.emissive.getHex(), 0);
+      assert.deepEqual(m.userData.sheer, { reflect: 0.65, transmit: 0.35 }); assert.equal(!!lightingOf(m).emits, false); assert.equal(m.emissiveIntensity * m.emissive.getHex(), 0);
       const sh = { uniforms: {}, vertexShader: T.ShaderLib.physical.vertexShader, fragmentShader: T.ShaderLib.physical.fragmentShader.replace('#include <lights_fragment_maps>', 'irradiance += probeIrradiance( vProbeWorld, inverseTransformDirection( geometryNormal, viewMatrix ) );') };
       sheerProbePatch(sh, m); assert.equal(sh.uniforms.uSheer.value.y, 0.35); assert.ok(sh.fragmentShader.includes('- sheerN'));
     }

@@ -260,12 +260,6 @@ Object.assign(M, {
   }),
 });
 
-// Real light sources: the lamp surfaces light_switch.js collects from the fixtures (userData.lightGlow) and materials
-// marked where they are made with userData.emits ('lamp' for bulbs, shades and diffusers outside a switch, 'screen' and
-// 'indicator' for displays and LEDs that are on, 'fire'). Any other emissive colour is a raster stand-in (lighting.js
-// lifts every emissive material to a 0.12 glow by day, so cloth and paper read as backlit) and must not emit light in
-// the path tracer (photo.js), the Blender export (bake/export/setup.py) or under the baked lighting (lightmap.js).
-export const emitsLight = m => !!(m?.userData?.lightGlow || m?.userData?.emits);
 
 // Sheer voile under the baked light (lightmap.js calls this from probeLit for materials with userData.sheer = { reflect,
 // transmit }). Real voile shows two things: the room-side light its fibres reflect, and the window-side light they

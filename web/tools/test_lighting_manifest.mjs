@@ -25,7 +25,6 @@ else console.log('ok   validator: every visible mesh and material resolved');
 const MATERIAL = [
   ['unwrapSkip', c => !!c.unwrapSkip, m => L(m).bake === 'probe'],
   ['glassCycles', c => !!c.glassCycles, m => L(m).glass?.export === 'pane'],
-  ['emitsLight', c => !!c.emitsLight, m => !!L(m).emits],
   ['sheer', c => !!c.sheer, m => !!L(m).sheer],
 ];
 const MESH = [

@@ -26,6 +26,11 @@ export const SCHEMA = {
     weather: ['auto', 'plant'],                    // the after-rain class of meshes using it: plant forces the leaf rule
     glass: 'null, or { overlay, export }: overlay = Fresnel sky overlay of window panes; export = pane (clear transmissive glass for the bake) or keep',
     sheer: 'null, or { reflect, transmit } (decor.js voile, cellular shades)',
+    // Real light sources: the lamp surfaces light_switch.js collects from the fixtures (switched) and materials marked where
+    // they are made ('lamp' for bulbs, shades and diffusers outside a switch, 'screen' and 'indicator' for displays and
+    // LEDs that are on, 'fire'). Any other emissive colour is a raster stand-in (lighting.js lifts every emissive material
+    // to a 0.12 glow by day, so cloth and paper read as backlit) and must not emit light in the path tracer (photo.js),
+    // the Blender export (bake/export/setup.py) or under the baked lighting (lightmap.js).
     emits: "null, or { kind: 'lamp' | 'screen' | 'indicator' | 'fire', switched }: a real light source",
     reflection: ['probe', 'mirror'],
     clearcoat: [null, 'probe'],                    // the clear-coat layer reflects the room's probe (the tracer strips it)

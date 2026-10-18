@@ -25,8 +25,8 @@ export const QUOTED = [
 ];
 // Called from the real source (see scene.mjs INTERNALS): lightmap.js weatherClass / isMirror, plan.js isInside, photo.js presentation /
 // weatherClass, foliage_bake.js isPlant, puddles.js wetMaterial / indoors, light_switch.js glowing,
-// materials.js emitsLight, pets/roam.js areaOf / isIndoor, plan.js roomName, lighting.indoorWeight.
-export const CALLED = ['emitsLight', 'roles.lightingOf (foliage, leafSide, wetEligible, glassShadow, glassOverlay, mirror, probe, occl, contactExcluded)',
+// roles.lightingOf emits, pets/roam.js areaOf / isIndoor, plan.js roomName, lighting.indoorWeight.
+export const CALLED = ['roles.lightingOf emits (emitsLight)', 'roles.lightingOf (foliage, leafSide, wetEligible, glassShadow, glassOverlay, mirror, probe, occl, contactExcluded)',
   'roles.meshLighting (weather, weatherPhoto, doorPart, pcssPlant, plantRoot)', 'plan.isInside', 'photoPresentation', 'foliageIsPlant',
   'puddlesWetMaterial', 'puddlesIndoors', 'switchGlowing', 'areaOf', 'isIndoor', 'plan.roomName', 'lighting.indoorWeight'];
 
@@ -40,7 +40,7 @@ export function materialClassify(w, m, fakeMesh) {
   return prune({
     foliage: !!L(m).foliage, leafSide: L(m).twoSided === 'faceDirection', wetEligible: L(m).wet === 'auto', wetPuddles: !!w.puddlesWetMaterial(m), unwrapSkip: UNWRAP_SKIP(m),
     glassShadow: !L(m).castsSun, glassOverlay: !!L(m).glass?.overlay, glassStats: !!(m.transmission > 0 || m.transparent), glassUnwrap: GLASS_UNWRAP(m), glassCycles: GLASS_CYCLES(m),
-    emitsLight: w.emitsLight(m), emitsKind: m.userData?.emits, glowing: !!w.switchGlowing(fakeMesh(m)), mirror: L(m).reflection === 'mirror', mirrorLayout: m?.name === 'mirror',
+    emitsLight: !!L(m).emits, emitsKind: m.userData?.emits, glowing: !!w.switchGlowing(fakeMesh(m)), mirror: L(m).reflection === 'mirror', mirrorLayout: m?.name === 'mirror',
     sheer: !!m.userData?.sheer, occl: !!L(m).foliage?.groundOcclusion && !m.foliageBake,
     // what probeLit(material) puts in the shader (lightmap.js, from the manifest record), without `sided` (mesh level)
     probe: m.isMeshStandardMaterial ? [L(m).twoSided === 'faceDirection' ? 'leafSide' : '', L(m).foliage ? 'foliage' : '', L(m).wet === 'auto' ? 'wet' : '', L(m).sheer ? 'sheer' : '', L(m).reflection === 'mirror' ? 'mirror' : ''].filter(Boolean).join(',') || undefined : undefined,
@@ -82,7 +82,7 @@ export function captureClassify(w, ix) {
     o2.doorPart = R(o).why === 'door';
     o2.plantRoot = R(o).role === 'plant';
     o2.pcssPlant = R(o).sun.track === 'plant';
-    o2.emits = ms.some(m => w.emitsLight(m));
+    o2.emits = ms.some(m => !!w.roles.lightingOf(m).emits);
     o2.glowing = !!w.switchGlowing(o);
     o2.mirrorFace = ms.some(m => m?.name === 'mirror');
     o2.batchable = !!(o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && o.geometry?.attributes.position);

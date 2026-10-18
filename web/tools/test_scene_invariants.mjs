@@ -71,11 +71,12 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   const owned = new Set(); for (const s of switches) for (const m of s.meshes) owned.add(m);
   const off = [];
   for (const { node: o } of ix.meshes) for (const m of mats(o)) {
-    if (!w.emitsLight(m) || ALLOWED.has(m.userData.emits)) continue;
+    const emits = w.roles.lightingOf(m).emits;
+    if (!emits || ALLOWED.has(emits.kind)) continue;
     if (owned.has(o)) continue;
     const f = fixtureOf(o);
     if (f && (f.userData.light || f.userData.lightFixture) && [...switches].some(s => { for (let p = s.root; p; p = p.parent) if (p === f) return true; return false; })) continue;
-    off.push(`${ix.placedKey.get(f) ?? ix.regionOf(o)} [${m.name || m.type}, emits ${m.userData.emits ?? (m.userData.lightGlow ? 'lightGlow' : '?')}]`);
+    off.push(`${ix.placedKey.get(f) ?? ix.regionOf(o)} [${m.name || m.type}, emits ${emits.kind}]`);
   }
   invariant('emitters-belong-to-fixture', 'every lamp-kind emitting material is on a switched fixture (screens, indicators and fire are allowed anywhere)', off);
 }

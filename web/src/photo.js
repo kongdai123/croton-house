@@ -383,7 +383,7 @@ export class PhotoMode {
         if (cls) mesh.material = wetMaterial(mesh.material, cls, mood.wet, wetCache, own);
         if (cls === 'ground') grounds.push(mesh); else if (cls) blockers.push(mesh);
       }
-      if (mood && mesh.material.userData.lightGlow && mesh.material.emissive) {
+      if (mood && lightingOf(mesh.material).emits?.switched && mesh.material.emissive) {
         let toggle; for (let p = o; p && !toggle; p = p.parent) toggle = p.userData.lightSwitch;
         const source = toggle?.glows?.find(g => g.material === o.material);
         const level = mood.lamps * (toggle?.manual ? toggle.value : 1);

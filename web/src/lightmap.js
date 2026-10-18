@@ -27,7 +27,7 @@ import { createLampGroups, lampGroupGLSL, lampGroupsWanted, loadGroupProbes, val
 import { createSlotProgress } from './slot_progress.js';
 import { TIERS } from './tier.js';
 import { bakedResolution } from './baked_mode.js';
-import { sheerProbePatch, emitsLight } from './materials.js';
+import { sheerProbePatch } from './materials.js';
 import { auditPrograms, fitSamplers } from './sampler_budget.js';
 import { insideGLSL, pieces as planPieces, plan } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
@@ -628,13 +628,13 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const byId = new Map(), byCount = new Map();
   for (const u of header.units) { if (u.id) byId.set(u.id, u); if (!byCount.has(u.vc)) byCount.set(u.vc, []); byCount.get(u.vc).push(u); }
   const weather = new Map(), emissionCopies = new Map();
-  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = e.source.userData.lightGlow ? e.source.emissiveIntensity : e.base * level; };
+  const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = lightingOf(e.source).emits.switched ? e.source.emissiveIntensity : e.base * level; };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
   pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them
   pcss.setTier(tier);
   lighting.sun.userData.bakedShadow = true;
-  const restoreEmission = lighting.physicalEmission?.();   // as in the bake: only real light sources glow (materials.js emitsLight)
+  const restoreEmission = lighting.physicalEmission?.();   // as in the bake: only real light sources glow (the manifest's emits)
   scene.updateMatrixWorld(true);
   const meshes = []; scene.traverse(o => { if (o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && o.geometry?.attributes.position) meshes.push(o); });
   const tight = o => { box.makeEmpty(); const pos = o.geometry.attributes.position; for (let i = 0; i < pos.count; i++) box.expandByPoint(tmp.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld)); return box; };
@@ -678,10 +678,10 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       if (mats.has(key)) return mats.get(key);
       // a clean copy: none of the walkthrough's fake-GI shader patches, the bake's light instead of the sky's diffuse
       const c = m.clone(); c.onBeforeRender = m.onBeforeRender;
-      if (emitsLight(m)) emissionCopies.set(c, { source: m, base: m.emissiveIntensity });   // copies must follow their switch even with one slot
+      if (lightingOf(m).emits) emissionCopies.set(c, { source: m, base: m.emissiveIntensity });   // copies must follow their switch even with one slot
       if (multi) weather.set(c, { cls: cls === 'ground' ? null : cls, color: c.color.clone(), roughness: c.roughness });
       wetten(c, cls === 'ground' ? null : cls, SLOTS[slot].wet);   // ground wetness is per pixel
-      if (!emitsLight(m)) c.emissiveIntensity = 0;   // a raster glow stand-in: the bake has the real light
+      if (!lightingOf(m).emits) c.emissiveIntensity = 0;   // a raster glow stand-in: the bake has the real light
       const puddles = (multi || SLOTS[slot].wet > 0) && cls !== 'plant';   // the mask is per pixel: outdoors, facing up, near the ground
       c.lightMap = target.texture; c.lightMapIntensity = lightMapIntensity;
       // reflections dimmed by the baked light reaching the spot (specular occlusion): a dim room reflects little of the
@@ -741,7 +741,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
         if (!m?.isMeshStandardMaterial || m.lightMap || m.isFogVolumeMaterial || !volume) continue;
         if (!hooks.has(m) && !m.userData.probeLit) {
           hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, bakedHooks: m.bakedHooks });
-          if (!emitsLight(m)) m.emissiveIntensity = 0;
+          if (!lightingOf(m).emits) m.emissiveIntensity = 0;
           probeLit(m, volume, pcss, sided.has(m)); probeLitCount++;
         }
         if (envTarget) setEnv(m);

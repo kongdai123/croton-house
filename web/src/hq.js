@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { pieces as planPieces } from './plan.js';
+import { lightingOf } from './lighting_roles.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -166,7 +167,7 @@ export function prepareMirrors(scene, mirrors, house) {
         if (walls.some(w => probes.every(p => origins.every(o => blocked(o, p, w))))) continue;
       }
       const material = source.material;
-      if (!dynamic && !source.isInstancedMesh && source.matrixWorld.determinant() > 0 && source.geometry.drawRange.count === Infinity && source.geometry.drawRange.start === 0 && (!material.vertexColors || source.geometry.attributes.color?.itemSize !== 4) && material.isMeshStandardMaterial && !material.transparent && !material.userData.lightGlow && material.emissive.getHex() === 0 && source.onBeforeRender === THREE.Mesh.prototype.onBeforeRender && material.customProgramCacheKey().startsWith(THREE.Material.prototype.onBeforeCompile.toString())) {
+      if (!dynamic && !source.isInstancedMesh && source.matrixWorld.determinant() > 0 && source.geometry.drawRange.count === Infinity && source.geometry.drawRange.start === 0 && (!material.vertexColors || source.geometry.attributes.color?.itemSize !== 4) && material.isMeshStandardMaterial && !material.transparent && !lightingOf(material).emits?.switched && material.emissive.getHex() === 0 && source.onBeforeRender === THREE.Mesh.prototype.onBeforeRender && material.customProgramCacheKey().startsWith(THREE.Material.prototype.onBeforeCompile.toString())) {
         const geometry = source.geometry.clone().applyMatrix4(source.matrixWorld), count = geometry.attributes.position.count;
         const colors = new Float32Array(count * 3), surface = new Float32Array(count * 2), original = material.vertexColors ? geometry.attributes.color : null;
         for (let i = 0; i < count; i++) {

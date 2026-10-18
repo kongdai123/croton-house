@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { isInside } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
-import { isBaked } from './shaders/baked_material.js';
+import { isBaked, materialOptions, setPlanarPuddle } from './shaders/baked_material.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -43,19 +43,15 @@ function outsideTriangle(a, b, c) {
 function visible(o) { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }
 function reflectionVisible(o) { for (let p = o; p; p = p.parent) if (!p.visible && !(p.name === 'frozen' && p.userData.batch)) return false; return true; }
 
-// furniture: roots of movable and animated objects (lightmap.js movables, dynamic), never given the planar reflection
-export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture = [] }) {
-  const P = { ...PUDDLE_PARAMS, ...params }, flat = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
-  flat.matrixWorldAutoUpdate = false; camera.userData.hqReflection = true; camera.userData.puddleReflection = true;
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true, samples: 0 });
-  rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
-  const uniforms = PUDDLE_UNIFORMS;
-  uniforms.uPuddleMatrix.value.identity(); uniforms.uPuddleTex.value = rt.texture; uniforms.uPuddleValid.value = 0; uniforms.uPuddleTime.value = 0;
-  uniforms.uPuddleY.value = P.ground; uniforms.uPuddleEdge.value = P.edge; uniforms.uPuddleWind.value = P.wind;
-  const sources = [], lights = [], samples = [], materials = new Map(), patches = [], candidates = [];
-  // Materials that can show a puddle: on a flat, up-facing triangle at a puddle plane's height outside the house (the
-  // wet mask is zero elsewhere). Only these take the planar reflection: never indoor floors or furniture, whose
-  // shaders have no texture unit to spare on Apple GPUs (16 per fragment shader).
+// The puddle reflection's scene and ground, from the scene as it is (CPU only, no materials made): the meshes it mirrors
+// (with their world bounds), the materials that can show a puddle (on a flat, up-facing triangle at a puddle plane's
+// height outside the house: the wet mask is zero elsewhere; only these take the planar reflection, never indoor floors or
+// furniture, whose shaders have no texture unit to spare on Apple GPUs) and the puddle samples that decide which plane
+// to render. Run once when the baked lighting loads, so the ground's shaders are compiled with the planar puddle from the
+// start (a later quality change only switches it on: no recompile at runtime). furniture: roots of movable and animated
+// objects (lightmap.js movables, dynamic), never given the planar reflection.
+export function scanPuddles(scene, furniture = [], params = {}) {
+  const P = { ...PUDDLE_PARAMS, ...params }, samples = [], meshes = [];
   const ground = new Set(), roots = new Set(furniture);
   const isFurniture = o => { for (let p = o; p; p = p.parent) if (roots.has(p)) return true; return false; };
   const markGround = (o, i) => {
@@ -65,24 +61,8 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     const g = o.geometry.groups.find(g => i >= g.start && i < g.start + g.count);
     const m = g ? ms[g.materialIndex] : ms[0]; if (wetMaterial(m)) ground.add(m);
   };
-  const stats = { renders: 0, draws: 0, triangles: 0, width: 0, height: 0, visible: false, plane: P.ground, visibilityMs: 0, samples: 0 };
-  const box = new THREE.Box3(), sphere = new THREE.Sphere(), size = new THREE.Vector2(), eye = new THREE.Vector3(), target = new THREE.Vector3(), up = new THREE.Vector3();
+  const box = new THREE.Box3(), sphere = new THREE.Sphere();
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3(), point = new THREE.Vector3();
-  const projection = new THREE.Matrix4(), frustum = new THREE.Frustum(), clip = new THREE.Plane(), cp = new THREE.Vector4(), q = new THREE.Vector4(), viewport = new THREE.Vector4();
-  scene.updateMatrixWorld(true);
-  // The reflection's copies: diffuse only (no normal map, shadow, probe specular, transmission, SSR tag or nested
-  // reflection work in this scene; its environment exists only to enable SH code), still the baked atlas decoding, SH,
-  // vertex colours, wind and alpha cut-outs: for a baked material the composed shader's diffuse flag.
-  function simple(m) {
-    if (materials.has(m)) return materials.get(m).material;
-    const s = m.isMeshStandardMaterial ? new THREE.MeshStandardMaterial().copy(m) : m.clone();
-    s.defines = { ...m.defines, ...s.defines }; s.onBeforeRender = m.onBeforeRender;
-    s.onBeforeCompile = m.onBeforeCompile; s.customProgramCacheKey = m.customProgramCacheKey; if (m.ownShader) s.ownShader = m.ownShader;
-    if (s.isMeshStandardMaterial) { s.normalMap = s.bumpMap = s.roughnessMap = s.metalnessMap = null; s.roughness = 1; s.metalness = 0; s.envMapIntensity = 0; }
-    if (isBaked(m)) s.userData.bakedDiffuse = true;
-    s.toneMapped = false;
-    materials.set(m, { material: s, env: s.envMap }); return s;
-  }
   // Ground samples come from real triangles, including merged batches, never the house's interior floor.
   function groundSamples(o, bounds) {
     if (bounds.min.y > P.terrace + 0.005 || bounds.max.y < -0.03 || ![].concat(o.material).some(wetMaterial)) return;
@@ -107,13 +87,8 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
       }
     }
   }
+  scene.updateMatrixWorld(true);
   scene.traverse(o => {
-    if (o.isDirectionalLight) {
-      const proxy = o.clone(false); proxy.target = o.target;
-      // Share the live shadow (matrix and map; nothing is re-rendered here) so the reflection keeps the sun's PCSS shade.
-      proxy.shadow = o.shadow; proxy.castShadow = o.castShadow;
-      proxy.matrixAutoUpdate = proxy.matrixWorldAutoUpdate = false; flat.add(proxy); lights.push({ source: o, proxy }); return;
-    }
     if (!o.isMesh || o.isSkinnedMesh || o.isReflector || o.userData.batched || o.userData.lightHit || !meshLighting(o).puddleMirror || !o.layers.isEnabled(0)) return;
     // Use the existing merged plant LOD even up close: keep whole crowns without hundreds of tiny leaf draws.
     for (let p = o.parent; p && p !== scene; p = p.parent) {
@@ -130,6 +105,60 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     if (o.isInstancedMesh) sphere.getBoundingBox(box); else box.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
     groundSamples(o, box);
+    groundSamples(o, box);
+    meshes.push({ o, ms, sphere: sphere.clone(), box: box.clone() });
+  });
+  return { ground, samples, meshes };
+}
+// Give the ground's baked materials the planar puddle (their composed shader's flag; its sampler plan may still leave it
+// out on a GPU without a texture unit to spare). -> the materials newly marked.
+export function markPuddleGround(scene, ground) {
+  const marked = [];
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) if (wetMaterial(m) && ground.has(m) && isBaked(m) && !materialOptions(m).planarPuddle) { setPlanarPuddle(m, true); marked.push(m); }
+  });
+  return marked;
+}
+
+// furniture: roots of movable and animated objects (lightmap.js movables, dynamic), never given the planar reflection
+// ground: the load-time scan's ground (lightmap.js), else this one's: the scene's meshes as they are now (the visitor
+// and the pets came after the load) are what the reflection draws either way.
+export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture = [], ground = null }) {
+  const scan = scanPuddles(scene, furniture, params);
+  const P = { ...PUDDLE_PARAMS, ...params }, flat = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+  flat.matrixWorldAutoUpdate = false; camera.userData.hqReflection = true; camera.userData.puddleReflection = true;
+  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true, samples: 0 });
+  rt.texture.colorSpace = THREE.LinearSRGBColorSpace;
+  const uniforms = PUDDLE_UNIFORMS;
+  uniforms.uPuddleMatrix.value.identity(); uniforms.uPuddleTex.value = rt.texture; uniforms.uPuddleValid.value = 0; uniforms.uPuddleTime.value = 0;
+  uniforms.uPuddleY.value = P.ground; uniforms.uPuddleEdge.value = P.edge; uniforms.uPuddleWind.value = P.wind;
+  const sources = [], lights = [], samples = scan.samples, materials = new Map(), candidates = [];
+  const stats = { renders: 0, draws: 0, triangles: 0, width: 0, height: 0, visible: false, plane: P.ground, visibilityMs: 0, samples: 0 };
+  const size = new THREE.Vector2(), eye = new THREE.Vector3(), target = new THREE.Vector3(), up = new THREE.Vector3();
+  const projection = new THREE.Matrix4(), frustum = new THREE.Frustum(), clip = new THREE.Plane(), cp = new THREE.Vector4(), q = new THREE.Vector4(), viewport = new THREE.Vector4();
+  scene.updateMatrixWorld(true);
+  // The reflection's copies: diffuse only (no normal map, shadow, probe specular, transmission, SSR tag or nested
+  // reflection work in this scene; its environment exists only to enable SH code), still the baked atlas decoding, SH,
+  // vertex colours, wind and alpha cut-outs: for a baked material the composed shader's diffuse flag.
+  function simple(m) {
+    if (materials.has(m)) return materials.get(m).material;
+    const s = m.isMeshStandardMaterial ? new THREE.MeshStandardMaterial().copy(m) : m.clone();
+    s.defines = { ...m.defines, ...s.defines }; s.onBeforeRender = m.onBeforeRender;
+    s.onBeforeCompile = m.onBeforeCompile; s.customProgramCacheKey = m.customProgramCacheKey; if (m.ownShader) s.ownShader = m.ownShader;
+    if (s.isMeshStandardMaterial) { s.normalMap = s.bumpMap = s.roughnessMap = s.metalnessMap = null; s.roughness = 1; s.metalness = 0; s.envMapIntensity = 0; }
+    if (isBaked(m)) s.userData.bakedDiffuse = true;
+    s.toneMapped = false;
+    materials.set(m, { material: s, env: s.envMap }); return s;
+  }
+  scene.traverse(o => {
+    if (!o.isDirectionalLight) return;
+    const proxy = o.clone(false); proxy.target = o.target;
+    // Share the live shadow (matrix and map; nothing is re-rendered here) so the reflection keeps the sun's PCSS shade.
+    proxy.shadow = o.shadow; proxy.castShadow = o.castShadow;
+    proxy.matrixAutoUpdate = proxy.matrixWorldAutoUpdate = false; flat.add(proxy); lights.push({ source: o, proxy });
+  });
+  for (const { o, ms, sphere, box } of scan.meshes) {
     const mat = Array.isArray(o.material) ? ms.map(simple) : simple(o.material);
     // Clone without allocating another instance buffer; matrices/colours/bounds are shared read-only with the source.
     const proxy = o.isInstancedMesh ? o.clone(false) : new THREE.Mesh(o.geometry, mat);
@@ -141,16 +170,9 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
       // budget order: 0 outside architecture, 1 plants, 2 anything wholly inside the house (seen only through windows)
       tier: o.isInstancedMesh || ms.some(m => lightingOf(m).foliage) ? 1 : indoors(box) ? 2 : 0 };
     sources.push(e);
-  });
-  // The ground materials show the reflection: the composed baked shader's planar puddle flag (its sampler plan may still
-  // leave it out on a GPU without a texture unit to spare).
-  scene.traverse(o => {
-    if (!o.isMesh) return;
-    for (const m of [].concat(o.material)) {
-      if (!wetMaterial(m) || !ground.has(m) || !isBaked(m) || patches.some(p => p.material === m)) continue;
-      m.userData.planarPuddle = true; m.needsUpdate = true; patches.push({ material: m });
-    }
-  });
+  }
+  // (marked when the baked lighting loaded; else now)
+  const patches = markPuddleGround(scene, ground ?? scan.ground);
   let lastRender = -Infinity, lastVisibility = -Infinity, plane = null, busy = false;
   // World bounds follow doors and furniture; refreshed only for a reflection render.
   const refresh = list => { for (const e of list) {
@@ -243,7 +265,7 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   stats.samples = samples.length; stats.sources = sources.length; stats.materials = patches.length;
   return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
     if (scene.onBeforeRender === hook) scene.onBeforeRender = before;
-    for (const p of patches) { delete p.material.userData.planarPuddle; p.material.needsUpdate = true; }
+    for (const m of patches) setPlanarPuddle(m, false);
     for (const { material } of materials.values()) material.dispose();
     rt.dispose(); uniforms.uPuddleValid.value = 0;
   } };

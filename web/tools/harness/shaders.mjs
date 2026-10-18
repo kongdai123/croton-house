@@ -77,7 +77,7 @@ function classOf(w, m, mesh, container, compiled) {
   if (L?.reflection === 'mirror') tags.push('mirror');
   if (L?.sheer) tags.push('sheer');
   if (R?.probeSide === 'face' && path === 'probe' && !m.transparent && !(m.transmission > 0)) tags.push('face');
-  if (m.userData.planarPuddle) tags.push('planarPuddle');
+  if (m.userData.planarPuddle || w.materialOptions?.(m).planarPuddle) tags.push('planarPuddle');
   if (compiled.uniforms.uContactCaster?.value === 1) tags.push('caster');
   if (R?.weather) tags.push('weather-' + R.weather);
   return [container, path, R?.role ?? '-', L?.surface ?? '-', ...tags].join('/');

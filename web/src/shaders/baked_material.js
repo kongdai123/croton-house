@@ -29,11 +29,15 @@ export function setContactCaster(m, caster) { m.userData.contactCaster = !!caste
 const TAA = { bias: null };
 export function setBakedTaa(bias) { TAA.bias = bias ?? null; }
 export const bakedTaa = m => !!TAA.bias && TAA_MAPS.some(k => m[k]);
+// The planar puddle reflection (puddles.js): the ground materials themselves, not their copies (the reflection is the main
+// camera's: a mirror's copy or a caster's copy shows none).
+const PUDDLE_GROUND = new WeakSet();
+export function setPlanarPuddle(m, on) { if (on) PUDDLE_GROUND.add(m); else PUDDLE_GROUND.delete(m); m.needsUpdate = true; }
 // Per-material options, read when the key and the shader are made:
-//   userData.planarPuddle   the planar puddle reflection (puddles.js ground materials)
+//   planarPuddle            the planar puddle reflection (setPlanarPuddle)
 //   userData.bakedDiffuse   diffuse only: no specular, no SSR tag (the puddle reflection's copies, puddles.js)
 //   userData.bakedSurface   per-vertex roughness / metalness (the mirrors' merged reflection geometry, hq.js)
-export const materialOptions = m => ({ planarPuddle: !!m.userData.planarPuddle, diffuse: !!m.userData.bakedDiffuse, surface: !!m.userData.bakedSurface, taa: bakedTaa(m) });
+export const materialOptions = m => ({ planarPuddle: PUDDLE_GROUND.has(m), diffuse: !!m.userData.bakedDiffuse, surface: !!m.userData.bakedSurface, taa: bakedTaa(m) });
 // the uniforms a composition needs from here
 export function bindOptions(s, f, m) {
   if (f.contactSun || f.contactAO) s.uniforms.uContactCaster = casterUniform(m);
@@ -108,8 +112,8 @@ const PREVIOUS = new WeakMap();
 export function uninstallBaked(material) {
   const p = PREVIOUS.get(material);
   if (!p) return false;
-  PREVIOUS.delete(material); CASTERS.delete(material);
-  for (const k of ['probeLit', 'samplerCut', 'planarPuddle', 'bakedDiffuse', 'bakedSurface', 'contactCaster']) delete material.userData[k];
+  PREVIOUS.delete(material); CASTERS.delete(material); PUDDLE_GROUND.delete(material);
+  for (const k of ['probeLit', 'samplerCut', 'bakedDiffuse', 'bakedSurface', 'contactCaster']) delete material.userData[k];
   material.needsUpdate = true;
   if (material.onBeforeCompile !== p.hook) { console.warn(`baked shader "${material.name || material.type}": wrapped by another hook, left as it is`); return false; }
   material.onBeforeCompile = p.compile; material.customProgramCacheKey = p.key;

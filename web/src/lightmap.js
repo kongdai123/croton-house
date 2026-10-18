@@ -18,7 +18,7 @@ import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CONTACT, CONTACT_SHADER } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
-import { createPuddles, PUDDLE_UNIFORMS } from './puddles.js';
+import { createPuddles, scanPuddles, markPuddleGround, PUDDLE_UNIFORMS } from './puddles.js';
 import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
@@ -648,6 +648,10 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     volume.fill(lampLevel); register(scene);
   }
   volumeRef = volume;
+  // The planar puddle's ground (puddles.js): decided now, so its shaders compile with the planar puddle under the loading
+  // screen and a quality change only switches the reflection on or off.
+  const puddleScan = multi || SLOTS[slot].wet > 0 ? scanPuddles(scene, [...movables, ...dynamic]) : null;
+  if (puddleScan) markPuddleGround(scene, puddleScan.ground);
   // every visible lit mesh left without a lightmap, by why: the manifest's reason (plant, cutout, glass, door, movable, dynamic:
   // animated or toggled), sharedUV, skipped by unwrap.py (ground, far), unmatched (an id the sidecar does not know: the
   // bake is older than the scene), nobake (a sidecar without ids)
@@ -742,7 +746,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let puddleRefl = null;
   const setFeatures = name => {
     tier = name;
-    if (TIERS[name].puddles && !puddleRefl) { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet, furniture: [...movables, ...dynamic] }); api.puddleRefl = puddleRefl; }
+    if (TIERS[name].puddles && !puddleRefl) { puddleRefl = createPuddles({ scene, renderer, wet: multi ? 1 : SLOTS[slot].wet, furniture: [...movables, ...dynamic], ground: puddleScan?.ground ?? null }); api.puddleRefl = puddleRefl; }
     puddleRefl?.setEnabled(TIERS[name].puddles && (!multi || slots.params.wet > 0));
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);

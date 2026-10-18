@@ -1073,7 +1073,7 @@ function probeLit(material, volume, pcss, sided = false, renderer = null) {
     if (f.refl) Object.assign(s.uniforms, refl.uniforms);
     if (f.contactSun || f.contactAO) Object.assign(s.uniforms, CONTACT_SHADER.uniforms);
     if (f.sheer) s.uniforms.uSheer = material.sheerUniform ??= { value: new THREE.Vector2(L.sheer.reflect, L.sheer.transmit) };
-    if (f.foliageBake) Object.assign(s.uniforms, FOLIAGE_UNIFORMS, f.multi ? volume.slots.uniforms : {});
+    if (f.foliageBake) Object.assign(s.uniforms, FOLIAGE_UNIFORMS, f.slotFade ? volume.slots.uniforms : {});
     if (f.planarPuddle) Object.assign(s.uniforms, PUDDLE_UNIFORMS);
   };
   installBaked(material, { name: 'probe', tag: 'probe-v4', own, features, bind, renderer });

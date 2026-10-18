@@ -58,6 +58,19 @@ try {
     shaderPatch(bad, 'fixture missing', s => { shaderReplace(s.fragmentShader, 'missing', '', 'fixture token'); });
     assert.deepEqual(bad, original); assert.equal(warnings.length, 1); assert.match(warnings[0][0], /fixture missing/);
     assert.throws(() => shaderReplace('xx', 'x', '', 'duplicate'), /got 2/);
+    // A foliage-baked material whose probe crossfade the sampler plan leaves out keeps its per-vertex level on the
+    // current slot too (it used to blend toward the next slot while the probes' mean stayed on the current one).
+    const leafy = new T.MeshStandardMaterial(); leafy.name = 'fixture-leafy'; leafy.foliageBake = FOLIAGE; leafy.userData.lighting = { surface: 'foliage' };
+    const slots = { uniforms: { uSlotBlend: { value: 0 }, uSlotLampA: { value: 0 }, uSlotLampB: { value: 0 } }, wet: { value: 0 } };
+    probeLit(leafy, { uniforms: {}, wet: 0, multi: true, slots }, pcss);
+    const roomy = shader(); leafy.onBeforeCompile(roomy, { capabilities: { maxTextures: 16 } });
+    assert.ok(roomy.vertexShader.includes('foliageNext') && roomy.fragmentShader.includes('uProbeNextSH'));
+    // 8 samplers: dfgLUT, environment, sun shadow, uSunDepth, uProbeSH + next, contact sun 2; at 5 the contact sun and
+    // the crossfade leave
+    const tight = shader(); leafy.onBeforeCompile(tight, { capabilities: { maxTextures: 5 } });
+    assert.deepEqual(tight.samplerDropped, ['contact sun', 'slot crossfade']);
+    assert.ok(!tight.vertexShader.includes('foliageNext') && !tight.fragmentShader.includes('uProbeNextSH') && tight.fragmentShader.includes('foliageScale( bakedProbe )'));
+    assert.match(warnings.at(-1)[0], /"fixture-leafy": 8 fragment samplers > 5 texture units; dropped contact sun, slot crossfade$/);
   } finally { console.warn = warn; }
   // Tracked casters: world transform and effective visibility, including parent transforms, every frame.
   const parent = new T.Group(), mesh = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial({ alphaTest: 0.3 }));

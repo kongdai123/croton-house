@@ -120,11 +120,12 @@ export function compose(f) {
   const key = flagsKey(f);
   const memo = MEMO.get(key); if (memo) return memo;
   const world = needsWorld(f), probe = f.path === 'probe';
-  const vpars = [world && WORLD_VARYING, f.foliageBake && foliageVertexPars(f.multi), f.sheer && SHEER_VERTEX_PARS, f.surface && SURFACE_VERTEX_PARS].filter(Boolean).join('');
+  const vpars = [world && WORLD_VARYING, f.foliageBake && foliageVertexPars(f.slotFade), f.sheer && SHEER_VERTEX_PARS, f.surface && SURFACE_VERTEX_PARS].filter(Boolean).join('');
   const vertex = [{ site: 'void main() {', text: vpars + '$&' }];
   const project = (f.sheer ? SHEER_SPREAD_LINE : '') + (world ? WORLD_VERTEX : '');
   if (project) vertex.push({ site: '#include <project_vertex>', text: '$&' + project });
-  const begin = (f.foliageBake ? foliageVertexGLSL(f.multi) : '') + (f.surface ? SURFACE_VERTEX : '');
+  // the foliage bake's level fades with the probe crossfade or not at all: both come from the same slot pair
+  const begin = (f.foliageBake ? foliageVertexGLSL(f.slotFade) : '') + (f.surface ? SURFACE_VERTEX : '');
   if (begin) vertex.push({ site: '#include <begin_vertex>', text: '$&' + begin });
 
   const fpars = [world && WORLD_VARYING,

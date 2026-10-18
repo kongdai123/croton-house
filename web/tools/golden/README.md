@@ -34,44 +34,28 @@ Commands (run from the repo root):
 
 ## Classifiers called from the real source
 
-`emitsLight`, lightmap.js `isMirror` / `weatherClass` / `probeWalls`, photo.js `presentation` / `weatherClass`,
-foliage_bake.js `isPlant`, puddles.js `wetMaterial` / `indoors`, light_switch.js `glowing`, pets/roam.js `areaOf` /
-`isIndoor`, plan.js (all of it), `lighting.indoorWeight`. Module-private ones are exposed by appending an export at bundle
-time (no change to `web/src`). Python: `plan.py` and `reflprobe_layout.py` imported; `lamp_groups.py` `group_of` / `order_of`
-lifted by AST.
+Since the lighting manifest (step 3), almost every lighting decision is a read of the records `web/src/lighting_roles.js`
+resolves (`roles.lightingOf` per material, `roles.meshLighting` per mesh), and `classify.json` calls them: foliage,
+leafSide, wetEligible, unwrapSkip, the glass and mirror columns, emitsLight, the probe shader flags, weather (also what
+photo mode uses), doorPart, pcssPlant, plantRoot, contactExcluded, interior, the switches' exterior flag. Still called from
+their modules: photo.js `presentation`, foliage_bake.js `isPlant`, puddles.js `wetMaterial` / `indoors`, light_switch.js
+`glowing`, pets/roam.js `areaOf` / `isIndoor`, plan.js (all of it), `lighting.indoorWeight`. Module-private ones are
+exposed by appending an export at bundle time (no change to `web/src`). Python: `plan.py` and `reflprobe_layout.py`
+imported; `lamp_groups.py` `group_of` / `order_of` lifted by AST.
 
-## Quoted, to be replaced
+## Quoted
 
-These decisions are inline in closures or Blender scripts, so the capture re-implements the expression (the golden documents
-today's behaviour; a replacement must reproduce it).
+These decisions are inline in closures or Blender scripts, so the capture re-implements the expression, now over the
+manifest records:
 
 | classifier | original | expression |
 |---|---|---|
-| `plant.foliage` | web/src/lightmap.js:1287 (also :201 PCSS e.plant, :777 stats, contact.js:173, puddles.js:193) | `m.alphaTest > 0 \|\| /^(garden-\|plant)/.test(m.name \|\| '')` |
-| `plant.leafSide` | web/src/lightmap.js:1286 | `/^garden-/.test(m.name \|\| '')` |
-| `plant.wetEligible` | web/src/lightmap.js:1289 (volume.wet > 0 assumed) | `!/^garden-/.test(m.name \|\| '') && !(m.alphaTest > 0)` |
-| `plant.unwrapSkip` | bake/scripts/unwrap.py:73-78 material_skip (alphaMode MASK = alphaTest > 0; glTF transmission = glass.unwrap) | `alphaTest > 0 \|\| name.startswith('garden-') \|\| name.startswith('plant') \|\| glass.unwrap` |
-| `glass.shadow` | web/src/lightmap.js:733 (duplicated web/src/webgpu/materials.js:62), first material only | `m.transmission > 0 \|\| m.userData?.daylightOpacity !== undefined \|\| (m.transparent && m.opacity < 0.6)` |
-| `glass.windowOverlay` | web/src/lightmap.js:1350 addWindowReflections, any material | `m.userData?.daylightOpacity !== undefined \|\| m.transmission > 0` |
-| `glass.stats` | web/src/lightmap.js:777 "why unlit", first material only | `m.transmission > 0 \|\| m.transparent` |
-| `glass.unwrap` | web/src/photo.js:141-149 traceMaterial + bake/scripts/unwrap.py:77 (KHR_materials_transmission) | `!isShaderMaterial && (userData.sheer \|\| userData.daylightOpacity !== undefined \|\| transmission > 0)` |
-| `glass.cycles` | bake/export/setup.py:42 (Transmission Weight > 0.5 and no sheer key; glass exported by photo.js:149 has transmission 1) | `(daylightOpacity !== undefined \|\| transmission > 0.5) && !sheer` |
-| `mirror.layout` | web/src/layout.js:466 addMirrors (same test as lightmap.js:1143 isMirror, which is called for mirror.lightmap) | `mat?.name === 'mirror'` |
-| `probe.sheer` | web/src/lightmap.js:1290 | `!!material.userData.sheer` |
-| `probe.occl` | web/src/lightmap.js:1288 (foliageBake absent in the headless scene) | `foliage && !material.foliageBake` |
-| `mesh.sided` | web/src/lightmap.js:743 (material of a mesh under a door root or an animated root with a toggle) | `!m.lightMap && !m.transparent && !(m.transmission > 0), per MATERIAL over every mesh under dynamic roots` |
-| `mesh.doorPart` | web/src/lightmap.js:660-664 | `root.userData.door && kind not in {french, slider}: every mesh whose parent is not the door root` |
-| `mesh.interior` | web/src/lighting.js collectMaterials region | `plan.isInside(cx, -cz) && cy < ceiling + 0.05 && bboxX < 17 && bboxZ < 13 (exteriorFinish materials forced exterior)` |
-| `mesh.isPlantRoot` | web/src/lightmap.js:193 | `any ancestor userData.id matches /^(plants\|garden\|flowers)-/` |
-| `mesh.pcssPlant` | web/src/lightmap.js:201 | `any material foliage \|\| isPlantRoot` |
-| `mesh.contactExcluded` | web/src/contact.js:171-173 depthOf | `m.transparent \|\| m.transmission > 0 \|\| m.isShaderMaterial \|\| m.alphaTest > 0 \|\| /^(garden-\|plant)/.test(m.name) (first of the mesh materials that triggers)` |
-| `mesh.puddleTier` | web/src/puddles.js:193 (indoors() is called from the real module) | `instanced \|\| any material foliage ? 1 : indoors(box) ? 2 : 0` |
-| `mesh.lit` | web/src/lightmap.js:773-778 stats ladder, minus the sidecar-dependent branches (sharedUV, skipped[id], unmatched) | `transmission > 0 \|\| transparent ? 'glass' : foliage ? 'plant' : doorPart ? 'door' : lmSkip ?? (!lmId ? 'dynamic' : 'lightmap')` |
-| `mesh.unwrapGroundFar` | bake/scripts/unwrap.py:118 | `area > 300 \|\| abs(cx) > 14 \|\| -cz > 18 \|\| -cz < -14, centroid = mean of world vertices, glTF frame (x, y, z) = scene frame` |
-| `mesh.unwrapSkip` | bake/scripts/unwrap.py:73-78 over all materials | `every material plant.unwrapSkip` |
-| `mesh.batchable` | web/src/batch.js:49 lmMesh / :68 mergeable | `isMesh && !instanced && !skinned && position` |
-| `placed.exterior` | web/src/furniture/light_switch.js:138 (duplicated bake/export/switch_groups.mjs:40) | `/porch\|wall-light-black\|outdoor-front-lamp/.test(fixture.userData.id)` |
-| `placed.isPlantRoot` | web/src/lightmap.js:193 | `/^(plants\|garden\|flowers)-/ on the id of the root or an ancestor` |
+| `glass.unwrap` | web/src/photo.js traceMaterial: what the export turns into KHR_materials_transmission | `!isShaderMaterial && (sheer \|\| glass.export pane \|\| transmission > 0)` |
+| `mesh.sided` | web/src/lightmap.js applyLightmaps | materials (not lightmapped, not transparent, no transmission) of the meshes whose record says probeSide face |
+| `mesh.puddleTier` | web/src/puddles.js sources tier | `instanced \|\| any material foliage ? 1 : indoors(box) ? 2 : 0` |
+| `mesh.lit` | web/src/lightmap.js stats ladder, minus the sidecar branches | `why ('plant/glass' split by foliage) ?? (!lmId ? 'dynamic' : 'lightmap')` |
+| `mesh.unwrapGroundFar` | bake/scripts/unwrap.py ground/far | area over `plan.json volumes.lightmap.maxArea` or centroid outside its box |
+| `mesh.batchable` | web/src/batch.js lmMesh / mergeable | `isMesh && !instanced && !skinned && position` |
 
 Also quoted in `spatial.mjs`: grass.js `outdoor` (a planting keep-out, not yet from the plan), house.js `garagePts` (the
 garage + laundry floor slab), vpaudit.mjs `roomAt` (a manual tool over house.json).

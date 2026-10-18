@@ -5,6 +5,7 @@
 // times a distance falloff for turf) and each tile's draw count is cut to the same curve on the CPU, so distant lawn
 // and 'fast' mode draw fewer blades. Wind sways everything in the vertex shader (onBeforeCompile, uTime).
 import * as THREE from 'three';
+import { declare } from './lighting_roles.js';
 import { LOT, FRONT_BED, WEST_SHELL, FRONT_WALK, ISLAND_BEDS, GARDEN, WEST_FENCE_Y, pointInPoly } from './house.js';
 import { BEDS, PAVED, SHELL, PLACEMENTS, FOOT, edgeDist, plantClear, generatePlanting } from './layout.js';
 
@@ -223,6 +224,7 @@ function patch(m, U, density, opts, depthOnly) {
 function vegMat(U, density, opts) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: opts.rough ?? 0.8, metalness: 0, vertexColors: true, side: THREE.DoubleSide, envMapIntensity: 0.6 });
   m.name = 'garden-' + opts.name;
+  declare(m, { surface: 'leafCard' });   // lighting manifest: two-sided instanced leaf / blade cards, dry, plant weather
   return patch(m, U, density, opts, false);
 }
 
@@ -233,7 +235,7 @@ class Bag {
   push(x, h, y, yaw, tilt, sx, sy, sz, c) { this.a.push(x, h, -y, yaw, tilt, sx, sy, sz, c[0], c[1], c[2]); }
   get n() { return this.a.length / STRIDE; }
 }
-function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, cast = false, depthMat = null, rnd, name }) {
+function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, cast = false, depthMat = null, rnd, name, puddleMirror = true }) {
   const a = bag.a, n = bag.n, buckets = new Map(), geoH = geo.boundingBox.max.y;
   for (let i = 0; i < n; i++) { const key = Math.floor(a[i * STRIDE] / tile) + ',' + Math.floor(a[i * STRIDE + 2] / tile); let b = buckets.get(key); if (!b) buckets.set(key, b = []); b.push(i); }
   for (const idx of buckets.values()) {
@@ -259,6 +261,7 @@ function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, ca
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (hMin + hMax) / 2, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0, hMax - hMin) / 2 + 0.7);
     mesh.receiveShadow = true; mesh.castShadow = cast; if (depthMat) mesh.customDepthMaterial = depthMat;
     mesh.matrixAutoUpdate = false; mesh.name = 'garden-' + name;
+    if (!puddleMirror) declare(mesh, { puddleMirror: false });
     group.add(mesh);
     tiles.push({ mesh, n: m, x0, x1, z0, z1, y: hMin, lod, density, cast });
   }
@@ -391,7 +394,8 @@ export function buildGarden({ quality = 'hq', camera = null } = {}) {
     .map(p => ({ x: p.x, y: p.y, r: p.m === 'plants' ? (FOOT[p.i] ?? 0.35) * (p.scale ?? 1) : (p.i === 'plantersBench' ? 0.9 : 0.4), solid: p.m === 'outdoor' }));
 
   const turfMat = vegMat(U, U.turf, { name: 'turf', rough: 0.82, sway: 0.12, flutter: 0.04, height: 1.0, comp: 1.2, lod: [7, 30], blade: true, widen: 0.05 });
-  buildLayer(group, tiles, genTurf(rnd), turfBladeGeo(), turfMat, { tile: TILE.turf, lod: [7, 30], density: U.turf, rnd, name: 'turf' });
+  // the lawn stays out of the planar puddle reflection (lighting manifest puddleMirror): thousands of blades, puddles lie on paving
+  buildLayer(group, tiles, genTurf(rnd), turfBladeGeo(), turfMat, { tile: TILE.turf, lod: [7, 30], density: U.turf, rnd, name: 'turf', puddleMirror: false });
 
   const cover = genCover(rnd, plants);
   for (const [kind, seed, rough] of [['purple', 3, 0.55], ['green', 5, 0.72], ['lime', 7, 0.7]]) {

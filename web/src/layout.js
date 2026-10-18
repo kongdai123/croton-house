@@ -8,7 +8,7 @@ import { STYLING as STYLING_ROOMS } from './styling_rooms.js';
 import { STYLING as STYLING_GARDEN } from './styling_garden.js';
 import { STYLING as STYLING_FLOWERS } from './styling_flowers.js';
 import { addAABB } from './house.js';
-import { exteriorAt, lightLocal, ownLight } from './lighting_roles.js';
+import { exteriorAt, lightingOf, lightLocal, ownLight } from './lighting_roles.js';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.js';
@@ -469,7 +469,7 @@ export class Layout {
     obj.updateMatrixWorld(true);
     const faces = [], inverse = obj.matrixWorld.clone().invert(), relative = new THREE.Matrix4();
     obj.traverse(m => {
-      if (!m.isMesh || !(Array.isArray(m.material) ? m.material : [m.material]).some(mat => mat?.name === 'mirror')) return;
+      if (!m.isMesh || !(Array.isArray(m.material) ? m.material : [m.material]).some(mat => mat && lightingOf(mat).reflection === 'mirror')) return;   // manifest: a mirror
       m.geometry.computeBoundingBox(); const b = m.geometry.boundingBox, parameters = m.geometry.parameters;
       let face;
       if (m.geometry.type === 'CylinderGeometry') {

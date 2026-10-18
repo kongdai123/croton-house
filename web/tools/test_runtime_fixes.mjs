@@ -89,7 +89,7 @@ try {
   lamps.dispose();
   // Generated mirror shaders keep 3 cm for box-edge bathroom mirrors; ordinary materials keep 25 cm.
   for (const mirror of [false, true]) {
-    const mat = new T.MeshStandardMaterial(); if (mirror) mat.name = 'mirror';
+    const mat = new T.MeshStandardMaterial(); if (mirror) mat.userData.lighting = { surface: 'mirror' };   // a declared mirror (lighting manifest)
     probeLit(mat, { uniforms: {}, refl: { count: 27, uniforms: {} } }, { patch() {} });
     const sh = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
     mat.onBeforeCompile(sh, { capabilities: { maxTextures: 16 } });

@@ -22,7 +22,9 @@ try {
   try {
     // Any differing generated source must have a differing cache key, independent of compile order.
     for (const name of ['plain', 'plant-leaf', 'garden-leaf']) for (const alphaTest of [0, 0.4]) for (const wet of [0, 1]) for (const refl of [null, { count: 2, uniforms: {} }]) for (const fol of [false, true]) {
+      // plant leaves and garden leaf cards declare their surface (lighting manifest), as plants_parts.js and grass.js do
       const m = new T.MeshStandardMaterial({ alphaTest }); m.name = name; if (fol) m.foliageBake = FOLIAGE;
+      if (name !== 'plain') m.userData.lighting = { surface: name === 'garden-leaf' ? 'leafCard' : 'foliage' };
       const original = m.customProgramCacheKey();
       probeLit(m, { uniforms: {}, wet, refl }, pcss);
       const key = m.customProgramCacheKey(), sh = shader(); m.onBeforeCompile(sh, renderer);

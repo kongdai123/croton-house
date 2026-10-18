@@ -350,7 +350,7 @@ function wallPrint(seed = 0, wide = false) {
   root.add(plane(w - .11, h - .11, printMats()[seed % 3], { y: h / 2, z: .0266 }));
   return finish(root, 'wall-print', 'Oak framed landscape study', '橡木框风景画', 'Complementary art in the g26–35 natural palette');
 }
-const mirrorMat = once(() => Object.assign(solid(0xd6dfd8, .12, { metalness: 1 }), { name: 'mirror' }));
+const mirrorMat = once(() => declare(Object.assign(solid(0xd6dfd8, .12, { metalness: 1 }), { name: 'mirror' }), { surface: 'mirror' }));
 function roundMirror() {
   const root = group(cyl(.31, .31, .018, mirrorMat(), { y: .33, z: .019, rx: PI / 2, seg: 48 }));
   root.add(torus(.318, .017, M.oak(), { y: .33, z: .021, seg: 48, tube: 8 }));

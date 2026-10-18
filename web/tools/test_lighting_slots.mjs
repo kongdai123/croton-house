@@ -102,7 +102,7 @@ try {
   assert.equal(disposed.length, 20); // 5 textures per slot snapshot (one packed probe volume): sunrise, noon, dusk at half and quarter
   // Match and stage actual foliage attributes without touching the active encoded layer until commit.
   globalThis.location = { search: '' };
-  const plantScene = new T.Scene(), plantMaterial = new T.MeshStandardMaterial(); plantMaterial.name = 'plant-fixture';
+  const plantScene = new T.Scene(), plantMaterial = new T.MeshStandardMaterial(); plantMaterial.name = 'plant-fixture'; plantMaterial.userData.lighting = { surface: 'foliage' };
   const plantGeometry = new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute([10, 0, 0, 11, 0, 0, 10, 1, 0], 3));
   const plant = new T.Mesh(plantGeometry, plantMaterial); plant.userData.lmId = 'plant'; plantScene.add(plant);
   const header = value => ({ K: { slot: 0.2, lamps: 0.1 }, units: [{ id: 'plant', m: 'plant-fixture', vc: 3, min: [10, 0, 0], max: [11, 1, 0], slot: new Uint8Array(3).fill(value), lamps: new Uint8Array(3).fill(64), sun: new Uint8Array(3).fill(255) }] });

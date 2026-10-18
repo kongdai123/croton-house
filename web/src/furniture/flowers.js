@@ -1,7 +1,7 @@
 // Sarasota flowering layer. Photo anchors: crane flowers g38, bromeliads g05/g43,
 // red/orange shrub flowers g06/g39. Other species are restrained Gulf-coast accents.
 // Each seeded plant uses 2–4 merged meshes; leaves/petals and materials are shared.
-import { THREE, M, lathe, cyl, describe, setCollider } from '../kit.js';
+import { THREE, M, lathe, cyl, describe, setCollider, declare } from '../kit.js';
 import { TAU, GOLD, lcg, rr, tint, paint, leafMat, plainMat, texSprig,
   texStrap, orient, cardGeo, stemGeo, Batch } from './plants_parts.js';
 
@@ -63,7 +63,7 @@ function twig(batch, points, radius = .005, hex = stemColor) {
   batch.add(g, { tint: hex }); g.dispose();
 }
 function finish(root, name, zh, footprint, h) {
-  describe(root, { id: 'flowers-' + name, name, zh, note: 'Seeded flowering plant; merged foliage and blossoms' });
+  describe(root, { id: 'flowers-' + name, name, zh, note: 'Seeded flowering plant; merged foliage and blossoms' }); declare(root, { role: 'plant' });
   if (h >= .3) setCollider(root, { w: footprint, d: footprint, h });
   return root;
 }

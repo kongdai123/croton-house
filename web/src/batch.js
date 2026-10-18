@@ -18,7 +18,7 @@
 // volume.
 import { THREE } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { classifyLighting, inheritLighting, meshLighting } from './lighting_roles.js';
+import { classifyLighting, inheritLighting, isResolved, meshLighting } from './lighting_roles.js';
 
 const CELL = 8, SWAY_R = 10;
 const noRaycast = () => {};
@@ -98,7 +98,7 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
   const seen = new Map(), tag = (o, id) => { const k = seen.get(id) ?? 0; seen.set(id, k + 1); o.userData.lmId = k ? `${id}.${k}` : id; };
   const label = o => { if (!lmMesh(o)) return; if (meshLighting(o).motion === 'movable') o.userData.lmSkip = 'movable'; else tag(o, meshId(o)); };
   // a moving root classified before its last meshes were added (a light switch's hit proxy) is classified again here
-  const classified = root => { let all = true; root.traverse(x => { if (x.isMesh && !x.userData.lighting?.resolved) all = false; }); return all; };
+  const classified = root => { let all = true; root.traverse(x => { if (x.isMesh && !isResolved(x)) all = false; }); return all; };
 
   // world-static, interactive roots and doors; returns whether the whole subtree is static
   const groups = new Map(), rooms = new Map();

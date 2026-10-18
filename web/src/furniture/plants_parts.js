@@ -1,7 +1,7 @@
 // plants_parts — helpers for plants.js: seeded RNG, painted leaf textures (alpha cards with colour bleed so
 // mipmaps do not darken the edges), bent leaf-card geometry, tapered stem tubes, a merge batch that tints every
 // card through vertex colours (one draw call per material, ±8 % colour per leaf), and a wind-sway animator.
-import { THREE, shadow } from '../kit.js';
+import { THREE, shadow, declare } from '../kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const TAU = Math.PI * 2, GOLD = Math.PI * (3 - Math.sqrt(5));
@@ -316,11 +316,12 @@ export function leafMat(key, map, { rough = 0.62, soft = false, alpha = true, co
   if (MAT.has(k)) return MAT.get(k);
   const m = new THREE.MeshStandardMaterial({ map, color, alphaTest: alpha && map ? 0.5 : 0, side: THREE.DoubleSide, vertexColors: true, roughness: rough, metalness: 0, envMapIntensity: env });
   leafShader(m, soft);
-  m.name = 'plant-' + key; MAT.set(k, m); return m;
+  m.name = 'plant-' + key; declare(m, { surface: 'foliage' }); MAT.set(k, m); return m;   // lighting manifest: a plant's leaves
 }
 export function plainMat(key, color, { rough = 0.8, map = null, side = THREE.FrontSide, vertexColors = true } = {}) {
   if (MAT.has(key)) return MAT.get(key);
-  const m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, map, side, vertexColors }); m.name = 'plant-' + key; MAT.set(key, m); return m;
+  const m = new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0, map, side, vertexColors }); m.name = 'plant-' + key;
+  declare(m, { surface: 'foliage' }); MAT.set(key, m); return m;   // lighting manifest: a plant's stems, trunk, flowers
 }
 
 // ---------- geometry ----------

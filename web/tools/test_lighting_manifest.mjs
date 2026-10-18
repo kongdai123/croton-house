@@ -1,16 +1,14 @@
 // The lighting manifest (web/src/lighting_roles.js) on the real house, built headless (tools/harness/scene.mjs):
 //   1. the validator finds nothing (every visible mesh and material resolved, no contradictory declaration);
-//   2. characterisation: every decision a consumer reads from the manifest gives the answer today's rule gives
-//      (golden/classify.json documents those rules), for every material and mesh. A decision whose answer was changed on
-//      purpose is listed in CHANGED with the number of objects it changed and why.
+//   2. the deliberate fixes: each old rule against the manifest's, with the number of objects whose answer changed;
+//   3. switches: every switch in one lamp group, one plate per group, members agreeing on their default slots.
 //   node web/tools/test_lighting_manifest.mjs
 import { buildRealScene } from './harness/scene.mjs';
 import { indexScene, materialKey } from './harness/objects.mjs';
-import { captureClassify } from './harness/classify.mjs';
 
 const t0 = performance.now();
-const w = await buildRealScene(), ix = indexScene(w), today = captureClassify(w, ix);
-const { roles } = w, L = roles.lightingOf;
+const w = await buildRealScene(), ix = indexScene(w);
+const { roles } = w;
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
 let failed = 0;
 const fail = msg => { failed++; console.log('FAIL ' + msg); };
@@ -20,40 +18,21 @@ const errors = roles.validateLighting(w.scene);
 if (errors.length) fail(`validator: ${errors.length} errors\n  ${errors.slice(0, 12).join('\n  ')}`);
 else console.log('ok   validator: every visible mesh and material resolved');
 
-// ---- 2. characterisation -------------------------------------------------------------------------------------------------
-// [decision, today's answer from classify.json (undefined = false), the manifest's answer]
-const MATERIAL = [
-  ['unwrapSkip', c => !!c.unwrapSkip, m => L(m).bake === 'probe'],
-  ['glassCycles', c => !!c.glassCycles, m => L(m).glass?.export === 'pane'],
-  ['sheer', c => !!c.sheer, m => !!L(m).sheer],
+// ---- 2. deliberate fixes ------------------------------------------------------------------------------------------------
+// Every decision a consumer reads from the manifest was first checked equal to the rule it replaced, for every material and
+// mesh (see the commits); classify.json now records the manifest's answers. Where the manifest answers differently ON
+// PURPOSE (an inconsistency of docs/audit/lighting-roles.md fixed), the old rule stays here with the number of materials /
+// meshes whose answer changed and why: the count is checked, so a later change to either side shows up.
+//   [kind, decision, old rule (material or mesh), manifest's rule, expected changes, why]
+const FIXES = [
 ];
-const MESH = [
-  ['mirrorFace', c => !!c.mirrorFace, o => mats(o).some(m => L(m).reflection === 'mirror')],
-  ['unwrapSkip', c => !!c.unwrapSkip, o => mats(o).length > 0 && mats(o).every(m => L(m).bake === 'probe')],
-];
-// A decision leaves these tables when its consumer reads the manifest: classify.json then records the manifest's answer.
-// Decisions changed on purpose: [decision, count of materials / meshes whose answer changed, why].
-const CHANGED = {
-};
-
-
-const check = (kind, table, items) => {
-  for (const [name, old, now] of table) {
-    const diffs = [];
-    for (const [key, node, c] of items) {
-      const a = old(c, node), b = now(node, c);
-      if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push(`${key}: today ${JSON.stringify(a)}, manifest ${JSON.stringify(b)}`);
-    }
-    const expect = CHANGED[`${kind}.${name}`];
-    if (expect && diffs.length === expect[0]) { console.log(`ok   ${kind}.${name}: ${diffs.length} changed on purpose (${expect[1]})`); continue; }
-    if (!diffs.length && !expect) { console.log(`ok   ${kind}.${name}`); continue; }
-    fail(`${kind}.${name}: ${diffs.length} differ${expect ? ` (expected ${expect[0]})` : ''}\n  ${diffs.slice(0, 8).join('\n  ')}`);
-  }
-};
-const matItems = [], seenMat = new Map();
-for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seenMat.has(m)) { const k = materialKey(m); seenMat.set(m, k); matItems.push([k, m, today.materials[k]]); }
-check('material', MATERIAL, matItems);
-check('mesh', MESH, ix.meshes.map(({ key, node }) => [key, node, today.meshes[key]]));
+const items = { material: [], mesh: ix.meshes.map(({ key, node }) => [key, node]) };
+{ const seen = new Set(); for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seen.has(m)) { seen.add(m); items.material.push([materialKey(m), m]); } }
+for (const [kind, name, old, now, expected, why] of FIXES) {
+  const diffs = items[kind].filter(([, x]) => JSON.stringify(old(x)) !== JSON.stringify(now(x))).map(([k, x]) => `${k}: ${JSON.stringify(old(x))} -> ${JSON.stringify(now(x))}`);
+  if (diffs.length === expected) console.log(`ok   fix ${kind}.${name}: ${diffs.length} changed (${why})`);
+  else fail(`fix ${kind}.${name}: ${diffs.length} changed, expected ${expected}\n  ${diffs.slice(0, 8).join('\n  ')}`);
+}
 
 // ---- 3. switches: lamp groups and wall plates pass the manifest's checks ----------------------------------------------------
 {

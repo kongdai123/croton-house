@@ -24,7 +24,7 @@ const presentation = o => {
 };
 // the lightmap identity (batch.js) and the lighting manifest record (lighting_roles.js) ride along into the bake's GLB
 // export as node extras (bake/export/export.mjs writes the record as a JSON string)
-const lmTag = (o, m) => { if (o.userData.lmId) m.userData.lm = o.userData.lmId; else if (o.userData.lmSkip) m.userData.lmSkip = o.userData.lmSkip; m.userData.lighting = meshRecord(o); return m; };
+const lmTag = (o, m) => { if (o.userData.lmId) m.userData.lm = o.userData.lmId; else if (o.userData.lmSkip) m.userData.lmSkip = o.userData.lmSkip; m.userData.lightingRecord = meshRecord(o); return m; };
 
 // One world-space geometry holding every instance of an InstancedMesh (the tracer only understands plain meshes).
 async function expandInstanced(mesh, own, pause) {

@@ -2,13 +2,14 @@
 //
 // Declarations live in userData.lighting (objects: the mesh or any ancestor; materials: the material itself). Most
 // placements declare only a role ({ role: 'plant' }) and most materials nothing (an opaque surface); presets fill the
-// rest. classifyLighting(root) resolves every mesh and material below root into a full record in the same
-// userData.lighting, validateLighting(root) lists what is undeclared or contradictory, and every consumer (batching,
+// rest. classifyLighting(root) resolves every mesh and material below root into a full record (kept beside the object,
+// never in userData: a clone resolves its own, from its own properties and the declarations it copied; lightingOf and
+// meshLighting read them), validateLighting(root) lists what is undeclared or contradictory, and every consumer (batching,
 // baked and probe lighting, the bake export, unwrap, the Cycles scene, the tracer, puddles, contact shadows, lamp
 // groups) reads these records instead of deciding from names, ids or coordinates. bake/scripts/lighting.py reads the
 // same records from the GLB's extras (exportLighting writes them).
 //
-// Records (all fields always present once resolved; `resolved: 1` marks a resolved record):
+// Records (all fields always present; `declared` holds what was declared):
 //   material: { surface, alphaCutout, twoSided, foliage, wet, weather, glass, sheer, emits, reflection, clearcoat,
 //               castsSun, bake, contact, zone }
 //   mesh:     { role, motion, bake, why, probeSide, sun: { cast, track }, weather, zone, space, puddleMirror }
@@ -78,28 +79,15 @@ export const SURFACE_PRESETS = {
 
 // ---- declaring -------------------------------------------------------------------------------------------------------
 // declare(target, { role: 'plant' }) / declare(material, { surface: 'leafCard' }): merges into userData.lighting and drops
-// a resolved record (it is resolved again from the declarations).
+// its resolved record (it is resolved again from the declarations).
+const RECORDS = new WeakMap();
 export function declare(target, decl) {
-  const prev = target.userData.lighting, own = prev?.resolved ? prev.declared ?? {} : prev ?? {};
-  target.userData.lighting = { ...own, ...decl };
+  target.userData.lighting = { ...(target.userData.lighting ?? {}), ...decl };
+  RECORDS.delete(target);
   return target;
 }
-const declared = t => { const l = t?.userData?.lighting; return l ? (l.resolved ? l.declared ?? {} : l) : {}; };
-
-// ---- legacy inference --------------------------------------------------------------------------------------------------
-// Today's rules for what is not declared yet. Each entry moves to a declaration where the thing is made, and is deleted
-// here when it does (docs/architecture-lighting.md step 3).
-const LEGACY = {
-  surfaceByName(m) {
-    const n = m.name || '';
-    if (/^garden-/.test(n)) return 'leafCard';
-    if (/^plant/.test(n)) return 'foliage';
-    if (n === 'mirror') return 'mirror';
-    return null;
-  },
-  plantRoot: o => /^(plants|garden|flowers)-/.test(o.userData.id || ''),
-  noPuddleMirror: o => /^garden-turf/.test(o.name || ''),
-};
+const declared = t => t?.userData?.lighting ?? {};
+export const isResolved = t => RECORDS.has(t);
 
 // ---- materials ---------------------------------------------------------------------------------------------------------
 const glassLike = m => m.transmission > 0 || m.userData?.daylightOpacity !== undefined || (!!m.transparent && m.opacity < 0.6);
@@ -108,11 +96,11 @@ const presentationLike = m => !!m.userData?.presentation || m.blending === 2 /* 
 
 export function resolveMaterial(m) {
   if (!m) return null;
-  const cur = m.userData.lighting;
-  if (cur?.resolved) return cur;
+  const cur = RECORDS.get(m);
+  if (cur) return cur;
   const d = declared(m), u = m.userData;
   const emits = d.emits !== undefined ? d.emits : u.emits ? { kind: u.emits, switched: !!u.lightGlow } : u.lightGlow ? { kind: 'lamp', switched: true } : null;
-  let surface = d.surface ?? LEGACY.surfaceByName(m);
+  let surface = d.surface;
   if (!surface) surface = u.sheer ? 'sheer' : presentationLike(m) ? 'presentation' : glassLike(m) ? 'glass' : emits ? emits.kind : 'opaque';
   const alphaCutout = m.alphaTest > 0, preset = SURFACE_PRESETS[surface] ?? {};
   const pick = (k, dflt) => d[k] !== undefined ? d[k] : preset[k] !== undefined ? preset[k] : dflt;
@@ -124,24 +112,24 @@ export function resolveMaterial(m) {
   // what unwrap.py leaves out of the atlas (plant, glass): alpha masks, plants, and what the export turns into transmission
   const unwrapGlass = !m.isShaderMaterial && (!!sheer || u.daylightOpacity !== undefined || m.transmission > 0);
   const r = {
-    surface, alphaCutout,
+    declared: d, surface, alphaCutout,
     twoSided: pick('twoSided', false),
     foliage,
     wet: d.wet ?? (preset.wet === 'dry' || alphaCutout ? 'dry' : 'auto'),
     weather: d.weather ?? (preset.weather === 'plant' || alphaCutout ? 'plant' : 'auto'),
     glass, sheer, emits,
     reflection: pick('reflection', 'probe'),
-    clearcoat: m.clearcoat > 0 ? 'probe' : null,
+    clearcoat: d.clearcoat !== undefined ? d.clearcoat : m.clearcoat > 0 ? 'probe' : null,
     castsSun: d.castsSun ?? !glassLike(m),
     bake: d.bake ?? (alphaCutout || preset.bake === 'probe' && surface !== 'sheer' || unwrapGlass ? 'probe' : 'lightmap'),
     contact: d.contact ?? !(foliage || m.transparent || m.transmission > 0 || m.isShaderMaterial),
-    zone: d.zone ?? (u.exteriorFinish ? 'exterior' : null),
+    zone: d.zone !== undefined ? d.zone : null,
   };
-  m.userData.lighting = Object.assign({ resolved: 1, declared: d }, r);
-  return m.userData.lighting;
+  RECORDS.set(m, r);
+  return r;
 }
 // The resolved record of a material (resolving it on first use: pets, the visitor and helpers made after classify).
-export const lightingOf = m => m ? (m.userData.lighting?.resolved ? m.userData.lighting : resolveMaterial(m)) : null;
+export const lightingOf = m => m ? RECORDS.get(m) ?? resolveMaterial(m) : null;
 
 // ---- meshes ------------------------------------------------------------------------------------------------------------
 const mats = o => [].concat(o.material ?? []).filter(Boolean);
@@ -150,7 +138,7 @@ const lmMesh = o => o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !!o.ge
 function inherited(o, key) { for (let p = o; p; p = p.parent) { const d = declared(p); if (d[key] !== undefined) return { node: p, value: d[key] }; } return null; }
 const movingRoot = p => !!(p.userData.animate || p.userData.toggle);
 // The role an object declares, or inherits from the nearest ancestor that declares one.
-export function roleOf(o) { for (let p = o; p; p = p.parent) { const d = declared(p); if (d.role !== undefined) return d.role; if (LEGACY.plantRoot(p)) return 'plant'; } return null; }
+export function roleOf(o) { for (let p = o; p; p = p.parent) { const d = declared(p); if (d.role !== undefined) return d.role; } return null; }
 
 // Today's weather rule (lightmap.js): by the mesh's tight world box and its first material.
 export function weatherOf(box, m) {
@@ -169,7 +157,7 @@ export function inheritLighting(merged, member) { MEMBERS.set(merged, member); }
 function resolveMesh(o, ctx) {
   const member = MEMBERS.get(o);
   if (member) {
-    const from = member.userData.lighting?.resolved ? member.userData.lighting : resolveMesh(member, ctx), own = placeOf(o, ctx);
+    const from = RECORDS.get(member) ?? resolveMesh(member, ctx), own = placeOf(o, ctx);
     const plant = from.role === 'plant' || mats(o).some(m => lightingOf(m).foliage);
     return { ...from, ...own, sun: { cast: from.sun.cast, track: plant ? 'plant' : 'static' } };
   }
@@ -182,7 +170,6 @@ function resolveMesh(o, ctx) {
     if (!door && p.userData.door) door = p;
     if (!moving && movingRoot(p)) moving = p;
     if (!movable && p.userData.movable) movable = p;
-    if (!role && LEGACY.plantRoot(p)) role = 'plant';
   }
   if (o.isReflector || ms.some(m => lightingOf(m).surface === 'presentation')) presentation = true;
   if (presentation) role = 'presentation';
@@ -211,9 +198,9 @@ function resolveMesh(o, ctx) {
   for (let p = o; p; p = p.parent) if (p.userData.door || (p.userData.animate && p.userData.toggle)) { probeSide = 'face'; break; }
   const plant = role === 'plant' || ms.some(m => lightingOf(m).foliage);
   const own = declared(o);
-  return { resolved: 1, declared: own, role, motion, bake, why: hidden && !why ? 'hidden' : why, probeSide,
+  return { declared: own, role, motion, bake, why: hidden && !why ? 'hidden' : why, probeSide,
     sun: { cast: m0 ? lightingOf(m0).castsSun : true, track: plant ? 'plant' : 'static' },
-    ...placeOf(o, ctx), puddleMirror: own.puddleMirror ?? !LEGACY.noPuddleMirror(o), fakeShadow: !!own.fakeShadow };
+    ...placeOf(o, ctx), puddleMirror: own.puddleMirror ?? true, fakeShadow: !!own.fakeShadow };
 }
 // What follows from where the mesh is: its after-rain class (tight world box, lightmap.js), its zone (the interior /
 // exterior material split of lighting.js: the geometry box's centre inside the house, under the ceiling, not a site-wide
@@ -243,8 +230,8 @@ export function classifyLighting(root, { stillParts = null, force = false } = {}
   root.traverse(o => {
     if (!o.isMesh) return;
     for (const m of mats(o)) resolveMaterial(m);
-    if (!force && o.userData.lighting?.resolved) return;
-    o.userData.lighting = resolveMesh(o, ctx); meshes++;
+    if (!force && RECORDS.has(o)) return;
+    RECORDS.set(o, resolveMesh(o, ctx)); meshes++;
   });
   return { meshes };
 }
@@ -279,9 +266,7 @@ class Box {
 }
 // The record of a mesh (classified, or resolved on the spot for meshes made after classify: pets, mirror proxies).
 export function meshLighting(o) {
-  const l = o?.userData?.lighting;
-  if (l?.resolved && l.role) return l;
-  return resolveMesh(o, { still: new Set(), ceiling: levels.ceiling, box3: o2 => new Box().of(o2) });
+  return RECORDS.get(o) ?? resolveMesh(o, { still: new Set(), ceiling: levels.ceiling, box3: o2 => new Box().of(o2) });
 }
 
 // ---- validate ----------------------------------------------------------------------------------------------------------
@@ -294,12 +279,12 @@ export function validateLighting(root) {
     const d = declared(o);
     if (d.role !== undefined && !ROLES.includes(d.role)) errors.push(`${name(o)}: unknown role ${d.role}`);
     if (!o.isMesh || !visible(o)) return;
-    const l = o.userData.lighting;
-    if (!l?.resolved) { errors.push(`${name(o)}: not classified`); return; }
+    const l = RECORDS.get(o);
+    if (!l) { errors.push(`${name(o)}: not classified`); return; }
     if (!ROLES.includes(l.role)) errors.push(`${name(o)}: unknown role ${l.role}`);
     for (const m of mats(o)) {
-      const ml = m.userData.lighting, md = declared(m);
-      if (!ml?.resolved) { errors.push(`${name(o)} [${m.name || m.type}]: material not classified`); continue; }
+      const ml = RECORDS.get(m), md = declared(m);
+      if (!ml) { errors.push(`${name(o)} [${m.name || m.type}]: material not classified`); continue; }
       if (!SURFACES.includes(ml.surface)) errors.push(`${name(o)} [${m.name || m.type}]: unknown surface ${ml.surface}`);
       if (md.alphaCutout !== undefined && md.alphaCutout !== m.alphaTest > 0) errors.push(`${name(o)} [${m.name || m.type}]: alphaCutout declared ${md.alphaCutout} but alphaTest ${m.alphaTest}`);
       if (ml.emits && !EMIT_KINDS.includes(ml.emits.kind)) errors.push(`${name(o)} [${m.name || m.type}]: unknown emitter kind ${ml.emits.kind}`);
@@ -400,7 +385,7 @@ export const exportLighting = r => JSON.stringify(r);
 // GLTFExporter plugin (exporter.register(gltfLightingPlugin())): every node's record (photo.js puts it on the exported
 // meshes) and every material's, as the extras string "lighting". Runs after the exporter's own userData extras.
 export const gltfLightingPlugin = () => () => ({
-  writeNode(o, def) { if (o.userData.lighting) (def.extras ??= {}).lighting = exportLighting(o.userData.lighting.resolved ? meshRecord(o) : o.userData.lighting); },
+  writeNode(o, def) { if (o.userData.lightingRecord) { (def.extras ??= {}).lighting = exportLighting(o.userData.lightingRecord); delete def.extras.lightingRecord; } },
   async writeMaterialAsync(m, def) { (def.extras ??= {}).lighting = exportLighting(materialRecord(m)); },
 });
 export { MESH_KEYS, MATERIAL_KEYS };

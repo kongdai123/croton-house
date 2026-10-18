@@ -2,7 +2,7 @@
 // Leaves are alpha-tested painted cards (bent, folded, tinted per leaf); trunks, stems, petioles are real tubes.
 // Every builder takes an optional seed (deterministic LCG, never Math.random) and sways its leaf groups in
 // root.userData.animate(t). Helpers live in plants_parts.js.
-import { THREE, M, lathe, describe, setCollider, autoCollider, shadow } from '../kit.js';
+import { THREE, M, lathe, describe, setCollider, autoCollider, shadow, declare } from '../kit.js';
 import {
   TAU, GOLD, lcg, rr, tint, texBanana, texFan, texStrap, texCroton, CROTON_CELLS, texSprig, texPine, texColeus, texHeart,
   texPlume, texBananaStem, texCactus, texBoot, paint, leafMat, plainMat, orient, dirOf, cardGeo, fanGeo, stemGeo, Batch,
@@ -14,7 +14,7 @@ const lerp3 = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 const add3 = (a, b, s = 1) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
 const yawTilt = (d) => { const l = Math.hypot(...d); return [Math.atan2(d[0], d[2]), Math.acos(Math.max(-1, Math.min(1, d[1] / l)))]; };
 const meshOf = (geo, mat) => shadow(new THREE.Mesh(geo, mat));
-function finish(root, sw, meta) { describe(root, meta); return swayAnimate(root, sw); }
+function finish(root, sw, meta) { describe(root, meta); declare(root, { role: 'plant' }); return swayAnimate(root, sw); }
 
 // ------------------------------------------------------------------ banana
 function banana(seed = 1) {
@@ -442,7 +442,7 @@ function frontCover(seed = 1) {
     b.add(geo, { pos: [Math.sin(a) * rad, rr(r, .015, .11), Math.cos(a) * rad * .7], q: orient(a, rr(r, .45, 1.4), rr(r, -.4, .4)), s: rr(r, .65, 1.1), tint: tint(r, .23) });
   }
   root.add(b.mesh(leafMat('shrub', tex, { rough: .7, soft: true })));
-  describe(root, { id: 'plants-front-cover', name: 'Tropical groundcover', zh: '地被植物' }); return root;
+  describe(root, { id: 'plants-front-cover', name: 'Tropical groundcover', zh: '地被植物' }); declare(root, { role: 'plant' }); return root;
 }
 function frontQueen(seed = 1) {
   const r = lcg(seed * 239 + 3), root = new THREE.Group(), stems = new Batch(), leaves = new Batch(), H = rr(r, 3.8, 4.5);
@@ -458,7 +458,7 @@ function frontQueen(seed = 1) {
     }
   }
   root.add(stems.mesh(plainMat('frontPalmStem', 0xffffff, { rough: .78 })), leaves.mesh(leafMat('frontPalmPinna', texStrap('frontPalmPinna', '#769641', '#b3bc63', '#6a8e36'), { rough: .65 })));
-  setCollider(root, { w: .3, d: .3, h: H }); describe(root, { id: 'plants-front-queen', name: 'Queen palm', zh: '皇后葵' }); return root;
+  setCollider(root, { w: .3, d: .3, h: H }); describe(root, { id: 'plants-front-queen', name: 'Queen palm', zh: '皇后葵' }); declare(root, { role: 'plant' }); return root;
 }
 
 export const items = {

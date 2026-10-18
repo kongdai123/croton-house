@@ -26,7 +26,7 @@ w.scene.traverse(o => {
   let m = copies.get(src);
   if (!m) { m = new T.MeshStandardMaterial({ name: src.name }); m.userData.lighting = roles.materialRecord(src); copies.set(src, m); materials.push(m); }
   for (const k of MAPS) if (m[k]) m[k] = null;
-  const e = new T.Mesh(box, m); e.name = o.userData.lmId || o.name; e.userData.lighting = roles.meshRecord(o); out.add(e); meshes.push(e);
+  const e = new T.Mesh(box, m); e.name = o.userData.lmId || o.name; e.userData.lightingRecord = roles.meshRecord(o); out.add(e); meshes.push(e);
 });
 const exporter = new GLTFExporter(); exporter.register(roles.gltfLightingPlugin());
 const gltf = await exporter.parseAsync(out, { binary: false });
@@ -38,7 +38,7 @@ const doc = {
   schema: { meshKeys: roles.MESH_KEYS, materialKeys: roles.MATERIAL_KEYS, roles: roles.ROLES, surfaces: roles.SURFACES, emitKinds: roles.EMIT_KINDS, motions: roles.SCHEMA.mesh.motion, bakes: roles.SCHEMA.mesh.bake },
   gltf,
   expect: {
-    mesh: meshes.map(e => ({ record: canonical(e.userData.lighting), answers: answers('mesh', e.userData.lighting) })),
+    mesh: meshes.map(e => ({ record: canonical(e.userData.lightingRecord), answers: answers('mesh', e.userData.lightingRecord) })),
     material: materials.map(m => ({ record: canonical(roles.materialRecord(m)), answers: answers('material', roles.materialRecord(m)) })),
   },
 };

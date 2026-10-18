@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { pieces as planPieces } from './plan.js';
 import { lightingOf } from './lighting_roles.js';
+import { isBaked } from './shaders/baked_material.js';
+import { surfacePatch } from './shaders/compose.js';
+import { shaderPatch } from './shaders/patch.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -191,14 +194,17 @@ export function prepareMirrors(scene, mirrors, house) {
     for (const { source, geometries } of groups.values()) {
       const geometry = geometries.length === 1 ? geometries[0] : mergeGeometries(geometries);
       if (geometries.length > 1) geometries.forEach(g => g.dispose());
+      // one material for the merged group, the members' colour, roughness and metalness per vertex (hqSurface): the baked
+      // shader's surface option; the legacy raster lighting (the fallback) gets the same edit after its own hook
       const material = source.material.clone(), compile = source.material.onBeforeCompile, key = source.material.customProgramCacheKey();
       material.vertexColors = true; material.color.set(0xffffff);
-      material.onBeforeCompile = function(shader, renderer) {
-        compile.call(this, shader, renderer);
-        shader.vertexShader = 'attribute vec2 hqSurface; varying vec2 vHQSurface;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvHQSurface = hqSurface;');
-        shader.fragmentShader = 'varying vec2 vHQSurface;\n' + shader.fragmentShader.replace('float roughnessFactor = roughness;', 'float roughnessFactor = vHQSurface.x;').replace('float metalnessFactor = metalness;', 'float metalnessFactor = vHQSurface.y;');
-      };
-      material.customProgramCacheKey = () => key + '|reflection-surface';
+      material.onBeforeCompile = compile; material.customProgramCacheKey = source.material.customProgramCacheKey;
+      if (source.material.ownShader) material.ownShader = source.material.ownShader;
+      if (isBaked(source.material)) material.userData.bakedSurface = true;
+      else {
+        material.onBeforeCompile = function(shader, renderer) { compile.call(this, shader, renderer); shaderPatch(shader, 'reflection surface ' + key, surfacePatch); };
+        material.customProgramCacheKey = () => key + '|reflection-surface';
+      }
       materials.push({ source: source.material, material });
       const proxy = new THREE.Mesh(geometry, material);
       proxy.receiveShadow = source.receiveShadow; proxy.renderOrder = source.renderOrder; proxy.layers.mask = source.layers.mask;

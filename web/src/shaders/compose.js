@@ -99,17 +99,33 @@ function lightsBegin(f) {
   return b;
 }
 
+// The mirrors' merged reflection geometry (hq.js prepareMirrors): static meshes of one material class merged with their
+// own roughness and metalness per vertex (attribute hqSurface), which replace the material's in three's chunks.
+const SURFACE_VERTEX_PARS = 'attribute vec2 hqSurface; varying vec2 vHQSurface;\n', SURFACE_VERTEX = '\nvHQSurface = hqSurface;', SURFACE_PARS = 'varying vec2 vHQSurface;\n';
+const surfaceEdits = () => [
+  { site: '#include <roughnessmap_fragment>', text: rep(ShaderChunk.roughnessmap_fragment, 'float roughnessFactor = roughness;', 'float roughnessFactor = vHQSurface.x;', 'surface roughness') },
+  { site: '#include <metalnessmap_fragment>', text: rep(ShaderChunk.metalnessmap_fragment, 'float metalnessFactor = metalness;', 'float metalnessFactor = vHQSurface.y;', 'surface metalness') }];
+// The same edit for a material without the baked shader (the legacy raster lighting's mirrors): its own hook's output.
+export function surfacePatch(sh) {
+  sh.vertexShader = SURFACE_VERTEX_PARS + rep(sh.vertexShader, '#include <begin_vertex>', '#include <begin_vertex>' + SURFACE_VERTEX, 'surface vertex');
+  let src = SURFACE_PARS + sh.fragmentShader;
+  for (const e of surfaceEdits()) src = rep(src, e.site, e.text, e.site);
+  sh.fragmentShader = src;
+  return sh;
+}
+
 // Edits [{ site, alt?, text }]: `text` replaces the one occurrence of `site` (or, when the site is absent, of `alt`;
 // '$&' in text stands for the site found). Fragment declarations come in the order below: later pieces use earlier ones.
 export function compose(f) {
   const key = flagsKey(f);
   const memo = MEMO.get(key); if (memo) return memo;
   const world = needsWorld(f), probe = f.path === 'probe';
-  const vpars = [world && WORLD_VARYING, f.foliageBake && foliageVertexPars(f.multi), f.sheer && SHEER_VERTEX_PARS].filter(Boolean).join('');
+  const vpars = [world && WORLD_VARYING, f.foliageBake && foliageVertexPars(f.multi), f.sheer && SHEER_VERTEX_PARS, f.surface && SURFACE_VERTEX_PARS].filter(Boolean).join('');
   const vertex = [{ site: 'void main() {', text: vpars + '$&' }];
   const project = (f.sheer ? SHEER_SPREAD_LINE : '') + (world ? WORLD_VERTEX : '');
   if (project) vertex.push({ site: '#include <project_vertex>', text: '$&' + project });
-  if (f.foliageBake) vertex.push({ site: '#include <begin_vertex>', text: '$&' + foliageVertexGLSL(f.multi) });
+  const begin = (f.foliageBake ? foliageVertexGLSL(f.multi) : '') + (f.surface ? SURFACE_VERTEX : '');
+  if (begin) vertex.push({ site: '#include <begin_vertex>', text: '$&' + begin });
 
   const aoUsed = f.contactAO && !(probe && f.sheer);
   const fpars = [world && WORLD_VARYING,
@@ -121,9 +137,11 @@ export function compose(f) {
     f.contactSun && contactSunGLSL(f.contactSteps), aoUsed && contactAOGLSL(f.contactMax),
     f.foliageBake && FOLIAGE_PARS,
     f.planarPuddle && PLANAR_PUDDLE_GLSL,
+    f.surface && SURFACE_PARS,
   ].filter(Boolean).join('');
   const fragment = [{ site: 'void main() {', text: fpars + '$&' }];
   if (f.wet) fragment.push({ site: '#include <normal_fragment_begin>', alt: 'vec3 nonPerturbedNormal = normal;', text: '$&' + WET_MASK });
+  if (f.surface) fragment.push(...surfaceEdits());
   if (f.wet || f.sheer) fragment.push({ site: '#include <lights_physical_fragment>', text: (f.wet ? WET_SURFACE : '') + (f.planarPuddle ? PUDDLE_NORMAL : '') + '$&' + (f.sheer ? SHEER_SHEEN_TAIL : '') });
   if (f.sheer) fragment.push(
     // declared ahead of the physical BRDF's direct term, which reads it

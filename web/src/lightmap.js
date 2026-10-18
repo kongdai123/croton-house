@@ -33,7 +33,7 @@ import { PCSS_TAPS } from './shaders/pcss.glsl.js';
 import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.js';
 import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
-import { installBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader } from './shaders/baked_material.js';
+import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
@@ -625,7 +625,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       for (const m of [].concat(o.material)) {
         if (!m?.isMeshStandardMaterial || m.lightMap || m.isFogVolumeMaterial || !volume) continue;
         if (!hooks.has(m) && !m.userData.probeLit) {
-          hooks.set(m, { compile: m.onBeforeCompile, key: m.customProgramCacheKey, emission: m.emissiveIntensity, ownShader: m.ownShader });
+          hooks.set(m, { emission: m.emissiveIntensity });   // its hook and key: baked_material.js keeps them
           const L = lightingOf(m);
           if (!L.emits) m.emissiveIntensity = 0;
           // an unswitched lamp follows the slot's lamp level as its lightmapped copies do (switched lamps: their switch)
@@ -775,7 +775,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     else { skyBg?.dispose(); refl?.uniforms.uReflTex.value.dispose();
       for (const u of Object.values(volume?.uniforms ?? {})) if (u.value?.isTexture) u.value.dispose(); }
     for (const [m, e] of envs) { m.envMap = e.map; m.envMapIntensity = e.intensity; if (e.rotation) m.envMapRotation.copy(e.rotation); m.needsUpdate = true; }
-    for (const [m, h] of hooks) { m.onBeforeCompile = h.compile; m.customProgramCacheKey = h.key; m.emissiveIntensity = h.emission; delete m.userData.probeLit; if (h.ownShader) m.ownShader = h.ownShader; else delete m.ownShader; m.needsUpdate = true; }
+    for (const [m, h] of hooks) { uninstallBaked(m); m.emissiveIntensity = h.emission; }
     foliage?.dispose();
     for (const [o, s] of originalMeshes) { o.geometry.dispose(); o.geometry = s.geometry; o.material = s.material; o.castShadow = s.castShadow; }
     for (const [o, m] of faceSwaps) o.material = m;

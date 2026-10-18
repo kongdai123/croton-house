@@ -15,7 +15,8 @@ const EXTRA = `
   export { createPet as createCat } from './src/pets/cat.js';
   export { createPet as createDog } from './src/pets/dog.js';
   export { Human } from './src/human.js';
-  export * as samplerBudget from './src/sampler_budget.js';`;
+  export * as samplerBudget from './src/sampler_budget.js';
+  export { materialOptions } from './src/shaders/baked_material.js';`;
 // HDR decoding is the one loader that would need real pixels; every panorama becomes the same 2 x 1 image.
 const hdrStub = { name: 'hdr-stub', setup(b) {
   b.onLoad({ filter: /\/HDRLoader\.js$/ }, () => ({ loader: 'js', contents: `import { Texture } from 'three';
@@ -43,8 +44,9 @@ function diskFetch(hide = []) {
 }
 
 // groups: the lamp-group layers (else ?lmgroups=0, the shared lamps layer); slots: all four time slots (else sunrise only)
-export async function buildBakedScene({ groups = true, slots = true, tier = 'hq' } = {}) {
-  const variant = `baked:${groups}:${slots}:${tier}`;
+// before(world): called just before applyLightmaps (a fresh variant: `name` keeps it apart from the cached ones)
+export async function buildBakedScene({ groups = true, slots = true, tier = 'hq', name = '', before = null } = {}) {
+  const variant = `baked:${groups}:${slots}:${tier}:${name}`;
   const world = await buildRealScene({ extra: EXTRA, plugins: [hdrStub], variant });
   if (world.bakedState) return world.bakedState;
   const { T, scene, layout, lighting, doors } = world;
@@ -59,6 +61,7 @@ export async function buildBakedScene({ groups = true, slots = true, tier = 'hq'
   const warn = console.warn, info = console.info, warnings = [];
   console.warn = (...a) => warnings.push(a.map(String).join(' ')); console.info = () => {};
   try {
+    before?.(world);
     const baked = await world.applyLightmaps({ scene, renderer, lighting, movables: layout.movables,
       dynamic: [...doors.map(d => d.group), ...layout.animated.filter(o => o.userData.toggle)], slot: 'sunrise', tier });
     // main.js: the visitor and the pets register after baking (always-hot casters), contact and the tier's features next

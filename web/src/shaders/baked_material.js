@@ -61,7 +61,7 @@ export function ownSamplers(material, own) {
 // spec: { name, tag (key part), own: { compile, key } (the material's own hook and key), features(material) -> flags,
 //         bind(shader, flags, material) (the uniforms), renderer (for the key: the units three compiles for) }
 export function installBaked(material, { name, tag, own, features, bind, renderer = null }) {
-  const extra = ownSamplers(material, own);
+  const extra = ownSamplers(material, own), previous = { compile: material.onBeforeCompile, key: material.customProgramCacheKey, ownShader: material.ownShader };
   material.ownShader = own;
   const hook = function (sh, r) {
     const self = this ?? material;
@@ -76,6 +76,7 @@ export function installBaked(material, { name, tag, own, features, bind, rendere
     });
   };
   hook.bakedComposed = true;
+  if (!PREVIOUS.has(material)) PREVIOUS.set(material, { ...previous, hook });
   material.onBeforeCompile = hook;
   material.customProgramCacheKey = function () { const self = this ?? material; return `${own.key}|${tag}:${flagsKey(planOf(self, features(self), renderer, extra).flags)}`; };
 }
@@ -95,4 +96,23 @@ export function sunDepthShader(m) {
     s.fragmentShader = rep(s.fragmentShader, '#include <map_fragment>', '#include <map_fragment>\n#include <color_fragment>', 'depth alpha');
     hook.call(m, s, r);
   }); } };
+}
+
+// ---- uninstall ----------------------------------------------------------------------------------------------------------
+// What installBaked replaced, put back when the baked lighting goes (lightmap.js dispose, the legacy fallback). One rule
+// for every material: its hook, key and own-shader record are restored while the composed hook is still the material's
+// (nothing wraps a baked material: tools/test_shader_invariants.mjs), else it is left as it is and reported; the
+// options other modules set on it (probe registration, the audit's sampler cut, the planar puddle, the diffuse,
+// surface and caster options) go with it.
+const PREVIOUS = new WeakMap();
+export function uninstallBaked(material) {
+  const p = PREVIOUS.get(material);
+  if (!p) return false;
+  PREVIOUS.delete(material); CASTERS.delete(material);
+  for (const k of ['probeLit', 'samplerCut', 'planarPuddle', 'bakedDiffuse', 'bakedSurface', 'contactCaster']) delete material.userData[k];
+  material.needsUpdate = true;
+  if (material.onBeforeCompile !== p.hook) { console.warn(`baked shader "${material.name || material.type}": wrapped by another hook, left as it is`); return false; }
+  material.onBeforeCompile = p.compile; material.customProgramCacheKey = p.key;
+  if (p.ownShader) material.ownShader = p.ownShader; else delete material.ownShader;
+  return true;
 }

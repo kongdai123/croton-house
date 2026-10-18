@@ -151,6 +151,7 @@ class TAAPass extends Pass {
   patchTextures() {
     setBakedTaa(this.lodBias);
     this.scene.traverse(o => { for (const m of [].concat(o.material ?? [])) {
+      if (this.materials.get(m)?.baked && !isBaked(m)) this.materials.delete(m);   // its baked shader went (the legacy fallback)
       if (this.materials.has(m) || !TAA_MAPS.some(name => m[name])) continue;
       if (isBaked(m)) { this.materials.set(m, { baked: true }); m.needsUpdate = true; continue; }
       const prev = m.onBeforeCompile, key = m.customProgramCacheKey, sourceKey = key?.call(m) ?? '', bias = this.lodBias;

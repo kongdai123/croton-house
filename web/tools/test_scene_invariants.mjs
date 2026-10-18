@@ -127,6 +127,34 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   invariant('switch-plates-pickable', 'every wall plate\'s face stands >= 1 cm in front of every pick-blocking collider and a pick from in front reaches it', off);
 }
 
+// ---- 2c. nothing is built under an exterior wall's stucco skin ------------------------------------------------------------------
+// house.js put a baseboard on both faces of every wall piece, also on the outer face of exterior walls, where the 0.15 m
+// stucco skin covers it: 26 hidden meshes, black in the bake (bake QA units-black, e.g. 33178fb767b50d2f). A mesh whose box
+// lies inside the skin of an exterior plan piece (1 mm slack; the skin is outside the outline, house.js skinRect) and is
+// not the skin itself.
+{
+  const off = [], box = new T.Box3(), skins = [];
+  for (const p of w.plan.pieces) {
+    if (!p.exterior) continue;
+    const cx = (p.x0 + p.x1) / 2, cy = (p.y0 + p.y1) / 2;
+    if (p.dir === 'H') skins.push(w.plan.isInside(cx, cy + 0.2, 0) ? { x0: p.x0, x1: p.x1, y0: p.y0 - 0.15, y1: p.y0, z1: p.z1 } : { x0: p.x0, x1: p.x1, y0: p.y1, y1: p.y1 + 0.15, z1: p.z1 });
+    else skins.push(w.plan.isInside(cx + 0.2, cy, 0) ? { x0: p.x0 - 0.15, x1: p.x0, y0: p.y0, y1: p.y1, z1: p.z1 } : { x0: p.x1, x1: p.x1 + 0.15, y0: p.y0, y1: p.y1, z1: p.z1 });
+  }
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => {
+    if (!o.isMesh || o.userData.batch || (!visible(o) && !o.userData.batched)) return;
+    box.setFromObject(o); if (box.isEmpty()) return;
+    const x0 = box.min.x, x1 = box.max.x, y0 = -box.max.z, y1 = -box.min.z, e = 1e-3;
+    for (const k of skins) {
+      if (x0 < k.x0 - e || x1 > k.x1 + e || y0 < k.y0 - e || y1 > k.y1 + e || box.max.y > k.z1 + 0.13) continue;
+      if ((x1 - x0) * (y1 - y0) > 0.5 * (k.x1 - k.x0) * (k.y1 - k.y0)) continue;   // the skin (or a skin piece) itself
+      const a = []; for (let q = o; q && a.length < 3; q = q.parent) a.push(q.name || q.type);
+      off.push(`${fixtureOf(o)?.userData.placement?.i ?? a.join('<')} at x ${x0.toFixed(2)}..${x1.toFixed(2)}, y ${y0.toFixed(2)}..${y1.toFixed(2)}, h ${box.min.y.toFixed(2)}..${box.max.y.toFixed(2)}`); break;
+    }
+  });
+  invariant('nothing-under-the-skin', 'no mesh lies wholly inside an exterior wall\'s stucco skin', off);
+}
+
 // ---- 3. no static mesh is probe-lit without a reason ------------------------------------------------------------------------------
 // The lighting manifest says why a mesh takes the probe volume (lighting_roles.js why: instanced, movable, dynamic, door,
 // plant/glass, presentation, hidden); a visible lit mesh the manifest calls lightmapped must carry a lightmap id.

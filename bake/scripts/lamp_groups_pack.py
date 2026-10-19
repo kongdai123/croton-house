@@ -72,7 +72,7 @@ def tone_K(lum):
 
 def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}, units=None):
     from PIL import Image
-    from downscale_atlas import dilate, PAD, tier, unit_rasters
+    from downscale_atlas import dilate, PAD, tier as atlas_tier, unit_rasters
     groups = json.load(open(groups_json))['groups']; G = len(groups); T = math.ceil(G / 3)
     cov = np.load(coverage).astype(bool); H, W = cov.shape
     rasters = unit_rasters(units, W, H) if units else None   # chart-aware tiers, as downscale_atlas.py --units
@@ -101,7 +101,7 @@ def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}
             sizes[os.path.basename(p)] = os.path.getsize(p)
         del q
         for tier, factor in (('half', 2), ('quarter', 4)):
-            small, covered = tier(stack, cov, factor, rasters); small = dilate(small, covered, PAD)
+            small, covered = atlas_tier(stack, cov, factor, rasters); small = dilate(small, covered, PAD)
             q = np.round(np.sqrt(small / (small + K)) * 255).astype(np.uint8); u = grown(covered, PAD); q[u] = np.maximum(q[u], 1); os.makedirs(os.path.join(out, tier), exist_ok=True)
             p = os.path.join(out, tier, f'lampgroups_{t}.webp'); Image.fromarray(q).save(p, format='WEBP', lossless=True, quality=100, method=6)
             sizes[f'{tier}/{os.path.basename(p)}'] = os.path.getsize(p); meta.setdefault('tiers', {})[tier] = list(q.shape[1::-1])

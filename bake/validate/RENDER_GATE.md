@@ -81,4 +81,5 @@ new run is compared camera by camera: moved cameras have no baseline frame (a wa
 
 CI runs the smoke suite (web/tools/smoke) in software GL and skips `context-loss`, which recompiles the house twice there
 (about 90 minutes). After every bake, run the whole suite, `context-loss` included, on a scavenger GPU node from the
-site copy used for this gate: `node tools/smoke/run.mjs --gpu --angle vulkan --out=<dir>` (all 9 tests, about 5 minutes).
+site copy used for this gate: `node tools/smoke/run.mjs --gpu --out=<dir>` (all 9 tests, about 5 minutes; on Linux `--gpu` uses ANGLE on Vulkan,
+web/tools/smoke/session.mjs LINUX_GPU).

@@ -138,6 +138,9 @@ export const TESTS = [
       ctx.expect(plates.length > 0, 'no wall-switch-* objects in the scene');
       ctx.log(`${plates.length} wall switches`);
       const report = [], failures = [];
+      // every door open, as a visitor opens a closet to reach the switch inside it; closed again after the test
+      const opened = await page.evaluate(() => { const a = window.__app, out = []; a.getDoors().forEach((d, k) => { if (!window.__smoke.doorIsOpen(d)) { a.interact.toggleDoor(d); out.push(k); } }); return out; });
+      await ctx.frames(40);
       for (let i = 0; i < plates.length; i++) try {
         const info = await page.evaluate(i => {
           const a = window.__app, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
@@ -147,8 +150,10 @@ export const TESTS = [
           return { name: plate.name, x: p.x, y: p.y, z: p.z, ry: plate.rotation.y, matched: !!rec?.group, members, on: plate.userData.lightSwitch.on };
         }, i);
         if (!info.matched) { report.push(`${info.name}: matches no baked lamp group (skipped)`); continue; }
-        // Stand where a visitor can: 0.7 m in front of the plate first (switchStance), else further back or to the side
-        // (the click reaches 4 m; a bed or a counter may stand in front of a plate), never where the walk's colliders would push the player away; aim at the plate's centre.
+        // Stand where a visitor can: 0.7 m in front of the plate first (switchStance), else closer, further back or at an
+        // angle up to 75 degrees off the plate's normal (the click reaches 4 m; a bed or a counter may stand in front of a
+        // plate, a closet's plate is seen from inside it or through its doorway), never where the walk's colliders would
+        // push the player away; aim at the plate's centre.
         const first = switchStance(info);
         for (const target of [!info.on, info.on]) {   // press it, then press it back
           const r = await page.evaluate(({ i, first }) => {
@@ -157,7 +162,10 @@ export const TESTS = [
             const ry = new T.Euler().setFromQuaternion(plate.getWorldQuaternion(new T.Quaternion()), 'YXZ').y;
             const n = { x: Math.sin(ry), z: Math.cos(ry) }, l = { x: Math.cos(ry), z: -Math.sin(ry) }, tried = [];
             const spots = [{ x: first.x, z: first.z }];
-            for (const d of [0.7, 1.0, 1.4, 1.9, 2.5, 3.2]) for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.5, -1.5]) spots.push({ x: c.x + n.x * d + l.x * off, z: c.z + n.z * d + l.z * off });
+            for (const d of [0.35, 0.5, 0.7, 1.0, 1.4, 1.9, 2.5, 3.2]) for (const deg of [0, 20, -20, 40, -40, 60, -60, 75, -75]) {
+              const t = deg * Math.PI / 180, u = { x: n.x * Math.cos(t) + l.x * Math.sin(t), z: n.z * Math.cos(t) + l.z * Math.sin(t) };
+              spots.push({ x: c.x + u.x * d, z: c.z + u.z * d });
+            }
             for (const s of spots) {
               window.__smoke.place(s.x, s.z, 0, 0);
               const p = a.player.pos;
@@ -171,7 +179,7 @@ export const TESTS = [
             }
             return { pickedPlate: false, tried };
           }, { i, first });
-          ctx.expect(r.pickedPlate, `${info.name} at (${info.x.toFixed(2)}, ${info.z.toFixed(2)}): no standing spot within 3.2 m (1.5 m to either side) picks the plate: ${r.tried.filter((t, k, all) => all.indexOf(t) === k).slice(0, 10).join('; ')}`);
+          ctx.expect(r.pickedPlate, `${info.name} at (${info.x.toFixed(2)}, ${info.z.toFixed(2)}): no standing spot within 3.2 m (up to 75 degrees off its normal) picks the plate: ${r.tried.filter((t, k, all) => all.indexOf(t) === k).slice(0, 10).join('; ')}`);
           try { await ctx.until(() => window.__smoke.settled(), null, 30000, 'the switch fade to finish'); } catch (e) { throw new Error(`${info.name}: ${e.message}`); }
           const after = await page.evaluate(({ i, target }) => {
             const a = window.__app, plates = []; a.scene.traverse(o => { if (o.name.startsWith('wall-switch-')) plates.push(o); });
@@ -186,6 +194,7 @@ export const TESTS = [
         report.push(`${info.name}: ${info.members} member(s)`);
       } catch (e) { failures.push(e.message); await page.evaluate(() => { const a = window.__app; a.baked.lampGroups.reset(a.baked.slotName); }); }
       ctx.log(report.join('; '));
+      await page.evaluate(opened => { const a = window.__app, doors = a.getDoors(); for (const k of opened) a.interact.toggleDoor(doors[k]); }, opened);
       // every plate is tried, so one bad plate does not hide the others
       ctx.expect(failures.length === 0, `${failures.length} of ${plates.length} switches failed:\n  ${failures.join('\n  ')}`);
       await page.evaluate(() => { const a = window.__app; a.baked.lampGroups.reset(a.baked.slotName); window.__smoke.restore(); });

@@ -52,7 +52,9 @@ export class Session {
     const q = [this.query, extraQuery.replace(/^\?/, '')].filter(Boolean).join('&');
     // a second page (legacy) loads while the first keeps drawing: under SwiftShader that takes more than a minute
     await page.goto(`${this.base}/index.html?${q}`, { waitUntil: 'load', timeout: 180000 });
-    await page.waitForFunction(() => window.__ready === true, null, { timeout: 300000 });
+    // the wait for the app scales like every other wait: under SwiftShader a second page (legacy, context-loss) starts
+    // while the first keeps drawing on the same cores
+    await page.waitForFunction(() => window.__ready === true, null, { timeout: 300000 * this.slow });
     return page;
   }
   async close() { for (const c of this.contexts) await c.close().catch(() => {}); }

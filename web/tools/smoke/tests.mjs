@@ -397,35 +397,47 @@ export const TESTS = [
       const info = page => page.evaluate(() => { const S = window.__ctxLoss, a = window.__app; return { lost: S.lost, restored: S.restored, phases: S.phases, ready: window.__ready === true, hdr: a.lighting.renderConfig.hdr, baked: a.state.baked }; });
       const loads = [['during the build', { when: 'early', afterMs: 2500, restoreMs: 1500 }, 'building'], ['during the shader warm-up', { when: 'ready', restoreMs: 1500 }, 'warm-up']];
       const main = ctx.page;
-      let page = null, first = null;
-      for (const [what, arg, phase] of loads) {
-        const p = await ctx.session.newPage('', { init: hookContext, initArg: arg });   // resolves only when window.__ready is true
-        const s = await info(p); first ??= s;
-        ctx.log(`loss ${what}: lost ${s.lost}, restored ${s.restored}, at ${s.phases}, ready ${s.ready}, hdr ${s.hdr}, baked ${s.baked}`);
-        ctx.expect(s.lost >= 1, `no context loss happened ${what}: the load finished before it (phases: ${s.phases}); the test checked nothing`);
-        await ctx.untilOn(p, () => window.__ctxLoss.restored >= window.__ctxLoss.lost, null, 30000, `the context to be restored ${what}`);
-        ctx.expect(s.ready, `window.__ready never became true after a loss ${what}`);
-        ctx.expect(s.phases.includes(phase) || arg.when === 'early', `the loss did not hit the ${phase} phase (${s.phases})`);
-        await enterHouse(ctx, p);
-        await drawing(p, `after a loss ${what}`);
-        await p.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });   // the step that threw: time of day + pet relight
-        if (page) await page.context().close().catch(() => {}); page = p;
-      }
-      // lost and restored again once the visitor is in: the house, the pets and a time change all still work
-      ctx.page = page;   // the helpers (ctx.until, ctx.frames) act on ctx.page; the shared page comes back at the end
-      for (const restoreMs of [1500, 100]) {
-        const n = (await info(page)).lost;
-        await page.evaluate(() => { window.__ctxLoss.lose(); });
-        await ctx.untilOn(page, n => window.__ctxLoss.lost > n, n, 10000, 'the context to be lost');
-        await sleep(restoreMs);
-        await page.evaluate(() => { if (window.__ctxLoss.gl.isContextLost()) window.__ctxLoss.restore(); });
-        await ctx.untilOn(page, n => window.__ctxLoss.restored > n, n, 30000, 'the context to be restored');
-        await drawing(page, `after losing the context in the house (restored after ${restoreMs} ms)`);
-        await page.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });
-      }
-      const end = await info(page);
-      ctx.expect(end.ready && end.hdr === first.hdr, `the lighting configuration changed across the losses (hdr ${first.hdr} -> ${end.hdr})`);
-      ctx.page = main;
+      // Under SwiftShader every open page draws on the same cores, and a third page then barely loads. The shared page
+      // and each finished loss page stop drawing while the next one loads: they report document.hidden, as a background
+      // tab does (main.js skips the frame then). Freezing them through CDP (Page.setWebLifecycleState) is no substitute:
+      // with it the next page never started loading under SwiftShader. Closing a page that is still drawing can wait on
+      // the GPU process as long as the drawing takes, so pages are closed only at the end and never waited on long.
+      const background = (p, on) => p.evaluate(on => { if (on) Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); else delete document.hidden; }, on).catch(() => {});
+      const closeSoon = p => Promise.race([p.context().close().catch(() => {}), sleep(10000)]);
+      if (main) await background(main, true);   // a standalone run has no shared page
+      const opened = [];
+      try {
+        let page = null, first = null;
+        for (const [what, arg, phase] of loads) {
+          if (page) await background(page, true);
+          const p = await ctx.session.newPage('', { init: hookContext, initArg: arg });   // resolves only when window.__ready is true
+          opened.push(p);
+          const s = await info(p); first ??= s;
+          ctx.log(`loss ${what}: lost ${s.lost}, restored ${s.restored}, at ${s.phases}, ready ${s.ready}, hdr ${s.hdr}, baked ${s.baked}`);
+          ctx.expect(s.lost >= 1, `no context loss happened ${what}: the load finished before it (phases: ${s.phases}); the test checked nothing`);
+          await ctx.untilOn(p, () => window.__ctxLoss.restored >= window.__ctxLoss.lost, null, 30000, `the context to be restored ${what}`);
+          ctx.expect(s.ready, `window.__ready never became true after a loss ${what}`);
+          ctx.expect(s.phases.includes(phase) || arg.when === 'early', `the loss did not hit the ${phase} phase (${s.phases})`);
+          await enterHouse(ctx, p);
+          await drawing(p, `after a loss ${what}`);
+          await p.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });   // the step that threw: time of day + pet relight
+          page = p;
+        }
+        // lost and restored again once the visitor is in: the house, the pets and a time change all still work
+        ctx.page = page;   // the helpers (ctx.until, ctx.frames) act on ctx.page; the shared page comes back at the end
+        for (const restoreMs of [1500, 100]) {
+          const n = (await info(page)).lost;
+          await page.evaluate(() => { window.__ctxLoss.lose(); });
+          await ctx.untilOn(page, n => window.__ctxLoss.lost > n, n, 10000, 'the context to be lost');
+          await sleep(restoreMs);
+          await page.evaluate(() => { if (window.__ctxLoss.gl.isContextLost()) window.__ctxLoss.restore(); });
+          await ctx.untilOn(page, n => window.__ctxLoss.restored > n, n, 30000, 'the context to be restored');
+          await drawing(page, `after losing the context in the house (restored after ${restoreMs} ms)`);
+          await page.evaluate(async () => { const a = window.__app; await a.applyTime(); a.pets?.relight(); });
+        }
+        const end = await info(page);
+        ctx.expect(end.ready && end.hdr === first.hdr, `the lighting configuration changed across the losses (hdr ${first.hdr} -> ${end.hdr})`);
+      } finally { ctx.page = main; for (const p of opened) await closeSoon(p); if (main) await background(main, false); }
     },
   },
   {

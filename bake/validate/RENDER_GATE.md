@@ -76,3 +76,9 @@ new run is compared camera by camera: moved cameras have no baseline frame (a wa
   Cycles per room with that in mind; the baseline comparison is the enforced one.
 - Black at dusk with every switch on: bath B and the hall bath (no baked lamp group in the shipped bake).
 
+
+## After every bake: the full UI smoke suite on a GPU
+
+CI runs the smoke suite (web/tools/smoke) in software GL and skips `context-loss`, which recompiles the house twice there
+(about 90 minutes). After every bake, run the whole suite, `context-loss` included, on a scavenger GPU node from the
+site copy used for this gate: `node tools/smoke/run.mjs --gpu --angle vulkan --out=<dir>` (all 9 tests, about 5 minutes).

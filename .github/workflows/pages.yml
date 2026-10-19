@@ -64,7 +64,9 @@ jobs:
         run: node tools/build.mjs
       - name: UI smoke tests
         working-directory: web
-        run: node tools/smoke/run.mjs --out=smoke-artifacts
+        # context-loss recompiles the house twice in software GL (~90 min on CI); it runs on a GPU after every bake
+        # (bake/validate/RENDER_GATE.md) instead.
+        run: node tools/smoke/run.mjs --out=smoke-artifacts --only=load,tour,switches,doors,quality-and-slots,resize,keyboard,legacy
       - name: Upload artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4

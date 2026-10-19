@@ -30,13 +30,17 @@ jobs:
           python-version: '3.x'
       - name: Install dependencies
         working-directory: web
-        run: npm ci
+        # the Python tests (bake QA, packaging) read images and atlases with numpy and Pillow
+        run: |
+          npm ci
+          python -m pip install --quiet numpy pillow
       - name: Lint
         working-directory: web
         run: npm run lint --if-present
       - name: Tests
         working-directory: web
-        run: npm test
+        # GitHub's runners are 2-4x slower than a desktop: the shader goldens take ~40 s locally and passed 120 s here
+        run: npm test -- --timeout=600
 
   # UI smoke tests (gate d, web/tools/smoke): the house in headless Chromium on software WebGL2.
   # Non-blocking for now: it has not run on CI yet. Once it has been green there, make it blocking by removing

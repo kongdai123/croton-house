@@ -231,10 +231,14 @@ def lamp_group_order(plan, records):
 
 
 # ---- the checks -------------------------------------------------------------------------------------------------------------
+PUBLISHED = {'.webp', '.json', '.bin', '.gz', '.hdr'}
+
+
 def check_files(rep, A, T):
     big = []; n = 0
     for p in sorted(A.root.rglob('*')):
-        if p.is_file() and '.git' not in p.parts:
+        # what is published (a bake folder also holds its EXRs, npy arrays and logs, which never ship)
+        if p.is_file() and '.git' not in p.parts and p.suffix.lower() in PUBLISHED:
             n += 1
             if p.stat().st_size >= T['files']['maxBytes']: big.append(f'{p.relative_to(A.root)}{SEP}{p.stat().st_size / 1e6:.2f} MB')
     rep.check('files-size', f'every file under {T["files"]["maxBytes"] / 1e6:.0f} MB ({n} files)', 'fail', big)
@@ -490,10 +494,14 @@ def check_groups(rep, A, T, plan, units, objs, gs, space_of, big):
         allowed = set(S)
         for sid in S: allowed |= {n['space'] for n in plan.neighbors(sid)}
         e_all = sum(energy[gi][i] for i in range(len(units)) if not big[i]); e_out = 0.0; worst = {}
+        rects = [plan.rect_of(sid) for sid in allowed if plan.space(sid)]
         for i in range(len(units)):
             if big[i]: continue
             sp = space_of[i]
-            if sp not in allowed:
+            # a unit counts outside only if no part of its footprint lies in an allowed space (a merged cell of two closets'
+            # walls is centred in one of them)
+            x0, x1, y0, y1 = units[i]['min'][0], units[i]['max'][0], -units[i]['max'][2], -units[i]['min'][2]
+            if sp not in allowed and not any(x1 > r['x0'] and x0 < r['x1'] and y1 > r['y0'] and y0 < r['y1'] for r in rects):
                 e_out += energy[gi][i]; worst[sp] = worst.get(sp, 0) + energy[gi][i]
         frac = e_out / max(e_all, 1e-12)
         rep.metric(f'group.{g["name"]}.outsideFraction', frac)
@@ -502,7 +510,7 @@ def check_groups(rep, A, T, plan, units, objs, gs, space_of, big):
             top = sorted(worst.items(), key=lambda kv: -kv[1])[:3]
             leaks.append(f'{g["name"]}{SEP}{frac:.0%} of its energy outside {sorted(S)} and their neighbours; most in ' + ', '.join(f'{k} {v / max(e_all, 1e-12):.0%}' for k, v in top))
     rep.check('lamp-groups-energy', 'every lamp group has non-zero energy', 'fail', zero)
-    rep.check('lamp-groups-footprint', f'a group puts at most {gT["leakFraction"]:.0%} of its energy (units under {gT["bigUnit"]} m, at their centres) outside its plan spaces and their door/opening neighbours', 'fail', leaks)
+    rep.check('lamp-groups-footprint', f'a group puts at most {gT["leakFraction"]:.0%} of its energy (units under {gT["bigUnit"]} m wholly) outside its plan spaces and their door/opening neighbours', 'fail', leaks)
 
 
 def check_probes(rep, A, T, plan, slots):
@@ -572,6 +580,16 @@ def check_refl(rep, A, T, plan, slots):
     with contextlib.redirect_stdout(io.StringIO()): pts = layoutlib.points(plan)
     expect = [(p, layoutlib.plan_box(plan, p)) for p in pts]
     first = None; ceil = float(plan.levels['ceiling']); rects = layoutlib.full_walls(plan)
+    # the lamp groups' reflection layers (lamp_groups_pack.py refl): the site adds them to the daylight panorama, so a pixel
+    # is black only when the daylight and every lamp layer of its probe are (the dusk daylight inside a room is near zero)
+    lamp_max = {}
+    lmeta = read_json(A.lamp_dir / 'refl' / 'meta.json') if A.lamp_dir else None
+    for l in (lmeta or {}).get('layers', []):
+        f = A.lamp_dir / 'refl' / l['file']
+        if f.exists():
+            try: mx = read_hdr(f).max(-1)
+            except Exception: continue   # noqa: BLE001
+            lamp_max[l['probe']] = np.maximum(lamp_max[l['probe']], mx) if l['probe'] in lamp_max and lamp_max[l['probe']].shape == mx.shape else mx
     for s in slots:
         fr = []
         meta = read_json(A.aux_dir(s) / 'refl' / 'meta.json')
@@ -607,7 +625,9 @@ def check_refl(rep, A, T, plan, slots):
             try: img = read_hdr(f)
             except Exception as e:   # noqa: BLE001
                 layout.append(f'{s} probe {i}{SEP}panorama unreadable: {e}'); continue
-            mx = img.max(-1); bl = float((mx < rT['blackLevel']).mean())
+            mx = img.max(-1)
+            if i in lamp_max and lamp_max[i].shape == mx.shape: mx = np.maximum(mx, lamp_max[i])
+            bl = float((mx < rT['blackLevel']).mean())
             fr.append(bl); rep.details.setdefault('reflBlack', {})[f'{s}/{i:02d}'] = round(bl, 4)
             if not np.isfinite(img).all(): black.append(f'{s} probe {i}{SEP}non-finite pixels')
             elif bl > rT['maxBlackFraction']: black.append(f'{s} probe {i}{SEP}{bl:.0%} of the panorama is black')
@@ -615,7 +635,7 @@ def check_refl(rep, A, T, plan, slots):
         if fr: rep.metric(f'refl.{s}.blackFractionMean', np.mean(fr)); rep.metric(f'refl.{s}.blackFractionMax', max(fr)); rep.metric(f'refl.{s}.panoramas', len(fr))
     rep.check('refl-layout', 'refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points %g m, boxes %g m)' % (rT['pointTol'], rT['boxTol']), 'fail', layout)
     rep.check('refl-placement', 'reflection probes inside a plan space, clear of walls, box holding the centre and stopping at walls except at openings', 'fail', place)
-    rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]}) and not uniform', 'fail', black)
+    rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]} in the daylight and every lamp layer) and not uniform', 'fail', black)
     rep.check('refl-slots', 'the same probe layout in every slot', 'fail', cross)
 
 

@@ -135,7 +135,7 @@ export const PLACEMENTS = [
   { m: 'garage', i: 'shopLight', x: -5.7, y: -1.6, ry: E, lamp: { plate: [-3.519, -0.45, W] } }, { m: 'garage', i: 'shopLight', x: -4.4, y: -3.6, ry: E },
   // Porch & front
   { m: 'decor', i: 'ironColumn', x: -1.15, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' }, { m: 'decor', i: 'ironColumnMirror', x: 1.2, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' },
-  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.732, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
+  { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.882, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
   { m: 'decor', i: 'ironColumn', x: 4.98, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'decor', i: 'ironColumnMirror', x: 6.93, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'outdoor', i: 'frontPallet', x: -2.45, y: -9.45, h: .22, ry: S, zh: '前院木平台', n: 'Front garden pallet platform' },
@@ -403,11 +403,50 @@ function plantClearance(obj, p) {
 }
 
 // ---- The closet rule (owner decision 2026-10-17): every closet and the laundry nook gets a ceiling light on its own switch.
-// From the plan: a baked recessed can (light: false, bake: true, as the bath and hall cans) at the space's centre, clear of
-// the shelving below it, its wall plate inside the space by its door; its lamp group is the space's own (lighting_roles.js:
-// the space's id). A space that already has a can in the placement table (the walk-in closet) keeps it. The new cans stay
-// out of the merged cells (noBatch) until the next rebake, so the merged meshes keep the lightmap ids of the committed bake.
+// From the plan: a baked recessed can (light: false, bake: true, as the bath and hall cans), its wall plate inside the space
+// by its door; its lamp group is the space's own (lighting_roles.js: the space's id). A space that already has a can in the
+// placement table (the walk-in closet) keeps it. Where it goes (owner decision 2026-10-17, applied with the rebake): the
+// centre of the largest clear part of the space, not above furniture taller than CLOSET_TALL (a washer-dryer stack, a shelf
+// at head height), found when the can is placed (Layout.build: every other piece stands by then); the row's x, y (the
+// space's centre) is the fallback when no part is clear.
 const CLOSET_KINDS = new Set(['closet', 'laundry']);
+export const CLOSET_TALL = 1.9;
+// The largest clear part of a space: the largest axis-aligned rectangle of its `step` lattice (cell centres inside the
+// polygon) that no box covers, at least `min` on each side; ties go to the one nearest the space's centre. boxes: plan-frame
+// footprints [x0, x1, y0, y1] of the tall pieces. Returns { x, y, w, h } (the rectangle's centre and size) or null.
+export function closetSpot(polygon, boxes, { step = 0.025, min = 0.15 } = {}) {
+  const b = bbox(polygon), nx = Math.max(1, Math.round((b.x1 - b.x0) / step)), ny = Math.max(1, Math.round((b.y1 - b.y0) / step));
+  const sx = (b.x1 - b.x0) / nx, sy = (b.y1 - b.y0) / ny, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+  const clear = (i, j) => { const x = b.x0 + (i + 0.5) * sx, y = b.y0 + (j + 0.5) * sy;
+    return inPlanPoly(x, y, polygon) && !boxes.some(q => x >= q[0] && x <= q[1] && y >= q[2] && y <= q[3]); };
+  const run = new Array(nx).fill(0); let best = null;
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) run[i] = clear(i, j) ? run[i] + 1 : 0;   // clear cells ending at row j, per column
+    for (let i0 = 0; i0 < nx; i0++) {
+      let h = Infinity;
+      for (let i1 = i0; i1 < nx && run[i1]; i1++) {
+        h = Math.min(h, run[i1]); const w = (i1 - i0 + 1) * sx, hh = h * sy;
+        if (w < min - 1e-9 || hh < min - 1e-9) continue;
+        const x = b.x0 + (i0 + i1 + 1) / 2 * sx, y = b.y0 + (j + 1 - h / 2) * sy, area = w * hh, d = Math.hypot(x - cx, y - cy);
+        if (!best || area > best.area + 1e-9 || (Math.abs(area - best.area) <= 1e-9 && d < best.d - 1e-9)) best = { x, y, w, h: hh, area, d };
+      }
+    }
+  }
+  return best && { x: r3(best.x), y: r3(best.y), w: r3(best.w), h: r3(best.h) };
+}
+// Plan-frame footprints of the meshes standing in a space (footprint centre inside it: the placed pieces and the house's
+// built-in fit-outs, e.g. the linen closet's shelving) that reach above CLOSET_TALL (ceiling fixtures excluded).
+function tallFootprints(scene, s) {
+  const out = [], box = new THREE.Box3();
+  scene.traverse(o => {
+    if (!o.isMesh || !o.visible) return;
+    box.setFromObject(o);
+    if (box.isEmpty() || box.max.y <= CLOSET_TALL || box.min.y >= (s.ceiling ?? 2.44) - 0.12) return;
+    const q = [box.min.x, box.max.x, -box.max.z, -box.min.z];
+    if (inPlanPoly((q[0] + q[1]) / 2, (q[2] + q[3]) / 2, s.polygon)) out.push(q);
+  });
+  return out;
+}
 const r3 = v => Math.round(v * 1000) / 1000;
 // A wall plate in space s by one of its doors: on the door's wall beside a jamb, else on a side wall 15 cm in from the
 // door wall; backed by a plan wall, clear of that wall's openings, facing into the space. [x, y, ry] or null.
@@ -437,7 +476,7 @@ function closetLights(rows) {
     if (!CLOSET_KINDS.has(s.kind) || rows.some(p => p.i === 'recessedLight' && inPlanPoly(p.x, p.y, s.polygon))) continue;
     const b = bbox(s.polygon), plate = platePlace(s);
     if (!plate) { console.warn('closet rule: no wall for a switch plate in', s.id); continue; }
-    out.push({ m: 'decor', i: 'recessedLight', x: r3((b.x0 + b.x1) / 2), y: r3((b.y0 + b.y1) / 2), light: false, bake: true, noBatch: true, lamp: { plate }, rule: 'closet' });
+    out.push({ m: 'decor', i: 'recessedLight', x: r3((b.x0 + b.x1) / 2), y: r3((b.y0 + b.y1) / 2), light: false, bake: true, lamp: { plate }, rule: 'closet', space: s.id });
   }
   return out;
 }
@@ -464,11 +503,16 @@ export class Layout {
       let obj;
       try { obj = p.seed !== undefined ? builder(p.seed) : builder(); } catch (e) { console.error('build failed', p.m, p.i, e); continue; }
       if (p.zone === 'frontDense' && obj.userData.animate) { obj.userData.animate(0); delete obj.userData.animate; }
+      if (p.rule === 'closet') {   // the largest clear part of its space (every other piece stands by now: CLOSET_LIGHTS come last)
+        this.scene.updateMatrixWorld(true);
+        const s = planSpaces.find(q => q.id === p.space), spot = s && closetSpot(s.polygon, tallFootprints(this.scene, s));
+        if (spot) { p.x = spot.x; p.y = spot.y; }
+      }
       obj.position.set(p.x, p.h || 0, -p.y); obj.rotation.y = p.ry || 0; if (p.sx) obj.scale.x = p.sx; if (p.sy) obj.scale.y *= p.sy; if (p.sz) obj.scale.z = p.sz; if (p.scale) obj.scale.multiplyScalar(p.scale);
       frontBounds(obj, p); bedroomFrontClearance(obj, p);
       if (generated.has(p)) plantClearance(obj, p);
       obj.userData.placement = p; if (p.zh) obj.userData.zh = p.zh; if (p.n) obj.userData.name = p.n;
-      if (p.noBatch) obj.userData.noBatch = true;   // kept out of the merged cells (the closet rule's new cans, until a rebake)
+      if (p.noBatch) obj.userData.noBatch = true;   // kept out of the merged cells
       // lighting manifest: a placed piece is furniture unless it declares otherwise (plants, movables, fixtures, ...)
       if (obj.userData.lighting?.role === undefined) declare(obj, { role: obj.userData.lighting?.fixture ? 'fixture' : 'furniture' });
       this.root.add(obj); this.placed.push(obj);

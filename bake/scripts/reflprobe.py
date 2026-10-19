@@ -104,12 +104,20 @@ def scene_extents(p):
     return [round(v, 3) for v in out]
 
 def make_layout():
-    rows = []
+    rows, blocked = [], []
     for i, p in enumerate(L.points(plan)):
         if not L.in_plan(plan, p[0], p[1]) and not L.annex_of(plan, p[0], p[1]): p = scene_point(p)
+        else:
+            # under the roof the point is the plan's (reflprobe_layout.py clears the walls only; bake QA and the site compare
+            # against it): inside or against furniture is an error to fix in the plan, not a silent move (probe 4 stood inside
+            # the kitchen's pantry tower: 81% of every slot's panorama black)
+            t, back = scene_clearance(p)
+            if back >= 2 or t < IN_PLAN_CLEAR: blocked.append(f'probe {i} at ({p[0]}, {p[1]}): {back} back faces, nearest surface {t:.2f} m')
         b = L.plan_box(plan, p) or L.box(p, scene_extents(p))
         rows.append(dict(i=i, b=list(p), **b, where=L.room_of(plan, p[0], p[1])))
+    if blocked: raise SystemExit('reflection probes inside or against scene geometry (add a reflProbe seed to the space in web/data/plan_overlay.json):\n  ' + '\n  '.join(blocked))
     return rows
+IN_PLAN_CLEAR = 0.15   # metres to the nearest surface, level (web/tools/test_scene_invariants.mjs reflection-probes-in-free-air)
 
 if LAYOUT and os.path.exists(LAYOUT): layout = json.load(open(LAYOUT)); print('layout from', LAYOUT, len(layout), 'probes')
 else:

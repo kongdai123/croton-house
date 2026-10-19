@@ -1,6 +1,7 @@
 import { THREE, box } from '../kit.js';
 import { meshId } from '../batch.js';
 import { declare, fixtureOf, fixturesIn, glowLevel, lampGroupAt, lightLevel, ownedLights } from '../lighting_roles.js';
+import { getColliders } from '../house.js';
 
 // a fixture's lamp surfaces: whatever glows inside it (the switch turns them into switched emitters)
 const glowing = o => o.isMesh && o.material?.emissive?.getHex() && o.material.emissiveIntensity > 0;
@@ -8,10 +9,34 @@ const hitMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 
 // Wall plates: a fixture whose declaration (or placement row) has plate: [x, y, ry] gets one, on its switch nearest the
 // placement's origin; the plate reuses that switch's toggle, so pressing it moves the lamp group. Named after the group.
-function wallPlate(scene, entry, [x, y, ry], white) {
+// A declared plate gives the wall and the facing; the plate then stands on the visitor's side of what is built there:
+// plateOnWall moves it out of the wall colliders behind it (an exterior wall's 0.15 m stucco skin stands outside the plan
+// wall's face, and the porch plate, typed against that face, sat 1.2 cm inside the skin, unseen and unpickable).
+export const PLATE_Y = 1.12, PLATE_GAP = 0.012;   // centre height; centre off the wall face (the plate is 8 mm deep)
+const BLOCKS = c => c.tag === 'wall' || c.tag === 'closet' || c.tag === 'slider';   // what interact.wallDist stops a pick at
+export function plateOnWall([x, y, ry], colliders = getColliders()) {
+  const nx = Math.sin(ry), nz = Math.cos(ry), tx = nz, tz = -nx, z = -y;   // scene frame: the plate looks along +n
+  let face = -Infinity;
+  for (const c of colliders) {
+    if (!BLOCKS(c) || c.top < PLATE_Y) continue;
+    // a collider behind or around the plate's centre line (25 cm back to 5 cm out), within the plate's half width
+    let hit = false;
+    for (let s = -0.25; s <= 0.05 + 1e-9 && !hit; s += 0.01) for (const l of [-0.0375, 0, 0.0375]) {
+      const px = x + nx * s + tx * l, pz = z + nz * s + tz * l;
+      if (px > c.x0 && px < c.x1 && pz > c.z0 && pz < c.z1) { hit = true; break; }
+    }
+    if (!hit) continue;
+    for (const cx of [c.x0, c.x1]) for (const cz of [c.z0, c.z1]) face = Math.max(face, (cx - x) * nx + (cz - z) * nz);
+  }
+  if (!(face > -PLATE_GAP + 1e-3)) return [x, y, ry];   // already clear (or no wall behind it: the invariant reports that)
+  const d = face + PLATE_GAP;
+  return [+(x + nx * d).toFixed(4), +(y - nz * d).toFixed(4), ry];
+}
+function wallPlate(scene, entry, declared, white) {
+  const [x, y, ry] = plateOnWall(declared);
   const plate = new THREE.Group(); plate.name = 'wall-switch-' + entry.lighting.group;
   declare(plate, { role: 'fixture' });
-  plate.position.set(x, 1.12, -y); plate.rotation.y = ry;
+  plate.position.set(x, PLATE_Y, -y); plate.rotation.y = ry;
   plate.userData.lightSwitch = entry.toggle;
   plate.add(box(0.075, 0.12, 0.008, white, { r: 0.004 }));
   const rocker = box(0.032, 0.064, 0.008, white, { z: 0.007, r: 0.002 }); plate.add(rocker);

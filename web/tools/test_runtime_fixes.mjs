@@ -99,10 +99,16 @@ try {
   }
   const meta = JSON.parse(await readFile(new URL('../assets/lightmaps/sunrise/refl/meta.json', import.meta.url), 'utf8'));
   const select = (P, margin, skip = true) => meta.filter(m => !skip || Math.min(m.max[0] - m.min[0], m.max[2] - m.min[2]) >= 0.3).map(m => ({ id: m.i, score: Math.hypot(...P.map((v, a) => v - m.p[a])) + (P.every((v, a) => v >= m.min[a] - margin && v <= m.max[a] + margin) ? 0 : 1000) })).sort((a, b) => a.score - b.score)[0].id;
-  assert.equal(select([-5.873, 1.59, -3.04], 0.25), 2); assert.equal(select([-5.873, 1.59, -3.04], 0.03), 5);
+  // a point in the primary bedroom 2 cm off the bath wall, inside the bath probe's box grown by 25 cm: an ordinary
+  // margin takes the bath probe, the mirrors' 3 cm the bedroom's (the plan-fitted layout of the final rebake)
+  assert.equal(select([-5.873, 1.59, -4.5], 0.25), 2); assert.equal(select([-5.873, 1.59, -4.5], 0.03), 5);
   const bath = meta.find(m => m.i === 26); assert.equal(select([bath.min[0] - 0.02, 1.59, -1.07], 0.03), 26);
-  const sliver = meta.find(m => m.i === 9); assert.ok(sliver.max[0] - sliver.min[0] < 0.3);
-  assert.equal(select(sliver.p, 0.25, false), 9); assert.ok([6, 12].includes(select(sliver.p, 0.25)));
+  // degenerate boxes (under 0.3 m across) are skipped: the plan-fitted layout has none any more (probe 9's 0.07 m box
+  // came from the partition it stood in), so a sliver is added beside probe 9 to keep the rule tested
+  assert.ok(meta.every(m => Math.min(m.max[0] - m.min[0], m.max[2] - m.min[2]) >= 0.3));
+  const p9 = meta.find(m => m.i === 9), sliver = { i: 99, p: [p9.p[0] + 0.02, p9.p[1], p9.p[2]], min: [p9.p[0] - 0.015, p9.min[1], p9.min[2]], max: [p9.p[0] + 0.055, p9.max[1], p9.max[2]] };
+  meta.push(sliver);
+  assert.equal(select(sliver.p, 0.25, false), 99); assert.equal(select(sliver.p, 0.25), 9);
   assert.ok(reflGLSL(27, true, true).includes('float( best ) + uReflNext'));
   console.log('runtime fixes: tour stop/restart/completion, bilingual slot captions, slider collision/nav, grouped switches/defaults/glow, mirror margins and degenerate probe fallback OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

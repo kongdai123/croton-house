@@ -36,4 +36,23 @@ class Reader(unittest.TestCase):
         self.assertTrue(L.clear_glass(glass)); self.assertTrue(L.see_through(glass)); self.assertFalse(L.see_through(MAT))
 
 
+class BakeSceneReaders(unittest.TestCase):
+    def test_blender_side_lookups_tolerate_bake_made_materials(self):
+        """The scripts that walk a Blender bake scene meet materials and objects setup.py made itself (the mist volume,
+        helpers): no manifest record. Every material() / mesh() lookup there passes required=False (foliage_bake.py's did
+        not, and all four foliage tasks of the final rebake stopped with a ManifestError)."""
+        import ast, os
+        here = os.path.dirname(os.path.abspath(__file__)); bad = []
+        for f in ('foliage_bake.py', 'reflprobe.py', 'layer_lights.py', 'bake.py', 'probe.py', 'lamp_groups.py', 'skypano.py'):
+            tree = ast.parse(open(os.path.join(here, f)).read())
+            for n in ast.walk(tree):
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ('material', 'mesh') \
+                        and isinstance(n.func.value, ast.Name) and n.func.value.id in ('lighting', 'manifest'):
+                    a = n.args[0] if n.args else None   # g.materials[i] / g.nodes[i]: the exported glTF, where every record exists
+                    gltf = isinstance(a, ast.Subscript) and isinstance(a.value, ast.Attribute) and isinstance(a.value.value, ast.Name) and a.value.value.id == 'g'
+                    if not gltf and not any(k.arg == 'required' and isinstance(k.value, ast.Constant) and k.value.value is False for k in n.keywords):
+                        bad.append(f'{f}:{n.lineno}')
+        self.assertFalse(bad, f'manifest lookups on a Blender scene without required=False: {bad}')
+
+
 if __name__ == '__main__': unittest.main()

@@ -24,6 +24,7 @@ layers. Placeholders: `$HOST` the cluster login node, `$R` the croton folder on 
 | `bakes/bathfix_fill/` | the shipped composites (world fill of holes and skipped texels) of `bakes/bathfix` |
 | `lampgroups/` | the shipped 15 lamp groups: `scene_lm_lampgroups2.blend`, `groups2.json`, `bakes_final/` (raw), `bakes_sofa/` + `out_sofa/` (merged, shipped) |
 | `site_sofa/` | the newest complete site copy (four slots, lamp groups): the base for test sites |
+| `final/` | the final rebake of 2026-10-18 (its own `scripts/`, `validate/`, `site/`, `scene/f1`, `bakes/f1`, task queue and logs): shipped in `web/assets/lightmaps` |
 | `site/`, `bakes/v2`, `scene/v2`, `scene/clean`, `scene/stableid`, other `site_*` | older; not used by the rebake |
 | `tasks/` | the pool's queue (`pending/ running/ done/ failed/`), `logs/tasks/` the task logs |
 
@@ -51,21 +52,26 @@ rsync -a web/dist web/data web/index.html web/style.css $HOST:$R/site_$V/
 (The export runs the site in legacy mode, so the site copy's lightmaps do not matter; its code and data must be the
 merged build.)
 
-## 1. Export (one GPU job, Chrome; ~15 min)
+## 1. Export (GPU jobs, Chrome; ~5 min each, in parallel)
 ```sh
 cd $R/validate
-node export.mjs ../scene/$V/croton.glb ../scene/$V/export_bundle.js ../site_$V            # day state
+node export.mjs ../scene/$V/croton.glb ../scene/$V/export_bundle.js ../site_$V            # day state (lightmap pose)
 node export.mjs ../scene/$V/croton_dusk.glb ../scene/$V/export_bundle.js ../site_$V --dusk # sheers drawn, as the site at dusk
+node export.mjs ../scene/$V/croton_probe.glb ../scene/$V/export_bundle.js ../site_$V --probe-pose             # probe pose
+node export.mjs ../scene/$V/croton_probe_dusk.glb ../scene/$V/export_bundle.js ../site_$V --dusk --probe-pose
 node lights.mjs ../site_$V > ../scene/$V/lights.json
 node switch_groups.mjs ../site_$V > ../scene/$V/switches.json
 ```
-Check the door/toggle lines of the log (also `croton.glb.state.json`) against the table in "Toggle states" below.
+Check the door/toggle lines of the logs (also `<glb>.state.json`, whose `pose` says which) against the table in "Door and
+toggle states" below.
 
-## 2. Unwrap, UVs, denoiser guides (one GPU job; ~3 min)
+## 2. Unwrap, UVs, denoiser guides (one GPU job; ~5 min)
 ```sh
 $P scripts/unwrap.py scene/$V/croton.glb scene/$V/croton_lm.glb bakes/$V/lightmap_uv.bin 0 32
-$P scripts/unwrap.py scene/$V/croton_dusk.glb scene/$V/croton_lm_dusk.glb bakes/$V/lightmap_uv_dusk.bin 0 32 --reuse bakes/$V/lightmap_uv.bin
-cmp bakes/$V/lightmap_uv.bin bakes/$V/lightmap_uv_dusk.bin && rm bakes/$V/lightmap_uv_dusk.bin   # same layout, or stop
+for x in dusk probe probe_dusk; do   # the same units: the same layout, or stop
+  $P scripts/unwrap.py scene/$V/croton_$x.glb scene/$V/croton_lm_$x.glb bakes/$V/lightmap_uv_$x.bin 0 32 --reuse bakes/$V/lightmap_uv.bin
+  cmp bakes/$V/lightmap_uv.bin bakes/$V/lightmap_uv_$x.bin && rm bakes/$V/lightmap_uv_$x.bin
+done
 $P scripts/compact_uv.py bakes/$V/lightmap_uv.bin bakes/$V/lightmap_uv2.bin.gz
 $P scripts/denoise.py guides scene/$V/croton_lm.glb bakes/$V/lightmap_uv.bin bakes/$V/guides.npz
 ```
@@ -74,53 +80,66 @@ chart) and `N units under 16 texels left to the probes` (~120; they are probe-li
 2026-10-16 gives ~950 units in a ~5920 x 5925 atlas at 32 texels/m (the still parts of animated and toggled furniture,
 batch.js stillParts, and the wall switch plates added ~380 meshes and +1.5% texels over the earlier 5883 x 5877).
 
-## 3. Blender scenes (one GPU job, sequential; ~1 h) and the lamp-group scene
+## 3. Blender scenes (one GPU job each, in parallel; ~10 min) and the two lamp-group scenes
 ```sh
 S=scene/$V
-$B -P $S/setup.py -- $S/croton_lm.glb $S/lights.json $S/scene_lm.blend                     # sunrise lightmaps + probes (wet)
-$B -P $S/setup.py -- $S/croton_lm.glb $S/lights.json $S/scene_lm_dry.blend --dry           # noon, golden
-$B -P $S/setup.py -- $S/croton_lm_dusk.glb $S/lights.json $S/scene_lm_dusk.blend --dry     # dusk
-$B -P $S/setup.py -- $S/croton.glb $S/lights.json $S/scene.blend                           # sunrise reflections, references
-$B -P $S/setup.py -- $S/croton.glb $S/lights.json $S/scene_dry.blend --dry                 # noon, golden reflections
-$B -P $S/setup.py -- $S/croton_dusk.glb $S/lights.json $S/scene_dusk.blend --dry           # dusk reflections
-$B $S/scene_lm.blend -P scripts/lamp_groups.py -- $S/switches.json $S/scene_lm_lampgroups.blend $S/groups.json
+$B -P $S/setup.py -- $S/croton_lm.glb $S/lights.json $S/scene_lm.blend                     # sunrise lightmaps (wet)
+$B -P $S/setup.py -- $S/croton_lm.glb $S/lights.json $S/scene_lm_dry.blend --dry           # noon, golden lightmaps
+$B -P $S/setup.py -- $S/croton_lm_dusk.glb $S/lights.json $S/scene_lm_dusk.blend --dry     # dusk lightmaps
+$B -P $S/setup.py -- $S/croton_lm_probe.glb $S/lights.json $S/scene_lmp.blend              # sunrise light probes (probe pose)
+$B -P $S/setup.py -- $S/croton_lm_probe.glb $S/lights.json $S/scene_lmp_dry.blend --dry    # noon, golden light probes
+$B -P $S/setup.py -- $S/croton_lm_probe_dusk.glb $S/lights.json $S/scene_lmp_dusk.blend --dry   # dusk light probes
+$B -P $S/setup.py -- $S/croton_probe.glb $S/lights.json $S/scene_p.blend                   # sunrise reflections, sky
+$B -P $S/setup.py -- $S/croton_probe.glb $S/lights.json $S/scene_p_dry.blend --dry         # noon, golden reflections
+$B -P $S/setup.py -- $S/croton_probe_dusk.glb $S/lights.json $S/scene_p_dusk.blend --dry   # dusk reflections
+$B -P $S/setup.py -- $S/croton.glb $S/lights.json $S/scene.blend                           # Cycles references (site pose)
+$B -P $S/setup.py -- $S/croton.glb $S/lights.json $S/scene_dry.blend --dry
+$B -P $S/setup.py -- $S/croton_dusk.glb $S/lights.json $S/scene_dusk.blend --dry
+$B $S/scene_lm.blend -P scripts/lamp_groups.py -- $S/switches.json $S/scene_lm_lampgroups.blend $S/groups.json      # lamp lightmaps
+$B $S/scene_lmp.blend -P scripts/lamp_groups.py -- $S/switches.json $S/scene_lmp_lampgroups.blend $S/groups_p.json  # lamp probes, reflections
+cmp $S/groups.json $S/groups_p.json   # the same groups, lights and surfaces in both poses, or stop
 ```
-`lamp_groups.py` prints one line per group (22 in this order: living, livingCenter, livingNiche, kitchenPendant,
-kitchen, kitchenCabinet, dining, family, primary, primaryLamps, primaryBath, closet, bedroomB, bedroomBLamps, bathB,
-hallBath, bedroom3, bedroom3Lamps, hall, garage, porch, always): every group needs lights or surfaces.
+`lamp_groups.py` prints one line per group (27 in the manifest's order, `always` last): every group needs lights or
+surfaces.
 
 ## 4. Queue (one short GPU job; it writes task files only)
 ```sh
-export BLENDER=$R/tools/blender-4.5.14-linux-x64/blender; cd $R
-$P scripts/make_tasks.py sunrise 8 16384 $V probes
-$P scripts/make_tasks.py noon    8 4096  $V probes
-$P scripts/make_tasks.py golden  8 4096  $V probes
-$P scripts/make_tasks.py dusk    8 4096  $V probes --scene scene/$V/scene_lm_dusk.blend
-$P scripts/lamp_groups_tasks.py scene/$V/groups.json scene/$V/scene_lm_lampgroups.blend bakes/$V/lampgroups tasks bakes/$V/lightmap_uv.bin \
-   --samples 4096 --objgroups 8 --probe-samples 128 --chunks 4
+export BLENDER=$R/tools/blender-4.5.14-linux-x64/blender; cd $R; S=scene/$V
+$P scripts/make_tasks.py sunrise 8 16384 $V probes --scene $S/scene_lm.blend --probe-scene $S/scene_lmp.blend
+$P scripts/make_tasks.py noon    8 4096  $V probes --scene $S/scene_lm_dry.blend --probe-scene $S/scene_lmp_dry.blend
+$P scripts/make_tasks.py golden  8 4096  $V probes --scene $S/scene_lm_dry.blend --probe-scene $S/scene_lmp_dry.blend
+$P scripts/make_tasks.py dusk    8 4096  $V probes --scene $S/scene_lm_dusk.blend --probe-scene $S/scene_lmp_dusk.blend
+$P scripts/lamp_groups_tasks.py $S/groups.json $S/scene_lm_lampgroups.blend bakes/$V/lampgroups tasks bakes/$V/lightmap_uv.bin \
+   --samples 4096 --objgroups 8 --probe-samples 128 --chunks 4 --probe-scene $S/scene_lmp_lampgroups.blend
 ```
-Then, as task files in `tasks/pending/` (shell lines that `worker.sh` runs from `$R`):
+`make_tasks.py` writes the probe grid (`scene/probes.json`, probe_grid.py): points inside a plan wall or the exterior skin
+are flagged solid and written invalid without a render. Then, as task files in `tasks/pending/` (shell lines that
+`worker.sh` runs from `$R`):
 ```sh
 O="--plan scripts/plan.json --layout bakes/$V/refl_layout.json"
-# first, in a short GPU job, the layout alone (no renders); every reflection task then reuses bakes/$V/refl_layout.json
-$B scene/$V/scene_dry.blend -P scripts/reflprobe.py -- '{"slot": "noon"}' bakes/$V/refl_scratch 0 0 $O
+# first, in a short GPU job, the layout alone (no renders); it stops on a probe under the roof that stands inside or
+# against furniture (add a reflProbe seed to its space in plan_overlay.json); every reflection task reuses the layout
+$B $S/scene_p_dry.blend -P scripts/reflprobe.py -- '{"slot": "noon"}' bakes/$V/refl_scratch 0 0 $O
 for SLOT in sunrise noon golden dusk; do
-  case $SLOT in sunrise) SC=scene.blend;; dusk) SC=scene_dusk.blend;; *) SC=scene_dry.blend;; esac
+  case $SLOT in sunrise) SC=scene_p.blend;; dusk) SC=scene_p_dusk.blend;; *) SC=scene_p_dry.blend;; esac
   for r in "0 7" "7 14" "14 21" "21 27"; do set -- $r
-    echo "$B scene/$V/$SC -P scripts/reflprobe.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/refl $1 $2 $O" > tasks/pending/${V}_e_${SLOT}_refl_$1
+    echo "$B $S/$SC -P scripts/reflprobe.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/refl $1 $2 $O" > tasks/pending/${V}_e_${SLOT}_refl_$1
   done
-  echo "$B scene/$V/$SC -P scripts/skypano.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/sky_bg.hdr" > tasks/pending/${V}_e_${SLOT}_sky
+  echo "$B $S/$SC -P scripts/skypano.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/sky_bg.hdr" > tasks/pending/${V}_e_${SLOT}_sky
 done
 for r in "0 7" "7 14" "14 21" "21 27"; do set -- $r
-  echo "$B scene/$V/scene_lm_lampgroups.blend -P scripts/reflprobe.py -- '{\"slot\": \"dusk\"}' bakes/$V/lampgroups/refl $1 $2 $O --lamps scene/$V/groups.json --max-layers 3" > tasks/pending/${V}_d_lamprefl_$1
+  echo "$B $S/scene_lmp_lampgroups.blend -P scripts/reflprobe.py -- '{\"slot\": \"dusk\"}' bakes/$V/lampgroups/refl $1 $2 $O --lamps $S/groups.json --max-layers 3" > tasks/pending/${V}_d_lamprefl_$1
 done
 # foliage per slot, on the slot's lightmap scene (sunrise scene_lm, noon/golden scene_lm_dry, dusk scene_lm_dusk):
 #   export CROTON_SITE_PACKAGES=...; $B scene/$V/<scene> -P scripts/foliage_bake.py -- '{"slot": "<slot>", "glb": "scene/$V/croton_lm.glb", "out": "bakes/$V/<slot>/foliage/foliage.npz", "samples": 512}'
 # Cycles references: $B scene/$V/scene.blend -P scene/$V/render.py -- <view json>; with lamp groups
 #   $B scene/$V/scene_lm_lampgroups.blend -P scripts/lamp_groups_render.py -P scene/$V/render.py -- '<json with lampsOn>'
 ```
-Rename for order (the pool takes names in sort order): sunrise lightmaps `${V}_a_*`, lamp-group lightmaps `${V}_b_*`,
-light-probe chunks `${V}_c_*`, lamp reflections `${V}_d_*`, the rest `${V}_e_*`.
+Rename for order (the pool takes names in sort order, longest first): sunrise lightmaps `${V}_a_*`, every light-probe
+chunk (slots and lamp groups) `${V}_b_*`, the other lightmaps (slots and lamp groups) `${V}_c_*`, lamp reflections
+`${V}_d_*`, the rest `${V}_e_*`.
+Before the full run, a targeted test: `bake.py` with `"only": [lightmap ids]` bakes those units alone (e.g. the last
+bake's QA offenders), then composite, encode and tiers as below, and qa.py on that folder.
 
 ## 5. Bake on the pool
 `scripts/submit_pool.sh` (two 8-GPU, one 6-GPU, one 1-GPU worker job: 23 GPUs; up to 7 more single-GPU
@@ -135,7 +154,7 @@ $B -P scripts/composite_v2.py -- $V/sunrise                                   # 
 for s in noon golden dusk; do $B -P scripts/composite_v2.py -- $V/$s --lamps-from $V/sunrise; done
 for s in sunrise noon golden dusk; do
   $P scripts/encode_webp.py $V/$s --split
-  $B -P scripts/downscale_atlas.py -- $V/$s --mask $V/$s/coverage.npy
+  $B -P scripts/downscale_atlas.py -- $V/$s --mask $V/$s/coverage.npy --units $V/lightmap_uv2.bin.gz   # chart-aware tiers
   L=""; [ $s = sunrise ] || L="--lamps-from $V/sunrise"
   $P scripts/probe_pack.py $V/$s scene/probes.json $L --refl $V/$s/refl
   $P scripts/foliage_pack.py $V/$s/foliage/foliage.npz $V/$s/foliage.bin.gz
@@ -143,7 +162,7 @@ done
 export CROTON_GUIDES=$R/$V/guides.npz CROTON_HOLES=$R/$V/sunrise/holes.npy
 for g in $V/lampgroups/g*; do $B -P scripts/lamp_groups_pack.py -- merge $g; done
 $P scripts/lamp_groups_pack.py pack scene/$V/groups.json $V/lampgroups $V/sunrise/coverage.npy $V/lampgroups/out \
-   --probes scene/probes.json --gains living=1.5,livingCenter=2,kitchenPendant=1.5,kitchen=2,family=2,hall=0.6
+   --probes scene/probes.json --units $V/lightmap_uv2.bin.gz --gains living=1.5,livingCenter=2,kitchenPendant=1.5,kitchen=2,family=2,hall=0.6
 $P scripts/lamp_groups_pack.py refl scene/$V/groups.json $V/lampgroups/refl $V/lampgroups/out
 ```
 The gains are the shipped set (15 groups); the new groups (livingNiche, kitchenCabinet, closet, bedroomBLamps, bathB,
@@ -178,26 +197,40 @@ the reference cameras per slot (`lightmap=<slot>&tier=hq&lmres=full`), the bathr
 the front-bedroom closet opened, the kitchen counters, bedroom 3's floor along its west wall; console free of shader
 errors; `baked.auditSamplers()` max <= 16.
 
-## Toggle states of the bake (export.mjs)
-The export is the site's startup state in daytime (`?legacy`, not dusk), except the doors whose plan door spec says
-`bakeOpen` (web/data/plan_overlay.json; their lighting manifest's bakePose is 'open').
-| Object | Site default | Bake |
+## Door and toggle states of the bake (export.mjs)
+Two poses. **Lightmaps** (`croton.glb`, `croton_dusk.glb`): the site's startup state in daytime (`?legacy`, not dusk),
+except the doors whose plan door spec says `bakeOpen` (web/data/plan_overlay.json; manifest bakePose 'open').
+**Probes** (`--probe-pose`: `croton_probe.glb`, `croton_probe_dusk.glb`; the light probes, the lamp groups' probes, the
+daylight and lamp reflection probes): every door shut where the site starts it shut, and where the plan says
+`probeClosed` (manifest probePose 'closed'); the rest as the site has them. The probes next to a doorway hold the light
+of the pose they were rendered in, and a door's leaves take the probe volume in every pose.
+| Door | Site default | Lightmaps | Probes | Why |
+|---|---|---|---|---|
+| Front door (ca2bb42b5a, porch / living) | open | open | **shut** (probeClosed) | open, its leaf swings out onto the porch (outdoor probes), so the probes just inside light only its shut leaf and hardware; rendered open they held the sunlit porch (postmortem row 19); no probe-lit piece stands within 1.5 m inside |
+| Front-bedroom reach-in bifold, white louvers (d8425baf7a, bedroom 3 / closet) | shut | **open** (bakeOpen) | shut | lightmaps: the closet's inside has light when opened (baked shut it stayed black); probes: the room as the site shows it |
+| Primary closet bifold (0f9916c91a) | open | open | open | |
+| Vestibule -> kitchen (40c340903a), bedroom 3 (60bf34160a), bedroom B (498f1f300a) | open | open | open | |
+| Kitchen -> garage (2e2d4a125a), primary bath (143ab6b9ba), primary-bath closet (029f0013aa), hall bath (054ac1818a), bath B (57fafde9ea), garage side door (gside) | shut | shut | shut | |
+| Sliders (e5f2f69eea, 9f018d7dea) | open 0.6 m | open 0.6 m | open 0.6 m | glazed, lightmapped leaves |
+| French doors (161782cdfa, bf8cb9f37a) | shut | shut | shut | glazed, lightmapped leaves |
+
+The invariant `door-bake-poses` (web/tools/test_scene_invariants.mjs) checks both declarations against the plan.
+| Toggle | Site default | Bake |
 |---|---|---|
-| Front door (ca2bb42b5a) | open | open |
-| Front-bedroom reach-in bifold, white louvers (d8425baf7a) | shut | **open** (bakeOpen: light reaches the closet's inside; its leaves are probe-lit in every pose) |
-| Primary closet bifold (0f9916c91a) | open | open |
-| Kitchen -> garage (2e2d4a125a), primary bath (143ab6b9ba), bath B (57fafde9ea), hall bath (054ac1818a), linen closet (029f0013aa), garage side door | shut | shut |
-| Vestibule -> kitchen (40c340903a), bedroom 3 (60bf34160a), bedroom B (498f1f300a), other hinged doors | open | open |
-| Sliders (e5f2f69eea, 9f018d7dea) | open 0.6 m | open 0.6 m |
-| French doors (161782cdfa, bf8cb9f37a) | shut | shut |
 | Garage sectional door | raised | raised |
 | Cellular shades | raised | raised |
-| Sheer curtains | gathered by day, drawn at dusk | gathered (day scenes); drawn in the `--dusk` export (dusk lightmaps, probes, reflections) |
+| Sheer curtains | gathered by day, drawn at dusk | gathered (day scenes); drawn in the `--dusk` exports (dusk lightmaps, probes, reflections) |
 | Patio umbrella | closed | closed |
 | Fire pit | off by day, lit at dusk | off (setup.py skips it as a light) |
-The lamp groups bake once, from the day scene (sheers gathered), for every slot.
+The lamp groups bake once, from the day scenes (sheers gathered), for every slot: lightmaps in the lightmap pose,
+probes and reflections in the probe pose.
 
-## Cost (RTX 2080 Ti, from the 2026-10-15 logs; 22 lamp groups)
+## Cost
+Measured on the final rebake (2026-10-18, RTX A4000, 27 lamp groups, 496 tasks): 78 GPU-h in all (the pool 75), about
+20 min per sunrise lightmap task; prep (four exports, unwrap, 14 scenes, queue) about 50 min of wall time, the pool
+3 h on 25 GPUs, post-processing about 45 min with the composites and merges in parallel jobs.
+
+Earlier estimate (RTX 2080 Ti, from the 2026-10-15 logs; 22 lamp groups):
 | Pass | Tasks x time | GPU-h |
 |---|---|---|
 | Sunrise lightmaps, 16384 spp: sky, sun bounce, shared lamps | 3 x 8 x ~21 min | 8.1 |

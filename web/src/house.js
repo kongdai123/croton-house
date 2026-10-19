@@ -151,10 +151,16 @@ export function buildHouse(house, mods, opts = {}) {
   interior.add(box(1.14, CEIL - 2.21, 5.357 - 1.822, M.ceiling(), { x: -2.284 - 0.57, y: (CEIL + 2.21) / 2, z: -(1.822 + 5.357) / 2 }));
 
   // ---- Baseboards (interior faces) ----
+  // not on the face an exterior piece's stucco skin covers: there it was buried in the skin (black in the bake, bake QA)
   for (const p of pieces) if (p.kind === 'solid') {
-    const t = 0.012, h = 0.09;
-    if (p.dir === 'H') { interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y1 + t / 2) })); interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y0 - t / 2) })); }
-    else { interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x1 + t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 })); interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x0 - t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 })); }
+    const t = 0.012, h = 0.09, sk = outside(p) ? skinRect(p, EXT_FP, 0.15) : null;
+    if (p.dir === 'H') {
+      if (!(sk && sk.y0 >= p.y1 - 1e-6)) interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y1 + t / 2) }));
+      if (!(sk && sk.y1 <= p.y0 + 1e-6)) interior.add(box(p.x1 - p.x0, h, t, M.trim(), { x: (p.x0 + p.x1) / 2, y: h / 2, z: -(p.y0 - t / 2) }));
+    } else {
+      if (!(sk && sk.x0 >= p.x1 - 1e-6)) interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x1 + t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 }));
+      if (!(sk && sk.x1 <= p.x0 + 1e-6)) interior.add(box(t, h, p.y1 - p.y0, M.trim(), { x: p.x0 - t / 2, y: h / 2, z: -(p.y0 + p.y1) / 2 }));
+    }
   }
 
   // Alcove end-grain baseboard on the pier face; the back/side returns come from
@@ -406,8 +412,17 @@ function buildDoor(o, house) {
     doors.push(d); g.userData.door = d; setFrench(d, 0);
   }
   // Lighting manifest: hinged and bifold leaves take the probe volume in every pose (the bake fits only the pose it saw);
-  // the glazed garden doors (french, sliders) keep the bake. bakePose: the pose the bake export sets (plan bakeOpen).
-  if (g.userData.door) declare(g, { role: 'door', leaves: ['french', 'slider'].includes(g.userData.door.kind) ? 'lightmap' : 'probe', bakePose: o.bakeOpen ? 'open' : 'site' });
+  // the glazed garden doors (french, sliders) keep the bake. bakePose: the pose the bake export sets for the lightmaps
+  // (plan bakeOpen: baked open although the site starts it shut). probePose: the pose of the light and reflection probes
+  // (bake/export/export.mjs --probe-pose): shut wherever the site starts the door shut, and where the plan says probeClosed
+  // (the front door); else the site's pose.
+  // Both read the plan's opening record: `o` is house.json's (the scan), which has no bakeOpen / probeClosed (that read
+  // left the front-bedroom closet's bakePose at 'site', i.e. baked shut, its closet black when opened).
+  if (g.userData.door) {
+    const d = g.userData.door, po = plan.openings.find(q => q.id === o.id) ?? o;
+    const siteShut = d.kind === 'french' ? !d.open : d.kind === 'slider' ? false : !d.openDefault;
+    declare(g, { role: 'door', leaves: ['french', 'slider'].includes(d.kind) ? 'lightmap' : 'probe', bakePose: po.bakeOpen ? 'open' : 'site', probePose: siteShut || po.probeClosed ? 'closed' : 'site' });
+  }
   return g;
 }
 // Door motion profile (smootherstep): leaves start and stop gently.

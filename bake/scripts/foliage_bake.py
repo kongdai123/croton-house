@@ -67,7 +67,11 @@ P, N, UV, COL, F, FM = to_b(np.concatenate(P)), to_b(np.concatenate(N)), np.conc
 print(f'{len(meta)} plant units, {len(P)} vertices, {len(F)} triangles, {len(mats)} materials, {time.time() - t0:.0f} s', flush=True)
 
 # ---- swap the imported plants for one mesh in glTF vertex order
-for o in [o for o in scene.objects if o.type == 'MESH' and o.material_slots and all(s.material and lighting.baked_foliage(lighting.material(s.material)) for s in o.material_slots)]:
+# (a material the bake scene made itself, setup.py's mist and helpers, has no manifest record: not foliage)
+def foliage_material(m):
+    rec = lighting.material(m, required=False) if m else None
+    return rec is not None and lighting.baked_foliage(rec)
+for o in [o for o in scene.objects if o.type == 'MESH' and o.material_slots and all(foliage_material(s.material) for s in o.material_slots)]:
     bpy.data.objects.remove(o, do_unlink=True)
 # Every triangle gets its own corners, pulled `shrink` metres toward its centre: a sample exactly on a vertex sits on
 # the edges of its neighbours too, and Cycles (which only skips the triangle a ray leaves) finds them in the way of

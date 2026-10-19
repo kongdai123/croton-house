@@ -50,7 +50,7 @@ const FIXES = [
   ['material', 'clearGlass', m => m.userData.daylightOpacity !== undefined, m => L(m).glass?.export === 'pane', 0, 'only window panes become clear glass in the bake'],
   // 3. the sided probe lookup is a mesh's (audit section 3, item 9: per material, a door leaf's material shared with a static
   // mesh switched both to the 0.5 m outward lookup)
-  ['mesh', 'sided', o => [].concat(o.material ?? []).some(m => m && faceShared.has(m)), o => R(o).probeSide === 'face' && [].concat(o.material ?? []).some(m => m && !m.lightMap && !m.transparent && !(m.transmission > 0)), 961, 'only door leaves, blinds and curtains take the outward lookup: 961 meshes sharing their materials no longer do (frames, trim, baseboards, can rings in the shades\' white; most are lightmapped, where the flag never applied)'],
+  ['mesh', 'sided', o => [].concat(o.material ?? []).some(m => m && faceShared.has(m)), o => R(o).probeSide === 'face' && [].concat(o.material ?? []).some(m => m && !m.lightMap && !m.transparent && !(m.transmission > 0)), 932, 'only door leaves, blinds and curtains take the outward lookup: 932 meshes sharing their materials no longer do (frames, trim, baseboards, can rings in the shades\' white; most are lightmapped, where the flag never applied; 961 before the 29 baseboards under the stucco skin went)'],
 ];
 const items = { material: [], mesh: ix.meshes.map(({ key, node }) => [key, node]) };
 { const seen = new Set(); for (const { node: o } of ix.meshes) for (const m of mats(o)) if (!seen.has(m)) { seen.add(m); items.material.push([materialKey(m), m]); } }

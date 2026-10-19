@@ -97,7 +97,7 @@ export function buildPlan(house, overlay) {
     if (o.wall) out.wall = o.wall;
     if (kind === 'window') { out.sill = o.sill ?? levels.windowSill; out.head = o.head ?? levels.windowHead; }
     else if (kind === 'door') { out.sill = 0; out.head = o.head ?? levels.doorHeight; }
-    for (const k of ['hinge', 'swing', 'open', 'white', 'bakeOpen']) { const v = o[k] ?? sp[k]; if (v !== undefined) out[k] = v; }
+    for (const k of ['hinge', 'swing', 'open', 'white', 'bakeOpen', 'probeClosed']) { const v = o[k] ?? sp[k]; if (v !== undefined) out[k] = v; }
     if (o.connects) out.connects = o.connects;
     else {   // the spaces 0.25 m beyond each face, low side (south / west) first
       const cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2, h = (o.dir === 'H' ? o.y1 - o.y0 : o.x1 - o.x0) / 2 + 0.25;

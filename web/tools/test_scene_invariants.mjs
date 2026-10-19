@@ -33,6 +33,46 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
     w.plan.spaces.filter(sp => sp.zone !== 'exterior' && !lit.has(sp.id)).map(sp => `${sp.id} (${sp.label.en})`));
 }
 
+// ---- 1b. closet rule: each closet / laundry can over the clear part of its space -----------------------------------------
+// Owner decision 2026-10-17: the centre of the largest clear part of the space, never above furniture taller than ~1.9 m
+// (layout.js closetSpot: the laundry can sat on the washer-dryer stack). Checked from the scene: the can's centre is in its
+// space and its footprint over no mesh standing in that space (footprint centre inside) that reaches above 1.9 m.
+{
+  const off = [], box = new T.Box3(), tall = [];
+  scene.updateMatrixWorld(true);
+  // the pieces as placed: batched originals (hidden, userData.batched) count, the merged cells (userData.batch) do not
+  scene.traverse(o => { if (!o.isMesh || o.userData.batch || (!visible(o) && !o.userData.batched)) return; box.setFromObject(o);
+    if (box.isEmpty() || box.max.y <= 1.9 || box.min.y >= 2.32) return;
+    tall.push({ x0: box.min.x, x1: box.max.x, y0: -box.max.z, y1: -box.min.z, o }); });
+  const cans = w.layout.placed.filter(o => o.userData.placement?.rule === 'closet');
+  for (const c of cans) {
+    const p = c.userData.placement, sp = w.plan.spaces.find(s => s.id === p.space), x = c.position.x, y = -c.position.z;
+    if (!sp || w.plan.spaceAt(x, y)?.id !== sp.id) { off.push(`${p.space}: can at (${x.toFixed(2)}, ${y.toFixed(2)}) outside its space`); continue; }
+    const cb = new T.Box3().setFromObject(c), e = 0.005, f = { x0: cb.min.x + e, x1: cb.max.x - e, y0: -cb.max.z + e, y1: -cb.min.z - e };   // the can's own footprint
+    for (const q of tall) if (w.plan.spaceAt((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2)?.id === sp.id && f.x1 > q.x0 && f.x0 < q.x1 && f.y1 > q.y0 && f.y0 < q.y1)
+      off.push(`${p.space}: can at (${x.toFixed(2)}, ${y.toFixed(2)}) above ${fixtureOf(q.o)?.userData.placement?.i ?? q.o.name ?? 'a mesh'} (top ${box.setFromObject(q.o).max.y.toFixed(2)} m)`);
+  }
+  if (!cans.length) off.push('no closet-rule cans placed');
+  invariant('closet-lights-clear', 'every closet-rule can is in its space and not above a piece standing there that is taller than 1.9 m', off);
+}
+
+// ---- 1c. door poses of the bake: the lightmaps' (bakePose) and the probes' (probePose) -------------------------------------
+// bakePose 'open' exactly where the plan says bakeOpen (house.js once read them from house.json's scan record, which has
+// none: the front-bedroom closet was going to bake shut again); probePose 'closed' wherever the site starts the door shut
+// and where the plan says probeClosed (the front door), 'site' elsewhere (bake/export/export.mjs --probe-pose).
+{
+  const off = [];
+  for (const d of doors) {
+    const L = d.group.userData.lighting ?? {}, po = w.plan.openings.find(o => o.id === d.id) ?? {};
+    const siteShut = d.kind === 'french' ? !d.open : d.kind === 'slider' ? false : !d.openDefault;
+    const bake = po.bakeOpen ? 'open' : 'site', probe = siteShut || po.probeClosed ? 'closed' : 'site';
+    if (L.bakePose !== bake) off.push(`${d.id} (${d.kind}): bakePose ${L.bakePose}, plan says ${bake}`);
+    if (L.probePose !== probe) off.push(`${d.id} (${d.kind}): probePose ${L.probePose}, expected ${probe} (site ${siteShut ? 'shut' : 'open'}${po.probeClosed ? ', probeClosed' : ''})`);
+  }
+  if (!doors.some(d => d.group.userData.lighting?.bakePose === 'open')) off.push('no door bakes open (the plan has bakeOpen doors)');
+  invariant('door-bake-poses', 'every door declares the lightmaps\' pose (plan bakeOpen) and the probes\' pose (shut where the site starts it shut, or plan probeClosed)', off);
+}
+
 // ---- 2. wall plates: every plate drives a fixture, every declared plate was made, one plate per lamp group, on wall ----------
 // Plates are declared with their fixtures (layout.js placement rows lamp.plate, the niche can in house.js); a plate takes
 // the toggle of its fixture's switch and is named after the switch's lamp group (lighting_roles.js lampGroupAt).
@@ -49,12 +89,70 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
   for (const [g, n] of groups) if (n > 1) off.push(`group ${g}: ${n} plates`);
   // on solid wall (the plan's walls, annex included), clear of every opening and its casing on that wall
   for (const p of plates) {
-    const ry = p.rotation.y, x = p.position.x, y = -p.position.z, dx = -Math.sin(ry) * 0.02, dy = Math.cos(ry) * 0.02;
-    const wall = w.plan.walls.find(q => x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1);
+    // behind it: a plan wall 2 cm back, or an exterior wall behind its 0.15 m stucco skin (the porch plate)
+    const ry = p.rotation.y, x = p.position.x, y = -p.position.z, at = b => [-Math.sin(ry) * b, Math.cos(ry) * b];
+    const backed = (b, ext) => { const [dx, dy] = at(b); return w.plan.walls.find(q => (!ext || q.exterior) && x + dx >= q.x0 && x + dx <= q.x1 && y + dy >= q.y0 && y + dy <= q.y1); };
+    const wall = backed(0.02, false) ?? backed(0.17, true);
     if (!wall) { off.push(`plate ${p.name}: no wall behind it`); continue; }
     if (w.plan.openings.some(o => o.wall === wall.id && (o.dir === 'V' ? y > o.y0 - 0.065 && y < o.y1 + 0.065 : x > o.x0 - 0.065 && x < o.x1 + 0.065))) off.push(`plate ${p.name}: in a door or its casing`);
   }
   invariant('switch-plates-map-to-fixtures', 'every wall plate drives a fixture of its own lamp group, every declared plate was made (one per group), on solid wall clear of doors', off);
+}
+
+// ---- 2b. every wall plate is pickable: in front of every collider that stops a pick (interact.js wallDist) --------------------
+// The porch plate was typed against the plan wall's face and sat 1.2 cm inside the exterior stucco skin's collider: no
+// standing spot could pick it (smoke test switches). Its face (the 8 mm plate's front) is >= 1 cm in front of every wall /
+// closet / slider collider along its normal, at its centre and edges; and a pick ray from eye height, up to 0.8 m in front
+// (short of the next collider), reaches the face before any such collider.
+{
+  const off = [], cols = w.getColliders().filter(c => (c.tag === 'wall' || c.tag === 'closet' || c.tag === 'slider'));
+  const ray = new T.Ray(), hit = new T.Vector3(), bx = new T.Box3();
+  for (const p of plates) {
+    const n = new T.Vector3(Math.sin(p.rotation.y), 0, Math.cos(p.rotation.y)), t = new T.Vector3(n.z, 0, -n.x);
+    const face = p.position.clone().addScaledVector(n, 0.004), y = p.position.y;
+    const inside = c => q => q.x > c.x0 && q.x < c.x1 && q.z > c.z0 && q.z < c.z1 && q.y < c.top;
+    for (const c of cols) {
+      let bad = false;
+      for (const l of [-0.035, 0, 0.035]) for (let s = -0.01; s <= 0.3 + 1e-9 && !bad; s += 0.005) if (inside(c)(face.clone().addScaledVector(t, l).addScaledVector(n, s))) bad = true;
+      if (bad) off.push(`${p.name} at (${p.position.x.toFixed(3)}, ${y.toFixed(2)}, ${p.position.z.toFixed(3)}): a ${c.tag} collider (x ${c.x0.toFixed(3)}..${c.x1.toFixed(3)}, z ${c.z0.toFixed(3)}..${c.z1.toFixed(3)}) within 1 cm behind or 30 cm in front of its face`);
+    }
+    // the visitor's eye: up to 0.8 m straight out, short of the first collider in front (a closet is 0.5..0.6 m across)
+    let room = 0.8; for (let s = 0.01; s <= 0.85; s += 0.01) if (cols.some(c => inside(c)(face.clone().addScaledVector(n, s)))) { room = s - 0.1; break; }
+    if (room < 0.3) { off.push(`${p.name}: only ${room.toFixed(2)} m to stand in front of it`); continue; }
+    const eye = face.clone().addScaledVector(n, room); eye.y = 1.6; ray.set(eye, face.clone().sub(eye).normalize());
+    const dist = eye.distanceTo(face); let wall = Infinity;
+    for (const c of cols) { bx.min.set(c.x0, 0, c.z0); bx.max.set(c.x1, c.top, c.z1); if (ray.intersectBox(bx, hit)) wall = Math.min(wall, hit.distanceTo(eye)); }
+    if (wall < dist - 1e-3) off.push(`${p.name}: a pick from ${room.toFixed(2)} m in front stops at a collider ${wall.toFixed(2)} m out, before the plate (${dist.toFixed(2)} m)`);
+  }
+  invariant('switch-plates-pickable', 'every wall plate\'s face stands >= 1 cm in front of every pick-blocking collider and a pick from in front reaches it', off);
+}
+
+// ---- 2c. nothing is built under an exterior wall's stucco skin ------------------------------------------------------------------
+// house.js put a baseboard on both faces of every wall piece, also on the outer face of exterior walls, where the 0.15 m
+// stucco skin covers it: 26 hidden meshes, black in the bake (bake QA units-black, e.g. 33178fb767b50d2f). A mesh whose box
+// lies inside the skin of an exterior plan piece (1 mm slack; the skin is outside the outline, house.js skinRect) and is
+// not the skin itself.
+{
+  const off = [], box = new T.Box3(), skins = [];
+  for (const p of w.plan.pieces) {
+    if (!p.exterior) continue;
+    const cx = (p.x0 + p.x1) / 2, cy = (p.y0 + p.y1) / 2;
+    if (p.dir === 'H') skins.push(w.plan.isInside(cx, cy + 0.2, 0) ? { x0: p.x0, x1: p.x1, y0: p.y0 - 0.15, y1: p.y0, z1: p.z1 } : { x0: p.x0, x1: p.x1, y0: p.y1, y1: p.y1 + 0.15, z1: p.z1 });
+    else skins.push(w.plan.isInside(cx + 0.2, cy, 0) ? { x0: p.x0 - 0.15, x1: p.x0, y0: p.y0, y1: p.y1, z1: p.z1 } : { x0: p.x1, x1: p.x1 + 0.15, y0: p.y0, y1: p.y1, z1: p.z1 });
+  }
+  scene.updateMatrixWorld(true);
+  scene.traverse(o => {
+    if (!o.isMesh || o.userData.batch || (!visible(o) && !o.userData.batched)) return;
+    box.setFromObject(o); if (box.isEmpty()) return;
+    const x0 = box.min.x, x1 = box.max.x, y0 = -box.max.z, y1 = -box.min.z, e = 1e-3;
+    for (const k of skins) {
+      if (x0 < k.x0 - e || x1 > k.x1 + e || y0 < k.y0 - e || y1 > k.y1 + e || box.max.y > k.z1 + 0.13) continue;
+      if ((x1 - x0) * (y1 - y0) > 0.5 * (k.x1 - k.x0) * (k.y1 - k.y0)) continue;   // the skin (or a skin piece) itself
+      const a = []; for (let q = o; q && a.length < 3; q = q.parent) a.push(q.name || q.type);
+      off.push(`${fixtureOf(o)?.userData.placement?.i ?? a.join('<')} at x ${x0.toFixed(2)}..${x1.toFixed(2)}, y ${y0.toFixed(2)}..${y1.toFixed(2)}, h ${box.min.y.toFixed(2)}..${box.max.y.toFixed(2)}`); break;
+    }
+  });
+  invariant('nothing-under-the-skin', 'no mesh lies wholly inside an exterior wall\'s stucco skin', off);
 }
 
 // ---- 3. no static mesh is probe-lit without a reason ------------------------------------------------------------------------------
@@ -144,6 +242,36 @@ invariant('switches-map-to-groups', 'every switch in one lamp group, every group
     });
   }
   invariant('reflection-probes-match-layout', 'committed refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points 1 cm, boxes 5 cm)', off);
+}
+
+// ---- 8b. reflection probes inside the house stand in free air, not inside furniture ----------------------------------------------
+// reflprobe_layout.py clears the plan's walls only; probe 4 stood inside the kitchen's pantry tower (81% of its panorama black).
+// From each layout point under the roof: 8 level rays and one up and down through the real scene (every mesh both sides,
+// see-through surfaces passed, as reflprobe.py's scene check): inside something when 2 or more first hits are back faces, or
+// a level ray hits within 0.15 m. (reflprobe.py stops the layout on the same test in the Cycles scene.)
+{
+  const layout = JSON.parse(execFileSync('python3', ['-I', join(REPO, 'bake/scripts/capture_spatial.py'), '--reflection-layout'], { encoding: 'utf8' }));
+  const off = [], meshes = [], sides = new Map();
+  scene.traverse(o => { if (o.isMesh && !o.userData.batch && o.geometry?.attributes?.position) meshes.push(o); });
+  for (const o of meshes) for (const m of mats(o)) if (!sides.has(m)) { sides.set(m, m.side); m.side = T.DoubleSide; }
+  const seeThrough = (o, hit) => { const ms = [].concat(o.material); const m = ms[hit.face?.materialIndex ?? 0] ?? ms[0];
+    const r = m && w.roles.resolveMaterial(m); return !!r && (r.surface === 'glass' || r.sheer != null || !!r.alphaCutout); };
+  const rc = new T.Raycaster(); rc.firstHitOnly = false;
+  const cast = (p, d) => { rc.set(p, d); rc.far = 3; for (const h of rc.intersectObjects(meshes, false)) {
+    if (seeThrough(h.object, h)) continue; const n = h.face.normal.clone().transformDirection(h.object.matrixWorld); return { t: h.distance, back: n.dot(d) > 0, o: h.object }; } return null; };
+  layout.forEach((l, i) => {
+    const [x, h, z] = l.p; if (!w.plan.isInside(x, -z, 0)) return;
+    const p = new T.Vector3(x, h, z); let back = 0, near = Infinity, what = null;
+    for (let k = 0; k < 10; k++) {
+      const d = k < 8 ? new T.Vector3(Math.cos(k * Math.PI / 4), 0, -Math.sin(k * Math.PI / 4)) : new T.Vector3(0, k === 8 ? 1 : -1, 0);
+      const hit = cast(p, d); if (!hit) continue;
+      if (hit.back) { back++; what = hit.o; }
+      if (k < 8 && hit.t < near) { near = hit.t; if (!what) what = hit.o; }
+    }
+    if (back >= 2 || near < 0.15) off.push(`probe ${i} at (${x.toFixed(2)}, ${(-z).toFixed(2)}): ${back} back faces, nearest ${near.toFixed(2)} m (${fixtureOf(what)?.userData.placement?.i ?? what?.name ?? '?'})`);
+  });
+  for (const [m, side] of sides) m.side = side;
+  invariant('reflection-probes-in-free-air', 'every reflection probe under the roof stands in free air (fewer than 2 back faces around it, 0.15 m clear level)', off);
 }
 
 // ---- 9. the plan model is the single source of room / inside / annex geometry --------------------------------------------

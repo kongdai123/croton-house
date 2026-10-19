@@ -106,29 +106,8 @@ def decode_lut(K):
     return (K * y * y / np.maximum(1 - y * y, 1 / 255)).astype(np.float32)
 
 
-# ---- the unit table (lightmap_uv2.bin.gz) -------------------------------------------------------------------------------
-def read_units(path):
-    buf = gzip.decompress(Path(path).read_bytes()) if str(path).endswith('.gz') else Path(path).read_bytes()
-    n = struct.unpack('<I', buf[:4])[0]; header = json.loads(buf[4:4 + n]); base = 4 + n
-    units = header['units']; v2 = header.get('format') == 2
-    for u in units:
-        o = base + u['off']; x16 = u.get('x16') if v2 else False; i16 = u.get('i16') if v2 else False
-        o += u['nv'] * 4 if v2 and not x16 else (u['nv'] * 2 if v2 else u['nv'] * 4)
-        idt = np.uint16 if v2 and i16 else np.uint32
-        u['idx'] = np.frombuffer(buf, idt, u['ni'], o).reshape(-1, 3).astype(np.int64); o += u['ni'] * np.dtype(idt).itemsize
-        u['uv'] = np.frombuffer(buf, np.uint16, u['nv'] * 2, o).reshape(-1, 2).astype(np.float64) / 65535
-        u['centre'] = [(a + b) / 2 for a, b in zip(u['min'], u['max'])]   # three's frame (x, up, z)
-    return header
-
-
-def rasterize(units, W, H):
-    """Unit index + 1 per texel (0 = no unit): every triangle of every unit drawn into its UV chart. Rows top-first, v is
-    the image row fraction (the site flips v once more for the texture)."""
-    img = Image.new('I', (W, H), 0); d = ImageDraw.Draw(img)
-    for k, u in enumerate(units, 1):
-        p = u['uv'] * (W, H) - 0.5
-        for t in p[u['idx']].reshape(-1, 6).tolist(): d.polygon(t, fill=k)
-    return np.asarray(img)
+# ---- the unit table (lightmap_uv2.bin.gz): bake/scripts/atlas_units.py ----------------------------------------------------
+from atlas_units import read_units, rasterize   # noqa: E402
 
 
 class Rasters:
@@ -176,13 +155,14 @@ class Objects:
     def mesh(self, lm_id): return self.meshes.get('lm:' + lm_id) if lm_id else None
 
     def material_albedo(self, name):
-        """Linear luminance of the material's base colour (1 when it has a map: unknown pattern), emissive/transparent -> None."""
+        """Linear luminance of the material's diffuse albedo, base colour x (1 - metalness): what the lightmap's light is
+        multiplied by (a metal has no diffuse lobe, so Cycles' DIFFUSE bake of it is black by design); emissive/transparent -> None."""
         m = self.materials.get(name)
         if not m: return None
         if m.get('transparent') or m.get('transmission', 0) > 0 or m.get('emissive', '000000') != '000000': return None
         c = m.get('color', 'ffffff'); rgb = [int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)]
         lin = [(v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4) for v in rgb]
-        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+        return (0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]) * (1 - min(max(float(m.get('metalness', 0) or 0), 0.0), 1.0))
 
     def albedo(self, lm_id):
         """The brightest opaque albedo among the unit's materials (None when unknown or all emissive/transparent)."""
@@ -251,10 +231,14 @@ def lamp_group_order(plan, records):
 
 
 # ---- the checks -------------------------------------------------------------------------------------------------------------
+PUBLISHED = {'.webp', '.json', '.bin', '.gz', '.hdr'}
+
+
 def check_files(rep, A, T):
     big = []; n = 0
     for p in sorted(A.root.rglob('*')):
-        if p.is_file() and '.git' not in p.parts:
+        # what is published (a bake folder also holds its EXRs, npy arrays and logs, which never ship)
+        if p.is_file() and '.git' not in p.parts and p.suffix.lower() in PUBLISHED:
             n += 1
             if p.stat().st_size >= T['files']['maxBytes']: big.append(f'{p.relative_to(A.root)}{SEP}{p.stat().st_size / 1e6:.2f} MB')
     rep.check('files-size', f'every file under {T["files"]["maxBytes"] / 1e6:.0f} MB ({n} files)', 'fail', big)
@@ -379,13 +363,14 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
         if n[i] < uT['minTexels']: continue
         if min(dark[s][i] for s in slotkeys) < uT['blackFraction']: continue                    # lit in at least one slot
         if lamp_dark is not None and lamp_dark[i] < uT['blackFraction']: continue              # or by the shared lamps layer
+        if group_stats is not None and group_stats['dark'][:, i].min() < uT['blackFraction']: continue   # or by its lamp group (a shut closet's plate)
         alb = objs.albedo(units[i].get('id'))
         row = f'{names[i]}{SEP}{objs.name(units[i].get("id"), units[i]["centre"])}'
         if alb is None and objs.ok and not objs.mesh(units[i].get('id')): unknown_mat.append(row)
         elif alb is None: dim_ok += 1   # emissive / transparent: black light is plausible
         elif alb >= uT['minAlbedo']: black.append(row + f' (albedo {alb:.2f})')
         else: dim_ok += 1
-    rep.check('units-black', f'units black in every slot and layer (>= {uT["blackFraction"]:.0%} of texels under {floor}) on a material with albedo >= {uT["minAlbedo"]} (the vertex-colour bug)', 'fail', black)
+    rep.check('units-black', f'units black in every slot and layer, lamp groups included (>= {uT["blackFraction"]:.0%} of texels under {floor}) on a material with diffuse albedo >= {uT["minAlbedo"]} (the vertex-colour bug)', 'fail', black)
     rep.check('units-black-unknown-material', 'units black in every slot and layer that objects.json has no material for', 'warn', unknown_mat)
     rep.metric('units.blackNonBlackMaterial', len(black)); rep.metric('units.blackAll', len(black) + len(unknown_mat) + dim_ok)
 
@@ -509,10 +494,14 @@ def check_groups(rep, A, T, plan, units, objs, gs, space_of, big):
         allowed = set(S)
         for sid in S: allowed |= {n['space'] for n in plan.neighbors(sid)}
         e_all = sum(energy[gi][i] for i in range(len(units)) if not big[i]); e_out = 0.0; worst = {}
+        rects = [plan.rect_of(sid) for sid in allowed if plan.space(sid)]
         for i in range(len(units)):
             if big[i]: continue
             sp = space_of[i]
-            if sp not in allowed:
+            # a unit counts outside only if no part of its footprint lies in an allowed space (a merged cell of two closets'
+            # walls is centred in one of them)
+            x0, x1, y0, y1 = units[i]['min'][0], units[i]['max'][0], -units[i]['max'][2], -units[i]['min'][2]
+            if sp not in allowed and not any(x1 > r['x0'] and x0 < r['x1'] and y1 > r['y0'] and y0 < r['y1'] for r in rects):
                 e_out += energy[gi][i]; worst[sp] = worst.get(sp, 0) + energy[gi][i]
         frac = e_out / max(e_all, 1e-12)
         rep.metric(f'group.{g["name"]}.outsideFraction', frac)
@@ -521,7 +510,7 @@ def check_groups(rep, A, T, plan, units, objs, gs, space_of, big):
             top = sorted(worst.items(), key=lambda kv: -kv[1])[:3]
             leaks.append(f'{g["name"]}{SEP}{frac:.0%} of its energy outside {sorted(S)} and their neighbours; most in ' + ', '.join(f'{k} {v / max(e_all, 1e-12):.0%}' for k, v in top))
     rep.check('lamp-groups-energy', 'every lamp group has non-zero energy', 'fail', zero)
-    rep.check('lamp-groups-footprint', f'a group puts at most {gT["leakFraction"]:.0%} of its energy (units under {gT["bigUnit"]} m, at their centres) outside its plan spaces and their door/opening neighbours', 'fail', leaks)
+    rep.check('lamp-groups-footprint', f'a group puts at most {gT["leakFraction"]:.0%} of its energy (units under {gT["bigUnit"]} m wholly) outside its plan spaces and their door/opening neighbours', 'fail', leaks)
 
 
 def check_probes(rep, A, T, plan, slots):
@@ -591,6 +580,16 @@ def check_refl(rep, A, T, plan, slots):
     with contextlib.redirect_stdout(io.StringIO()): pts = layoutlib.points(plan)
     expect = [(p, layoutlib.plan_box(plan, p)) for p in pts]
     first = None; ceil = float(plan.levels['ceiling']); rects = layoutlib.full_walls(plan)
+    # the lamp groups' reflection layers (lamp_groups_pack.py refl): the site adds them to the daylight panorama, so a pixel
+    # is black only when the daylight and every lamp layer of its probe are (the dusk daylight inside a room is near zero)
+    lamp_max = {}
+    lmeta = read_json(A.lamp_dir / 'refl' / 'meta.json') if A.lamp_dir else None
+    for l in (lmeta or {}).get('layers', []):
+        f = A.lamp_dir / 'refl' / l['file']
+        if f.exists():
+            try: mx = read_hdr(f).max(-1)
+            except Exception: continue   # noqa: BLE001
+            lamp_max[l['probe']] = np.maximum(lamp_max[l['probe']], mx) if l['probe'] in lamp_max and lamp_max[l['probe']].shape == mx.shape else mx
     for s in slots:
         fr = []
         meta = read_json(A.aux_dir(s) / 'refl' / 'meta.json')
@@ -626,7 +625,9 @@ def check_refl(rep, A, T, plan, slots):
             try: img = read_hdr(f)
             except Exception as e:   # noqa: BLE001
                 layout.append(f'{s} probe {i}{SEP}panorama unreadable: {e}'); continue
-            mx = img.max(-1); bl = float((mx < rT['blackLevel']).mean())
+            mx = img.max(-1)
+            if i in lamp_max and lamp_max[i].shape == mx.shape: mx = np.maximum(mx, lamp_max[i])
+            bl = float((mx < rT['blackLevel']).mean())
             fr.append(bl); rep.details.setdefault('reflBlack', {})[f'{s}/{i:02d}'] = round(bl, 4)
             if not np.isfinite(img).all(): black.append(f'{s} probe {i}{SEP}non-finite pixels')
             elif bl > rT['maxBlackFraction']: black.append(f'{s} probe {i}{SEP}{bl:.0%} of the panorama is black')
@@ -634,7 +635,7 @@ def check_refl(rep, A, T, plan, slots):
         if fr: rep.metric(f'refl.{s}.blackFractionMean', np.mean(fr)); rep.metric(f'refl.{s}.blackFractionMax', max(fr)); rep.metric(f'refl.{s}.panoramas', len(fr))
     rep.check('refl-layout', 'refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points %g m, boxes %g m)' % (rT['pointTol'], rT['boxTol']), 'fail', layout)
     rep.check('refl-placement', 'reflection probes inside a plan space, clear of walls, box holding the centre and stopping at walls except at openings', 'fail', place)
-    rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]}) and not uniform', 'fail', black)
+    rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]} in the daylight and every lamp layer) and not uniform', 'fail', black)
     rep.check('refl-slots', 'the same probe layout in every slot', 'fail', cross)
 
 

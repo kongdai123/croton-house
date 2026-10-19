@@ -79,7 +79,7 @@ new run is compared camera by camera: moved cameras have no baseline frame (a wa
 
 ## After every bake: the full UI smoke suite on a GPU
 
-CI runs the smoke suite (web/tools/smoke) in software GL and skips `context-loss`, which recompiles the house twice there
-(about 90 minutes). After every bake, run the whole suite, `context-loss` included, on a scavenger GPU node from the
-site copy used for this gate: `node tools/smoke/run.mjs --gpu --out=<dir>` (all 9 tests, about 5 minutes; on Linux `--gpu` uses ANGLE on Vulkan,
+CI cannot run the smoke suite (web/tools/smoke): in software GL on GitHub's runners the house takes over 7 minutes to load
+and every test times out. Run the whole suite on a scavenger GPU node after every bake and before pushing UI changes, from
+the site copy used for this gate: `node tools/smoke/run.mjs --gpu --out=<dir>` (all 9 tests, about 5 minutes; on Linux `--gpu` uses ANGLE on Vulkan,
 web/tools/smoke/session.mjs LINUX_GPU).

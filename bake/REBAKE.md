@@ -24,6 +24,7 @@ layers. Placeholders: `$HOST` the cluster login node, `$R` the croton folder on 
 | `bakes/bathfix_fill/` | the shipped composites (world fill of holes and skipped texels) of `bakes/bathfix` |
 | `lampgroups/` | the shipped 15 lamp groups: `scene_lm_lampgroups2.blend`, `groups2.json`, `bakes_final/` (raw), `bakes_sofa/` + `out_sofa/` (merged, shipped) |
 | `site_sofa/` | the newest complete site copy (four slots, lamp groups): the base for test sites |
+| `final/` | the final rebake of 2026-10-18 (its own `scripts/`, `validate/`, `site/`, `scene/f1`, `bakes/f1`, task queue and logs): shipped in `web/assets/lightmaps` |
 | `site/`, `bakes/v2`, `scene/v2`, `scene/clean`, `scene/stableid`, other `site_*` | older; not used by the rebake |
 | `tasks/` | the pool's queue (`pending/ running/ done/ failed/`), `logs/tasks/` the task logs |
 
@@ -153,7 +154,7 @@ $B -P scripts/composite_v2.py -- $V/sunrise                                   # 
 for s in noon golden dusk; do $B -P scripts/composite_v2.py -- $V/$s --lamps-from $V/sunrise; done
 for s in sunrise noon golden dusk; do
   $P scripts/encode_webp.py $V/$s --split
-  $B -P scripts/downscale_atlas.py -- $V/$s --mask $V/$s/coverage.npy
+  $B -P scripts/downscale_atlas.py -- $V/$s --mask $V/$s/coverage.npy --units $V/lightmap_uv2.bin.gz   # chart-aware tiers
   L=""; [ $s = sunrise ] || L="--lamps-from $V/sunrise"
   $P scripts/probe_pack.py $V/$s scene/probes.json $L --refl $V/$s/refl
   $P scripts/foliage_pack.py $V/$s/foliage/foliage.npz $V/$s/foliage.bin.gz
@@ -161,7 +162,7 @@ done
 export CROTON_GUIDES=$R/$V/guides.npz CROTON_HOLES=$R/$V/sunrise/holes.npy
 for g in $V/lampgroups/g*; do $B -P scripts/lamp_groups_pack.py -- merge $g; done
 $P scripts/lamp_groups_pack.py pack scene/$V/groups.json $V/lampgroups $V/sunrise/coverage.npy $V/lampgroups/out \
-   --probes scene/probes.json --gains living=1.5,livingCenter=2,kitchenPendant=1.5,kitchen=2,family=2,hall=0.6
+   --probes scene/probes.json --units $V/lightmap_uv2.bin.gz --gains living=1.5,livingCenter=2,kitchenPendant=1.5,kitchen=2,family=2,hall=0.6
 $P scripts/lamp_groups_pack.py refl scene/$V/groups.json $V/lampgroups/refl $V/lampgroups/out
 ```
 The gains are the shipped set (15 groups); the new groups (livingNiche, kitchenCabinet, closet, bedroomBLamps, bathB,
@@ -224,7 +225,12 @@ The invariant `door-bake-poses` (web/tools/test_scene_invariants.mjs) checks bot
 The lamp groups bake once, from the day scenes (sheers gathered), for every slot: lightmaps in the lightmap pose,
 probes and reflections in the probe pose.
 
-## Cost (RTX 2080 Ti, from the 2026-10-15 logs; 22 lamp groups)
+## Cost
+Measured on the final rebake (2026-10-18, RTX A4000, 27 lamp groups, 496 tasks): 78 GPU-h in all (the pool 75), about
+20 min per sunrise lightmap task; prep (four exports, unwrap, 14 scenes, queue) about 50 min of wall time, the pool
+3 h on 25 GPUs, post-processing about 45 min with the composites and merges in parallel jobs.
+
+Earlier estimate (RTX 2080 Ti, from the 2026-10-15 logs; 22 lamp groups):
 | Pass | Tasks x time | GPU-h |
 |---|---|---|
 | Sunrise lightmaps, 16384 spp: sky, sun bounce, shared lamps | 3 x 8 x ~21 min | 8.1 |

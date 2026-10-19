@@ -84,7 +84,7 @@ assert.ok(faces.length > 5000 && faces.some(f => f.label === 'door-ca2bb42b5a'),
 // Known, outside the door class (a follow-up: plant bases and dried stems, a sheer; their geometry is wound inside out):
 // listed by object and materials so that a new one fails and a fixed one is struck off (the list may only shrink).
 const KNOWN_WOUND = new Set(['decor-curtain-sheer []', 'plants-bromeliad-green [plant-bromBase]', 'plants-bromeliad-red [plant-bromBase]',
-  'props-vase-heather [plant-propsDriedStem]', 'props-kitchen-pitcher [plant-propsDriedStem]', 'batch [plant-flowers-stems]', 'batch []', 'batch [plant-propsDriedStem]']);
+  'props-vase-heather [plant-propsDriedStem]', 'props-kitchen-pitcher [plant-propsDriedStem]', 'batch [plant-flowers-stems]', 'batch [plant-propsDriedStem]']);
 if (report && woundBy.size) console.log('wound against their normals:', [...woundBy].map(([k, n]) => `${k} ${n}`).join('; '));
 assert.deepEqual([...woundBy.keys()].filter(k => !KNOWN_WOUND.has(k)), [], 'probe-lit faces wound against their normals');
 assert.deepEqual([...KNOWN_WOUND].filter(k => !woundBy.has(k)), [], 'fixed: strike these off KNOWN_WOUND');

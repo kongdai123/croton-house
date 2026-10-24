@@ -6,6 +6,9 @@
 // through an opening lies in the directions through its centre line, at any height); a cell is visible within the union
 // of the fans that reach it, the camera's own cell all round. A mesh is drawn when its plan footprint, grown by MARGIN
 // (so a wall piece or a skin belongs to the spaces on both of its faces), touches a reached cell within that cell's fans.
+// Outdoors the house itself is in the way: a garden footprint wholly below the walls' top, behind the house as seen from
+// the visitor (also below the walls), is hidden unless a line of sight crosses the house through its openings (the fans
+// that leave it again, `through`). The camera's own cells are seen within the plan directions its frustum covers.
 // Conservative throughout: near a portal both sides count as the camera's own, a footprint in no space is always drawn,
 // and there is no culling at or above the ceiling (aerial views look over the walls) or off the lot.
 //
@@ -13,11 +16,12 @@
 // layers alone, so the sun's shadow maps, mirrors, puddle reflections and contact depth still see every caster, and no
 // visibility flag changes (the sun-shadow cache would read that as motion). main.js: ?cull=0 turns it off.
 import { plan as PLAN, spaceAt } from './plan.js';
-import { inPoly, bbox } from './plan_geom.js';
+import { inPoly, bbox, boxHoles } from './plan_geom.js';
 
 export const MARGIN = 0.2;     // footprint growth: thicker than any wall with its skin (0.114 + 0.15)
 export const NEAR = 0.45;      // a camera this close to a portal's centre line sees both sides in full
 const PORTAL_REACH = 0.3;      // an opening borders every space within this of its rect (walls are 0.11-0.27 thick)
+const PORTAL_EXTEND = 0.3;     // a portal's centre line runs this far past the opening's ends (more than a wall is thick)
 const TAU = Math.PI * 2, OUT = 'outside';
 const norm = a => { a %= TAU; return a < 0 ? a + TAU : a; };   // [0, 2pi)
 
@@ -36,14 +40,28 @@ export function buildModel(plan = PLAN) {
   const portals = [];
   for (const o of plan.openings) {
     const joined = new Set(o.connects.map(cellOf).filter(i => i !== undefined));
-    const g = { x0: o.x0 - PORTAL_REACH, x1: o.x1 + PORTAL_REACH, y0: o.y0 - PORTAL_REACH, y1: o.y1 + PORTAL_REACH };
+    // grown through the wall, a little shrunk along it (a space meeting the opening only at its end is not in front of it)
+    const t = PORTAL_REACH, s = 0.02, g = o.dir === 'H' ? { x0: o.x0 + s, x1: o.x1 - s, y0: o.y0 - t, y1: o.y1 + t } : { x0: o.x0 - t, x1: o.x1 + t, y0: o.y0 + s, y1: o.y1 - s };
     cells.forEach((c, i) => { if (c.interior && rectTouchesPoly(g, c.poly)) joined.add(i); });
     if (joined.size < 2) continue;
-    const seg = o.dir === 'H' ? [o.x0, (o.y0 + o.y1) / 2, o.x1, (o.y0 + o.y1) / 2] : [(o.x0 + o.x1) / 2, o.y0, (o.x0 + o.x1) / 2, o.y1];
+    // the centre line, run on past both ends by PORTAL_EXTEND: where two open seams meet at a corner (living, office and
+    // dining) a line of sight can cut across the corner of both openings' rects and cross neither centre line
+    const e = PORTAL_EXTEND, seg = o.dir === 'H' ? [o.x0 - e, (o.y0 + o.y1) / 2, o.x1 + e, (o.y0 + o.y1) / 2] : [(o.x0 + o.x1) / 2, o.y0 - e, (o.x0 + o.x1) / 2, o.y1 + e];
     const p = { id: o.id, cells: [...joined], seg, hinged: o.kind === 'door' && HINGED.has(o.type) };
     portals.push(p); for (const i of p.cells) cells[i].portals.push(p);
   }
-  return { cells, portals, index, outside: index.get(OUT), outline: plan.outline.polygon, lot: plan.lot, ceiling: plan.levels.ceiling };
+  return { cells, portals, index, outside: index.get(OUT), outline: plan.outline.polygon, occluders: occludersOf(plan.outline.polygon), lot: plan.lot, ceiling: plan.levels.ceiling };
+}
+// Outdoors the house itself hides the far side of the garden from a visitor below its walls: the solid blocks are the
+// largest rectangles inside the outline (its bounding box clear of each notch), shrunk by OCC_SHRINK so a line of sight
+// that grazes a block's corner still runs through the real walls.
+export const OCC_SHRINK = 0.05;
+export function occludersOf(outline) {
+  const { box, holes } = boxHoles(outline), out = [];
+  const clear = r => r.x1 - r.x0 > 1 && r.y1 - r.y0 > 1 && holes.every(h => h.x0 >= r.x1 || h.x1 <= r.x0 || h.y0 >= r.y1 || h.y1 <= r.y0);
+  const cands = holes.length ? holes.flatMap(h => [{ ...box, y0: Math.max(box.y0, h.y1) }, { ...box, y1: Math.min(box.y1, h.y0) }, { ...box, x1: Math.min(box.x1, h.x0) }, { ...box, x0: Math.max(box.x0, h.x1) }]) : [{ ...box }];
+  for (const r of cands) if (clear(r)) out.push({ x0: r.x0 + OCC_SHRINK, x1: r.x1 - OCC_SHRINK, y0: r.y0 + OCC_SHRINK, y1: r.y1 - OCC_SHRINK });
+  return out;
 }
 
 // ---- footprints -----------------------------------------------------------------------------------------------------------
@@ -110,11 +128,69 @@ export function rectInArcs(x, y, r, arcs) {
   return false;
 }
 
+// ---- the house as an occluder, outdoors -------------------------------------------------------------------------------
+const cross = (ax, ay, bx, by) => ax * by - ay * bx, EPS = 1e-7;
+// q in the shadow one face [p, k] of a solid box casts from (x, y): on or beyond the face's line, within the wedge
+// through its ends
+function inFaceShadow(x, y, q, p, k) {
+  const fx = k[0] - p[0], fy = k[1] - p[1], sc = cross(fx, fy, x - p[0], y - p[1]), sq = cross(fx, fy, q[0] - p[0], q[1] - p[1]);
+  if (sc === 0 || sc * sq > 0) return false;
+  const ax = p[0] - x, ay = p[1] - y, bx = k[0] - x, by = k[1] - y, qx = q[0] - x, qy = q[1] - y, w = cross(ax, ay, bx, by);
+  return cross(ax, ay, qx, qy) * w >= -EPS && cross(qx, qy, bx, by) * w >= -EPS;
+}
+// the part of a convex polygon where f >= 0
+function clip(pts, f) {
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], fa = f(a), fb = f(b);
+    if (fa >= 0) out.push(a);
+    if ((fa > 0 && fb < 0) || (fa < 0 && fb > 0)) { const t = fa / (fa - fb); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); }
+  }
+  return out;
+}
+// The cone a box fills seen from (x, y): its two outermost corners as directions (a quick test before inShadow), or
+// null from inside it.
+export function coneOf(x, y, b) {
+  if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return null;
+  const cx = (b.x0 + b.x1) / 2 - x, cy = (b.y0 + b.y1) / 2 - y, base = Math.atan2(cy, cx);
+  let lo = Infinity, hi = -Infinity, a = null, c = null;
+  for (const [px, py] of [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]]) {
+    let d = Math.atan2(py - y, px - x) - base; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU;
+    if (d < lo) { lo = d; a = [px - x, py - y]; } if (d > hi) { hi = d; c = [px - x, py - y]; }
+  }
+  return { b, ax: a[0], ay: a[1], cx: c[0], cy: c[1] };
+}
+// every corner of r within the cone (counter-clockwise from a to c)
+const inCone = (x, y, r, k) => {
+  for (let i = 0; i < 4; i++) {
+    const qx = (i & 1 ? r.x1 : r.x0) - x, qy = (i & 2 ? r.y1 : r.y0) - y;
+    if (cross(k.ax, k.ay, qx, qy) < -EPS || cross(qx, qy, k.cx, k.cy) < -EPS) return false;
+  }
+  return true;
+};
+// Is the rect wholly in the plan shadow of the solid axis-aligned box b, seen from (x, y)?
+export function inShadow(x, y, r, b) {
+  if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1) return false;
+  const pts = [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]];
+  const hx = x < b.x0 ? b.x0 : x > b.x1 ? b.x1 : null, hy = y < b.y0 ? b.y0 : y > b.y1 ? b.y1 : null;
+  if (hx === null) return pts.every(q => inFaceShadow(x, y, q, [b.x0, hy], [b.x1, hy]));
+  if (hy === null) return pts.every(q => inFaceShadow(x, y, q, [hx, b.y0], [hx, b.y1]));
+  // seen from a corner's side: two faces meeting at k; the rect is split along the line from the point through k
+  const k = [hx, hy], faces = [[hx, hy === b.y0 ? b.y1 : b.y0], [hx === b.x0 ? b.x1 : b.x0, hy]];
+  const side = q => cross(k[0] - x, k[1] - y, q[0] - x, q[1] - y), s = Math.sign(side(faces[0]));
+  for (const [p, sign] of [[faces[0], s], [faces[1], -s]]) {
+    const piece = clip(pts, q => side(q) * sign);
+    if (!piece.every(q => inFaceShadow(x, y, q, p, k))) return false;
+  }
+  return true;
+}
+
 // ---- the walk through the portals ---------------------------------------------------------------------------------------
-// reached[i]: the arcs cell i is seen within (FULL for the camera's own cells) or null. null overall: no culling here
-// (at or above the ceiling, off the lot, nowhere, or a walk longer than MAX_STEPS): everything is drawn.
+// reached[i]: the arcs cell i is seen within or null; the camera's own cells within `view` (the plan directions its
+// frustum covers; FULL by default). null overall: no culling here (at or above the ceiling, off the lot, nowhere, or a
+// walk longer than MAX_STEPS): everything is drawn.
 export const MAX_STEPS = 20000;
-export function reach(model, x, y, z, isOpen = () => true) {
+export function reach(model, x, y, z, isOpen = () => true, view = FULL) {
   if (!(z < model.ceiling - 0.02) || x < model.lot.x0 || x > model.lot.x1 || y < model.lot.y0 || y > model.lot.y1) return null;
   const n = model.cells.length, reached = new Array(n).fill(null), start = new Set(), arcs = new Map();
   const own = spaceAt(x, y) ?? spaceAt(x, y, NEAR);
@@ -125,7 +201,7 @@ export function reach(model, x, y, z, isOpen = () => true) {
   }
   if (!start.size) return null;
   let steps = 0;
-  const onPath = new Set();
+  const onPath = new Set(), through = [];
   const walk = (cell, fan) => {
     if (++steps > MAX_STEPS) return false;
     (reached[cell] ??= []).push(...fan);
@@ -134,24 +210,39 @@ export function reach(model, x, y, z, isOpen = () => true) {
       const next = intersectArcs(fan, arcs.get(p));
       if (!next.length) continue;
       onPath.add(p);
-      for (const other of p.cells) if (other !== cell && !walk(other, next)) return false;
+      for (const other of p.cells) {
+        if (other === cell) continue;
+        if (other === model.outside) through.push(...next);   // out again through the house: what is seen across it
+        if (!walk(other, next)) return false;
+      }
       onPath.delete(p);
     }
     return true;
   };
-  for (const c of start) if (!walk(c, FULL)) return null;
-  for (let i = 0; i < n; i++) if (reached[i]) reached[i] = start.has(i) ? FULL : unionArcs(reached[i]);
-  reached.steps = steps;
+  const fan = unionArcs(view);
+  for (const c of start) if (!walk(c, fan)) return null;
+  for (let i = 0; i < n; i++) if (reached[i]) reached[i] = start.has(i) ? fan : unionArcs(reached[i]);
+  const outdoors = start.has(model.outside);
+  Object.assign(reached, { steps, model, outdoors, through: unionArcs(through), cones: outdoors ? model.occluders.map(b => coneOf(x, y, b)).filter(Boolean) : [] });
   return reached;
 }
-// Is a footprint (rect + its cells from cellsOf) visible, given reach()'s result from (x, y)?
-export function visibleFrom(reached, x, y, rect, cells) {
+// Is a footprint (rect + its cells from cellsOf; top: its highest point) visible, given reach()'s result from (x, y)?
+// Seen from outdoors, an outdoor footprint wholly below the walls' top is hidden where the house stands in the way, unless
+// a line of sight crosses the house through its openings (to look over the walls the camera would be above them: no
+// culling there at all).
+export function visibleFrom(reached, x, y, rect, cells, top = Infinity) {
   if (!reached || !cells) return true;
   for (const c of cells) {
     const arcs = reached[c]; if (!arcs) continue;
-    if (arcs === FULL || rectInArcs(x, y, rect, arcs)) return true;
+    if (!(arcs === FULL || rectInArcs(x, y, rect, arcs))) continue;
+    if (c === reached.model.outside && reached.outdoors && top < reached.model.ceiling - 0.02 && behindHouse(reached, x, y, rect)) continue;
+    return true;
   }
   return false;
+}
+function behindHouse(reached, x, y, rect) {
+  const r = { x0: rect.x0 - MARGIN, x1: rect.x1 + MARGIN, y0: rect.y0 - MARGIN, y1: rect.y1 + MARGIN };
+  return reached.cones.some(k => inCone(x, y, r, k) && inShadow(x, y, r, k.b)) && !(reached.through.length && rectInArcs(x, y, r, reached.through));
 }
 
 // ---- the scene side -------------------------------------------------------------------------------------------------------
@@ -178,10 +269,10 @@ export function createRoomCulling({ THREE, camera, roots, moving = [], swinging 
     });
     return into;
   };
-  const rectOf = b => b.isEmpty() ? null : { x0: b.min.x, x1: b.max.x, y0: -b.max.z, y1: -b.min.z };
+  const rectOf = b => b.isEmpty() ? null : { x0: b.min.x, x1: b.max.x, y0: -b.max.z, y1: -b.min.z, top: b.max.y };
   const footprint = root => rectOf(boxOf(root, box));
   const m4b = new THREE.Matrix4();
-  const grow = (r, d) => r && { x0: r.x0 - d, x1: r.x1 + d, y0: r.y0 - d, y1: r.y1 + d };
+  const grow = (r, d) => r && { x0: r.x0 - d, x1: r.x1 + d, y0: r.y0 - d, y1: r.y1 + d, top: r.top + d };
   for (const root of roots) root?.updateMatrixWorld(true);
   const movingSet = new Set(moving), swingBy = new Map();
   for (const r of swinging) if (r) swingBy.set(r, r.userData?.door ? 1.0 : 0.5);
@@ -213,12 +304,26 @@ export function createRoomCulling({ THREE, camera, roots, moving = [], swinging 
   let on = enabled, lastKey = '';
   const show = (u, hidden) => { if (u.hidden === hidden) return; u.hidden = hidden; for (const l of u.layers) l.culled = hidden; };
   function clear() { for (const u of units) show(u, false); stats.culled = 0; lastKey = ''; }
+  // The plan directions the camera's frustum covers (its corners seen from the eye, a little wider); the full circle when
+  // it looks steeply up or down. Outside them three's frustum culling would drop a mesh anyway.
+  const corner = new THREE.Vector3(), PAD = 0.03;
+  function viewFan() {
+    const e = camera.matrixWorld.elements, ex = e[12], ez = e[14], base = Math.atan2(e[10], -e[8]);   // plan angle of the view direction (-z)
+    let lo = 0, hi = 0;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1).applyMatrix4(camera.projectionMatrixInverse).applyMatrix4(camera.matrixWorld);
+      const dx = corner.x - ex, dy = ez - corner.z; if (dx * dx + dy * dy < 1e-8) return FULL;
+      let d = Math.atan2(dy, dx) - base; if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU;
+      if (d < lo) lo = d; if (d > hi) hi = d;
+    }
+    return hi - lo > Math.PI * 0.9 ? FULL : [[norm(base + lo - PAD), hi - lo + 2 * PAD]];
+  }
   function update() {
     if (!on) return;
     const t0 = performance.now();
     camera.updateMatrixWorld();
     const p = camera.matrixWorld.elements, x = p[12], y = -p[14], z = p[13];
-    let key = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)},`;
+    let key = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)},${p.slice(0, 11).map(v => v.toFixed(3)).join(',')},${camera.projectionMatrix.elements[0].toFixed(4)},${camera.projectionMatrix.elements[5].toFixed(4)},`;
     for (const d of doorById.values()) key += isOpen(d.id) ? '1' : '0';
     let moved = false;
     for (const m of movers.values()) {
@@ -229,10 +334,10 @@ export function createRoomCulling({ THREE, camera, roots, moving = [], swinging 
     }
     if (key !== lastKey || moved) {
       lastKey = key;
-      const reached = reach(model, x, y, z, isOpen);
+      const reached = reach(model, x, y, z, isOpen, viewFan());
       stats.off = !reached; stats.reached = reached ? reached.filter(Boolean).length : model.cells.length; stats.steps = reached?.steps ?? 0;
       let culled = 0;
-      for (const u of units) { const hide = !!u.rect && !visibleFrom(reached, x, y, u.rect, u.cells); show(u, hide); if (hide) culled += u.layers.length; }
+      for (const u of units) { const hide = !!u.rect && !visibleFrom(reached, x, y, u.rect, u.cells, u.rect.top); show(u, hide); if (hide) culled += u.layers.length; }
       stats.culled = culled;
     }
     stats.ms = performance.now() - t0;

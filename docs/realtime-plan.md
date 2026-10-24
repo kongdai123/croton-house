@@ -136,10 +136,32 @@ hq, 2560 × 1440, `?fps=0`, ten gate cameras and a 49 m walk, builds interleaved
   door click. The highlight no longer counts as motion, and a caster leaving or rejoining base redraws only the texels
   around it (pixel-identical to a full redraw).
 - **Frame pacing** (`src/frame_rate.js`): the display's rate when frames fit, else an even fraction of it.
-- **Left**: merge the far plants' frozen copies across plants (300 draws in a garden view; the per-vertex foliage bake
-  and its slot crossfade must follow the merge), keep the hidden merge originals out of the render traversal (three
-  walks ~8000 nodes per render), the aim raycast (`interact.js`, 1.5-2.5 ms) and the sun-shadow cache's per-frame
-  change scan (~2 ms). The WebGPU spike measured no gain at this draw count; draws have to go first either way.
+- **Second round** (same node type and method, `tools/perf_gpu.mjs --rounds 3 --mix`, against the integrate build with
+  TAA, volumetric light and white balance): garden views from 16-17 to 24-26 fps (CPU 58-62 → 38-42 ms, draws
+  1950-2330 → 1340-1600, p99 frame interval 68-72 → 41-46 ms), rooms +55-97%, the walk 29 → 51 fps (p99 67 → 44 ms).
+  `perf_gpu --mix` classifies every draw of a frame, `--profile` gives inclusive time; what they found and what changed:
+  - TAA patched its texture bias by walking the whole scene every frame (~10 ms in every view): now on the first
+    frame, after quality/time changes and per draw of a new material version (`taa.js`).
+  - The window seat's 74 books, six faces in three materials each, were 444 draws from every garden view through its
+    window. After the bake is applied (baked walkthrough only: the export and the lightmap ids are as before),
+    `batch_baked.js` splits multi-material meshes per material and merges same-material siblings and a toggle's rigid
+    parts under their parent, and stows the merged meshes' hidden sources (~6900 nodes) in one hidden group per parent.
+  - For the walkthrough camera only (layers `mainOnly` / `mainOff`, honoured by room culling; shadows, puddles, mirrors
+    and photo mode keep drawing the meshes themselves): the far plants' frozen copies per material and 16 m cell
+    (`plant_clusters.js`, the foliage bake's crossfade follows through views of the arrays), doors' leaves, toggles'
+    moving parts and carried pieces while at rest (`rest_clusters.js`: a member that moves, hides or takes the hover
+    tint draws itself at once), far plants' branches hidden whole.
+  - The aim raycast stops at the first wall and runs heavy meshes through a BVH (`pick_bvh.js`, patio 5.4 → ~1 ms);
+    the sun-shadow cache does not scan rigid roots part by part while they rest; uniform arrays are not resent to a
+    program that already holds them (`uniform_cache.js`); the puddle reflection refreshes bounds only where they moved.
+  - Pixels: `tools/ab_check.mjs` draws the same shots in two variants (each feature's `?flag=0` against it on): TAA's
+    patch, stowing and the uniform cache are identical; the merges differ in at most 25-96 of 921600 pixels per shot
+    (vertices transformed once on the CPU, coplanar faces drawn in another order); room culling stays exact
+    (`cull_check`, 176 shots).
+  - Left: the draw floor is the number of materials in view (~400 in a garden view), the near plants' sway pivots (one
+    draw per pivot and material, ~120-180) and the puddle reflection (250-370 draws, ~5 ms, chosen mesh by mesh). Uniform
+    upload per material switch is ~5 ms of the frame; uniform buffers shared across programs would cut it. The WebGPU
+    spike measured no gain at this draw count.
 
 ## Photo mode, built 2026-10-13
 

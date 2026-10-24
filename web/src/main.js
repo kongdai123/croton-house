@@ -189,7 +189,10 @@ if (bakedWanted && !state.bakedFallback) {
       catch (err) { console.warn('rest merge skipped', err); restClusters = null; }
     }
     // the merged meshes' hidden sources, per parent in one hidden group: the render walk skips them (?stow=0: off)
-    if (Q.get('stow') !== '0') { stowed = stowSources([houseRoot, layout.root]); state.stowed = { groups: stowed.groups, sources: stowed.sources }; }
+    if (Q.get('stow') !== '0') {
+      try { stowed = stowSources([houseRoot, layout.root]); state.stowed = { groups: stowed.groups, sources: stowed.sources }; }
+      catch (err) { console.warn('stowing skipped', err); stowed = null; }
+    }
     // the enclosed fit-outs updateRoomVisibility shows and hides: tracked casters for the sun-shadow cache, so walking in
     // and out of their rooms redraws base around them, not all of it (a 60 ms hitch at bedroom 3's door)
     if (batch.rooms?.length) baked.sunShadow.track(batch.rooms.flatMap(r => [r.group, ...r.roots]), false, true);   // rigid: only shown and hidden

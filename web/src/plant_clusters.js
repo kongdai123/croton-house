@@ -111,7 +111,7 @@ export function createPlantClusters({ lod, camera, parent }) {
     }
   };
   update();
-  const stats = { clusters: clusters.length, members: clusters.reduce((n, cl) => n + cl.members.length, 0), ms: Math.round(performance.now() - t0) };
+  const stats = { clusters: clusters.length, members: clusters.reduce((n, cl) => n + cl.members.length, 0), vertices: clusters.reduce((n, cl) => n + cl.mesh.geometry.attributes.position.count, 0), ms: Math.round(performance.now() - t0) };
   return {
     stats, clusters, update,
     dispose() {

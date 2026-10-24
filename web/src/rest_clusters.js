@@ -103,7 +103,7 @@ export function createRestClusters({ roots, camera, parent }) {
     cl.mesh.geometry.setDrawRange(0, at); cl.mesh.visible = at > 0;
     index.clearUpdateRanges?.(); if (at) index.addUpdateRange(0, at); index.needsUpdate = true; cl.dirty = false;
   };
-  const stats = { clusters: clusters.length, members: clusters.reduce((n, cl) => n + cl.members.length, 0), live: 0, recaptures: 0, ms: 0 };
+  const stats = { clusters: clusters.length, members: clusters.reduce((n, cl) => n + cl.members.length, 0), vertices: clusters.reduce((n, cl) => n + cl.mesh.geometry.attributes.position.count, 0), live: 0, recaptures: 0, ms: 0 };
   // per frame: a member that moved, hid or took another material draws itself; one that held still REST_FRAMES frames
   // (in a new pose: re-copied) comes back
   const update = () => {

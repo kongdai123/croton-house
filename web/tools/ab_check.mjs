@@ -158,9 +158,10 @@ for (const slot of slots) {
       await step(pages, 40); await shot(pages, `${slot}/shade_moved`);
       await both(pages, () => window.__shade.userData.toggle.set(!window.__shade.userData.toggle.on, true)); await step(pages, 4);
     }
-    // the hover highlight on the living room's window seat (its books were multi-material meshes: never tinted)
+    // the hover highlight on the living room's window seat (the seat with the most multi-material parts: its books, never
+    // tinted)
     const seatCam = cams.find(c => c.id === 'living_2'); if (seatCam) await place(pages, seatCam, vfov(seatCam.lens ?? 22)); await step(pages, 4);
-    await both(pages, () => { const A = window.__app, seat = A.layout.placed.find(o => o.userData.id === 'living-window-seat'); if (seat) A.interact.setHighlight(seat, true); window.__seat = seat; });
+    await both(pages, () => { const A = window.__app, multi = o => { let n = 0; o.traverse(x => { if (Array.isArray(x.material)) n++; }); return n; }, seat = A.layout.interactive.filter(o => o.userData.seats?.length).sort((a, b) => multi(b) - multi(a))[0]; if (seat) A.interact.setHighlight(seat, true); window.__seat = seat; });
     await shot(pages, `${slot}/seat_highlight`);
     await both(pages, () => { if (window.__seat) window.__app.interact.setHighlight(window.__seat, false); });
     // a slot crossfade halfway (1.5 s fade: 23 steps of 1/30 s)

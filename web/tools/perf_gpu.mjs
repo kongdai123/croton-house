@@ -157,7 +157,8 @@ function installProbe() {
   A.scene.traverse(o => { if (!o.isMesh) return; meshes++; if (o.userData.batch) batched++; if (o.isInstancedMesh) instanced++; });
   A.scene.traverseVisible(o => { if (!o.isMesh) return; visible++; if (o.castShadow) casters++; });
   return { gpuTimer: !!ext, renderer: String(gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info')?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER)), canvas: [r.domElement.width, r.domElement.height],
-    meshes, visibleMeshes: visible, visibleCasters: casters, batchedMeshes: batched, instanced, programs: info.programs?.length ?? 0, sunShadow: { ...ss() }, fpsCap: A.state.fpsCap, quality: A.state.quality, build: globalThis.CROTON_BUILD ?? null };
+    meshes, visibleMeshes: visible, visibleCasters: casters, batchedMeshes: batched, instanced, programs: info.programs?.length ?? 0, sunShadow: { ...ss() }, fpsCap: A.state.fpsCap, quality: A.state.quality, build: globalThis.CROTON_BUILD ?? null,
+    merges: Object.fromEntries(['batch2', 'plantClusters', 'restClusters', 'stowed'].map(k => [k, A.state[k] ?? null])) };
 }
 
 // one window of frames: settle, then record for `seconds`, then wait for the GPU queries

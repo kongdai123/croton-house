@@ -5,7 +5,7 @@
 //   node record.mjs --site <dir> --out <framesDir> [--script choreography.js|twitter.js] [--lang zh|en] [--fps 30]
 //                   [--every N] [--size 1920x1080] [--dsf 1] [--clean] [--shots a,b] [--stills poses.json]
 //                   [--query 'tier=hq&lmres=full'] [--max seconds] [--tour-slot noon|sunrise|golden] [--no-hearts]
-//                   [--png-frames n,n] [--wall-clock]
+//                   [--png-frames n,n] [--wall-clock] [--opt key=value,key=value (more window.__videoOptions for a script)]
 // --every N keeps one frame in N (a quick preview of the whole film: compositions, timings).
 // --clean hides the site's interface (top bar, plan, crosshair, labels, captions, cursor) with film-only CSS.
 // --dsf 2 renders the page at a device scale factor of 2 (the site caps its drawing buffer at 2560 x 1440) and keeps
@@ -64,7 +64,7 @@ await ctx.addInitScript(({ lang, options }) => {
   const realNow = performance.now.bind(performance); let virtualNow = null;
   performance.now = () => virtualNow ?? realNow();
   window.__filmClock = (ms) => { virtualNow = ms; };
-}, { lang: LANG, options: { fps: FPS, shots: SHOTS, stills: STILLS, hearts: !flag('--no-hearts'), tourSlot: opt('--tour-slot') } });
+}, { lang: LANG, options: { fps: FPS, shots: SHOTS, stills: STILLS, hearts: !flag('--no-hearts'), tourSlot: opt('--tour-slot'), ...Object.fromEntries((opt('--opt') || '').split(',').filter(Boolean).map(kv => kv.split('='))) } });
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => { errors.push(String(e.message)); console.log('[pageerror]', e.message); });

@@ -5,11 +5,14 @@
 //   0.4 (18% grey), back to linear, -> E-Gamut, log2, AgX_Base_sRGB.cube (57^3, tetrahedral), ^2.4, sRGB encoding.
 // On a GPU it matches Blender's own (16-bit PNG) output to 0.05/255 at most over grey ramps and saturated colours.
 // Installed over the composer's OutputPass while the renderer asks for AgX; anything else falls through to three.
+// The camera's white balance (white_balance.js, outputPass.whiteBalance: a 3 x 3 in linear Rec.709) is folded into the first
+// matrix, Rec.709 -> E-Gamut, as uIn = IN x white balance: no extra work per pixel, and exactly IN without one (?capture).
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
-const GLSL = `uniform sampler2D tDiffuse, tAutoExposure; uniform bool autoExposure; uniform highp sampler3D lumLut, agxLut; uniform float exposure; varying vec2 vUv;
-const mat3 IN = mat3(0.559463047, 0.0762332609, 0.0655375095, 0.304775811, 0.787952395, 0.16454273, 0.135812941, 0.135774849, 0.769741528);
+// AgX's input matrix (row-major here; the GLSL literal it replaced was column-major)
+const IN = new THREE.Matrix3().set(0.559463047, 0.304775811, 0.135812941, 0.0762332609, 0.787952395, 0.135774849, 0.0655375095, 0.16454273, 0.769741528);
+const GLSL = `uniform sampler2D tDiffuse, tAutoExposure; uniform bool autoExposure; uniform highp sampler3D lumLut, agxLut; uniform float exposure; uniform mat3 uIn; varying vec2 vUv;
 const mat3 LOOK = mat3(0.967977806, 0.131809967, 0.0468677678, 0.117887618, 0.916062285, 0.0124191066, -0.0858536371, -0.047868188, 0.940833412);
 const mat3 VIEW = mat3(1.04730554, -0.153314683, -0.0501479231, -0.135979098, 1.11078232, -0.00788863052, 0.0886511001, 0.0425245458, 1.05790992);
 vec3 enc(vec3 x) { return (log2(max(x, 1e-10)) + 12.47393) / 25.; }
@@ -32,7 +35,7 @@ vec3 tetra(highp sampler3D t, vec3 c) {
 void main() {
   vec4 t = texture2D(tDiffuse, vUv);
   float gain = autoExposure ? texture2D(tAutoExposure, vec2(0.5)).r : exposure;
-  vec3 c = dec(tetra(lumLut, enc(IN * (t.rgb * gain))));
+  vec3 c = dec(tetra(lumLut, enc(uIn * (t.rgb * gain))));
   c = dec((enc(LOOK * c) - 0.4) * 1.2 + 0.4);
   c = pow(max(tetra(agxLut, enc(VIEW * c)), 0.), vec3(2.4));
   // OCIO's sRGB encoding (its exact break point, not 0.0031308)
@@ -66,16 +69,17 @@ export async function loadAgXLuts(url = 'assets/agx/agx_lut.bin.gz') {
 export function blenderAgX(outputPass, url = 'assets/agx/agx_lut.bin.gz', staged = null) {
   return outputPass.blenderAgX ??= Promise.resolve(staged ?? loadAgXLuts(url)).then(([lumLut, agxLut]) => {
     const material = new THREE.ShaderMaterial({
-      uniforms: { tDiffuse: { value: null }, lumLut: { value: lumLut }, agxLut: { value: agxLut }, exposure: { value: 1 }, tAutoExposure: { value: null }, autoExposure: { value: false } },
+      uniforms: { tDiffuse: { value: null }, lumLut: { value: lumLut }, agxLut: { value: agxLut }, exposure: { value: 1 }, tAutoExposure: { value: null }, autoExposure: { value: false }, uIn: { value: IN } },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: GLSL, depthTest: false, depthWrite: false,
     });
-    const quad = new FullScreenQuad(material), render = outputPass.render.bind(outputPass);
+    const quad = new FullScreenQuad(material), render = outputPass.render.bind(outputPass), balanced = new THREE.Matrix3();
     outputPass.render = (renderer, writeBuffer, readBuffer, ...rest) => {
       if (renderer.toneMapping !== THREE.AgXToneMapping) return render(renderer, writeBuffer, readBuffer, ...rest);
       material.uniforms.tDiffuse.value = readBuffer.texture; material.uniforms.exposure.value = renderer.toneMappingExposure;
       material.uniforms.tAutoExposure.value = outputPass.autoExposureTexture ?? null;
       material.uniforms.autoExposure.value = !!outputPass.autoExposureTexture;
+      material.uniforms.uIn.value = outputPass.whiteBalance ? balanced.multiplyMatrices(IN, outputPass.whiteBalance) : IN;
       renderer.setRenderTarget(outputPass.renderToScreen ? null : writeBuffer); quad.render(renderer);
     };
     return material;

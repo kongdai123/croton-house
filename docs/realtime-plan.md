@@ -144,9 +144,9 @@ OutputPass (inside TAA's internal chain), so auto exposure meters it and the ton
   (`lightmap_slots.js` `fading`). At dusk the sun is down: no beams, a faint sky-lit haze outdoors.
 - Where the sun gets in (debug view, gate-c cameras): at sunrise (az 58, el 8) through the north french doors and the
   east windows: beams in the office, dining room and bedroom B, seen toward the windows. At noon short beams beside a
-  few windows (garage, bedroom 3). At golden hour (az 255, el 7) no sunlit air inside at all: the neighbours' trees and
-  fences keep the low sun off the west and south openings, so golden-hour beams are outdoors (shafts through the trees,
-  the haze lit around the sun).
+  few windows (garage, bedroom 3). At golden hour (az 255, el 7) no sunlit air inside at all: at 7 deg the sun is
+  shaded before it reaches the west and south openings (the debug view sees no sunlit air even outside the primary
+  bath's west window), so golden-hour beams are outdoors (shafts through the trees, the haze lit around the sun).
 - Cost on an RTX 2080 Ti at 2560 x 1440 (GPU timer queries): 0.53-0.87 ms with MSAA, 0.39-0.63 ms under TAA.
 
 **TAA** (`web/src/taa.js`) is the hq default (`taa: 1` in `tier.js`: full internal resolution; `?taa=0` returns to MSAA 4

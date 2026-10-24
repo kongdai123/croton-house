@@ -6,6 +6,9 @@ const BUILD = globalThis.CROTON_BUILD ?? 'dev';
 
 const ms = (v) => (v == null || Number.isNaN(v) ? '–' : `${Math.round(v)} ms`);
 const num = (v) => (v == null ? '–' : Math.round(v).toLocaleString('en-US'));
+// room visibility (visibility.js): meshes the walls hide from here, of those it watches
+const culling = (c) => !c ? 'off' : !c.enabled ? 'paused' : c.stats.off ? `none here (${num(c.stats.meshes)} meshes)`
+  : `${num(c.stats.culled)} of ${num(c.stats.meshes)} meshes hidden · ${c.stats.reached} spaces seen · ${c.stats.ms.toFixed(2)} ms`;
 
 export class Stats {
   constructor({ renderer, camera, player, state, lighting, pets, canvas }) {
@@ -39,9 +42,10 @@ export class Stats {
     const steps = s.warmupSteps ?? {}, heap = performance.memory;
     const heading = ((-(p.yaw ?? 0) * 180) / Math.PI % 360 + 360) % 360;
     const rows = [
-      ['Frame', `${fps.toFixed(1)} fps · cap ${s.fpsCap ? `${s.fpsCap} fps` : 'off'}`],
+      ['Frame', `${fps.toFixed(1)} fps · ${s.pacing?.describe() ?? (s.fpsCap ? `cap ${s.fpsCap} fps` : 'uncapped')}`],
       ['CPU / frame', `${avg.toFixed(2)} ms avg · ${this.cpuMax.toFixed(1)} ms max`],
       ['Draw calls', num(this.last?.calls)],
+      ['Culling', culling(window.__app?.culling)],
       ['Triangles', num(this.last?.triangles)],
       ['Programs', num(info.programs?.length)],
       ['Geometries', `${num(info.memory.geometries)} · textures ${num(info.memory.textures)}`],

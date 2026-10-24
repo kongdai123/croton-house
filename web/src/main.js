@@ -28,6 +28,8 @@ import { applyLightmaps } from './lightmap.js';
 import { createContact } from './contact.js';
 import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
 import { createGuard } from './startup_guard.js';
+import { createRoomCulling } from './visibility.js';
+import { createFrameRate } from './frame_rate.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -295,6 +297,7 @@ const compiling = warmScene().then(() => baked?.checkPatches()).catch(async err 
   if (!baked) throw err;
   await fallbackLegacy(err); await warmScene();
 }).catch(err => console.warn('shader warmup', err));   // never reject: the load awaits this below
+const puddleShaders = soft('puddle shaders', () => baked?.puddleRefl?.warm?.());   // the ground reflection's own copies (puddles.js)
 // Real progress for the loading screen: KHR_parallel_shader_compile answers "is this program linked yet?" without
 // blocking, so the bar counts finished programs out of all of them. Without the extension the bar stays indeterminate.
 const stopCompileProgress = (() => {
@@ -318,7 +321,7 @@ if (!baked) { // The file was requested at startup and is normally long here; ne
   }
   state.daylightSource = lighting.daylight?.source; }
 lapStart = lap('bake', lapStart);
-await Promise.race([compiling, new Promise(resolve => setTimeout(resolve, 120000))]);
+await Promise.race([Promise.all([compiling, puddleShaders]), new Promise(resolve => setTimeout(resolve, 120000))]);
 stopCompileProgress(); document.getElementById('warmbar').style.width = '94%';
 // The first draw below blocks the page for a moment (texture uploads, shadow maps, the last shader links). Name that step and
 // let it paint first, so a visitor already on the loading screen sees "Lighting the rooms" rather than a stalled count.
@@ -337,6 +340,10 @@ try {
   try { renderer.render(scene, camera); } catch (_) {}
 }
 lapStart = lap('draw', lapStart);
+// Room visibility (visibility.js): from here on the walkthrough camera skips what the plan's walls hide from it; shadows,
+// mirrors and reflections still see everything. ?cull=0 turns it off.
+const culling = Q.get('cull') === '0' ? null : soft('room culling', () => createRoomCulling({ THREE, camera, roots: [houseRoot, layout.root, garden.group, batch.world],
+  moving: layout.interactive.filter(o => !o.userData.toggle), swinging: [...getDoors().map(d => d.group), ...layout.animated], doors: getDoors() }));
 firstFrameDrawn = true;
 document.getElementById('warmbar').style.width = '100%';
 ui.hideLoading();
@@ -381,6 +388,7 @@ function frame(dt) {
   minimap.draw();
   soft('lighting.update', () => lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1)));
   try { baked?.updateMovables(dt); } catch (err) { if (!gl0.isContextLost()) fallbackLegacy(err); }   // a lost context is not the bake's fault
+  if (culling) soft('room culling', culling.update);   // after everything that moves the camera or a door this frame
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
@@ -414,21 +422,24 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles };
-// Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
-// Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
-// cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.
-const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && Number.isFinite(+fpsParam) ? Math.max(0, +fpsParam) : 30;
-const framePeriod = fpsCap > 0 ? 1000 / fpsCap : 0;
-state.fpsCap = fpsCap;
-let readyFrames = 0, nextFrameAt = 0;
+window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
+// Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
+// 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
+// the old 30 fps cap. Skipped display refreshes cost nothing.
+const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && Number.isFinite(+fpsParam) ? Math.max(0, +fpsParam) : detected.tier === 'mobile' ? 30 : null;
+const pacing = createFrameRate({ cap: fpsCap });
+state.fpsCap = fpsCap; state.pacing = pacing;
+let readyFrames = 0;
 // ?capture: the app stops drawing on its own so a recorder can step it frame by frame with renderAt (tools/promo.mjs).
 const CAPTURE = Q.has('capture');
 const loop = (now) => {
   requestAnimationFrame(loop);
   if (CAPTURE && readyFrames >= 12) return;
-  // The cap is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo at 30 fps judders.
-  if (framePeriod && !viewpoints.panoOpaque) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
-  const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) soft('frame', () => frame(dt)); if (++readyFrames === 12) window.__ready = true;
+  // The pacing is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo judders.
+  if (!pacing.tick(now) && !viewpoints.panoOpaque) return;
+  const dt = Math.min(0.1, clock.getDelta()), t0 = performance.now();
+  if (!document.hidden) soft('frame', () => frame(dt));
+  pacing.drawn(now, performance.now() - t0);
+  if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

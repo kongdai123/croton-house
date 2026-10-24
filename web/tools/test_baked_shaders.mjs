@@ -110,6 +110,14 @@ try {
   for (let i = 0; i < 150; i++) { still.position.x += 0.01; scene.updateMatrixWorld(); pcss.update(0.02); }
   const ambient = pcss.version; for (let i = 0; i < 20; i++) { still.position.x += 0.01; scene.updateMatrixWorld(); pcss.update(0.02); } assert.equal(pcss.version, ambient); assert.equal(pcss.stats.ambient, 1);
   scene.remove(still); pcss.update(0.1);
+  // The hover highlight (interact.js) swaps in a tinted copy with the same shader hook: depth does not change, so the still
+  // caster is neither promoted nor redrawn (it was: every seat the crosshair crossed cost a full base redraw).
+  const seat = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); seat.castShadow = true; scene.add(seat); pcss.invalidate(); pcss.update(0.1);
+  const seatTracked = pcss.stats.tracked, seatStatic = pcss.stats.staticRenders, tint = seat.material.clone(); tint.onBeforeCompile = seat.material.onBeforeCompile;
+  seat.material = tint; for (let i = 0; i < 150; i++) pcss.update(0.02);
+  assert.equal(pcss.stats.tracked, seatTracked); assert.equal(pcss.stats.staticRenders, seatStatic);
+  tint.alphaTest = 0.5; for (let i = 0; i < 150; i++) pcss.update(0.02); assert.equal(pcss.stats.tracked, seatTracked + 1);   // a cut-out change still counts
+  scene.remove(seat); pcss.update(0.1);
   // A tracked caster leaves base (one base redraw) when it starts moving and returns there 2 s after it stops.
   mesh.castShadow = true; for (let i = 0; i < 25; i++) pcss.update(0.1); pcss.invalidate(); pcss.update(0.1); assert.equal(pcss.stats.hot, 0);
   const staticRenders = pcss.stats.staticRenders; parent.position.x += 0.5; pcss.update(0.1);

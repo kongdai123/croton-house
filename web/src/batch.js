@@ -168,6 +168,7 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
   }
   stats.lod = lod; stats.lmIds = seen.size;
   stats.rooms = [...rooms.values()];
+  stats.world = world;   // the world-static merged meshes (room culling registers them, visibility.js)
   return stats;
 }
 

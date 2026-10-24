@@ -168,6 +168,8 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
       for (const e of entries.values()) e.pending = false;
     } finally { renderer.setRenderTarget(prev, face, mip); }
   };
+  // the shader hook a material's depth copy runs (its vertex deformation), once per material
+  const hooks = new WeakMap(), hookOf = m => { if (!m) return null; let h = hooks.get(m); if (h === undefined) { h = ownShader(m).compile ?? null; hooks.set(m, h); } return h; };
   // Visibility (LOD levels are three's to switch: not a change), world matrices (doors, toggles, carried objects and
   // parent transforms), skin, morph and instance data, geometry and material changes. Snapshots are reused.
   const changedArray = (e, key, a) => {
@@ -193,9 +195,12 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     if (ms.length !== n) { ms.length = n; changed = true; }
     for (let i = 0; i < n; i++) {
       const m = multi ? o.material[i] : o.material, a = ms[i] ??= {};
-      // what the depth pass reads (not the version: environment maps and the like recompile without changing depth)
-      if (a.m !== m || a.alpha !== m?.alphaTest || a.visible !== m?.visible || a.map !== m?.map || a.alphaMap !== m?.alphaMap || a.side !== (m?.shadowSide ?? m?.side)) {
-        a.m = m; a.alpha = m?.alphaTest; a.visible = m?.visible; a.map = m?.map; a.alphaMap = m?.alphaMap; a.side = m?.shadowSide ?? m?.side; changed = true;
+      // what the depth pass reads (not the version: environment maps and the like recompile without changing depth; not
+      // the material object either: the hover highlight swaps in a tinted copy with the same shader hook, and counting
+      // that as motion redrew every still caster each time the crosshair crossed a seat)
+      const hook = hookOf(m);
+      if (a.hook !== hook || a.alpha !== m?.alphaTest || a.visible !== m?.visible || a.map !== m?.map || a.alphaMap !== m?.alphaMap || a.side !== (m?.shadowSide ?? m?.side) || a.disp !== m?.displacementMap) {
+        a.hook = hook; a.alpha = m?.alphaTest; a.visible = m?.visible; a.map = m?.map; a.alphaMap = m?.alphaMap; a.side = m?.shadowSide ?? m?.side; a.disp = m?.displacementMap; changed = true;
       }
     }
     return changed;

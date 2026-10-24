@@ -120,6 +120,27 @@ for it, and build it only if fixed slots feel limiting.
 - **Download size.** About 6 MB per slot plus lamp layers. Lazy loading keeps the first visit close to today's.
 - **Probe-lit objects** read a little flatter than lightmapped ones. Keep them few and give them GTAO.
 
+## Frame cost with the bake, measured 2026-10-24
+
+`web/tools/perf_gpu.mjs` on a GPU node (RTX 2080 Ti, Xeon Silver 4216 at 2.1 GHz, headless Chromium on ANGLE/Vulkan),
+hq, 2560 × 1440, `?fps=0`, ten gate cameras and a 49 m walk, builds interleaved in one job:
+
+- **The frame is bound by draw submission, not by pixels.** At 1280 × 720 it costs the same as at 1440p. The main pass
+  takes 75-85% of it at 15-25 µs per draw (three's per-object bookkeeping, WebGL validation, ANGLE), so the draw count
+  decides the frame: 600-3000 draws, 26-56 ms per frame on this CPU. The pixel work (GTAO ~5 ms, SSR, SMAA, output,
+  the puddle reflection 3-10 ms) runs alongside it on the GPU.
+- **Room culling** (`src/visibility.js`): the plan's spaces and openings as portals; outdoors the house hides the far
+  garden. Only the walkthrough camera skips what is hidden, so shadows and reflections are unchanged. Draws fall by
+  40-90% indoors and 15-35% outdoors; `tools/cull_check.mjs` proves frames identical with culling on and off.
+- **Sun-shadow cache**: base redraws used to cost ~55 ms of CPU (every caster) and came with every hover highlight and
+  door click. The highlight no longer counts as motion, and a caster leaving or rejoining base redraws only the texels
+  around it (pixel-identical to a full redraw).
+- **Frame pacing** (`src/frame_rate.js`): the display's rate when frames fit, else an even fraction of it.
+- **Left**: merge the far plants' frozen copies across plants (300 draws in a garden view; the per-vertex foliage bake
+  and its slot crossfade must follow the merge), keep the hidden merge originals out of the render traversal (three
+  walks ~8000 nodes per render), the aim raycast (`interact.js`, 1.5-2.5 ms) and the sun-shadow cache's per-frame
+  change scan (~2 ms). The WebGPU spike measured no gain at this draw count; draws have to go first either way.
+
 ## Photo mode, built 2026-10-13
 
 Path traced in the browser: guided denoiser, AgX, physical sky with a placeable sun, mood words in Chinese and

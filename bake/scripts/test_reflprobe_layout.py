@@ -10,7 +10,7 @@ plan = L.load_plan(ROOT / 'web/data/plan.json')
 class Layout(unittest.TestCase):
     def test_points_clear_of_walls(self):
         pts = L.points(plan); rects = L.walls_at(plan, L.PROBE_Z)
-        self.assertEqual(len(pts), 27)
+        self.assertEqual(len(pts), 30)
         for i, (x, y, z) in enumerate(pts):
             if L.in_plan(plan, x, y): self.assertGreaterEqual(L.wall_distance(rects, x, y), L.WALL_CLEARANCE - 1e-6, i)
         self.assertEqual(pts[9][:2], (3.3, -3.6))   # was inside the living / front-bedroom partition
@@ -32,6 +32,19 @@ class Layout(unittest.TestCase):
         # the hall bath's box runs to its east wall (the shower glass is not a wall), bath B has its own
         self.assertGreater(boxes[13]['max'][0], 7.8); self.assertGreater(boxes[26]['max'][0], 7.8)
         self.assertLess(-boxes[13]['min'][2], 0.25); self.assertGreater(-boxes[26]['max'][2], 0.25)
+
+    def test_bbox_boxes_hold_no_other_space(self):
+        # a reflBox 'bbox' space's box (the L-shaped garage) holds none of another space's floor: the shader takes the
+        # probe whose box holds a point, and the garage's bbox gave the linen closet's floor the garage's strip lights
+        n = 0
+        for p in L.points(plan):
+            a = L.annex_of(plan, p[0], p[1])
+            if not a: continue
+            b = L.plan_box(plan, p); n += 1
+            r = (b['min'][0], b['max'][0], -b['max'][2], -b['min'][2])
+            self.assertEqual(L.foreign_in(plan, a, r, 0.02), {}, p)
+            self.assertGreater((r[1] - r[0]) * (r[3] - r[2]), 0.8 * 4.396 * 5.021, p)   # the garage's main rectangle is kept
+        self.assertGreater(n, 0)
 
 
 if __name__ == '__main__': unittest.main()

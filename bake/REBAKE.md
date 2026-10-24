@@ -19,11 +19,16 @@ group packs at 1 (`lamp_groups_pack.py pack` without `--gains`). Placeholders: `
 - One shared ssh connection: start long work detached (`sbatch`) and poll with one short ssh at most every 60 s.
 - Steps that need Blender with numpy: `export CROTON_SITE_PACKAGES=$R/.venv/lib/python3.11/site-packages`.
 - Node + Chrome: `export PATH=<node bin dir>:$PATH PLAYWRIGHT_BROWSERS_PATH=$R/tools/pw` (bake/cluster/env.sh NODEBIN).
+- Storage (the v4 bake filled the project's 2 TB quota twice): check `df -h` of the project volume before the queue and
+  during the pool. A full volume fails every task's write, and a worker that takes the next task at once loops through
+  the queue failing it: stop a worker slot after 3 quick failures in a row. Keep Blender's per-frame progress lines
+  (`Fra:`) out of the task logs (~100 MB per probe task otherwise: 40 GB for one bake). Delete the raw EXRs of a slot
+  once its composite is checked, and a lamp group's once its merge is (the bake's only large intermediates).
 
 ## Current folders (2026-10-16)
 | Folder | What |
 |---|---|
-| `scene/v4/`, `bakes/v4/`, `site_v4/` | the physical-lamp rebake of 2026-10-24 (lumen model, dusk sky 0.35, scene debt fixes), run from its own root `agents/lamps/root` (its `scripts/`, `validate/` exporters, probe grid, task queue `tasks/`, logs; `scene/v4` and `bakes/v4` link to these folders) with the steps in `agents/lamps/v4/` |
+| `scene/v4/`, `bakes/v4/`, `site_v4/` | the physical-lamp rebake of 2026-10-24 (lumen model, dusk sky 0.35, scene debt fixes), run from its own root `agents/lamps/root` (its `scripts/`, `validate/` exporters, probe grid, task queue `tasks/`, logs; `scene/v4` and `bakes/v4` link to these folders) with the steps in `agents/lamps/v4/`. Its scene, bakes, task logs and publish tree live on another project's volume (`croton_v4/` beside the old croton folders there; links from `$R`), because this project's 2 TB quota filled during the bake; delete `croton_v4/` once v4 is on master |
 | `scene/bathfix/` | last full export, unwrap and Blender scenes (`scene_lm.blend` wet, `scene_lm_dry.blend`, `scene.blend`, `scene_dry.blend`) |
 | `bakes/bathfix/` | its `lightmap_uv.bin`, `guides.npz` and the four slots' raw bakes (`<slot>/*_gNN.exr`, probe chunks, `refl/`, `foliage/`) |
 | `bakes/bathfix_fill/` | the shipped composites (world fill of holes and skipped texels) of `bakes/bathfix` |
@@ -126,16 +131,18 @@ are flagged solid and written invalid without a render. Then, as task files in `
 ```sh
 O="--plan scripts/plan.json --layout bakes/$V/refl_layout.json"
 # first, in a short GPU job, the layout alone (no renders); it stops on a probe under the roof that stands inside or
-# against furniture (add a reflProbe seed to its space in plan_overlay.json); every reflection task reuses the layout
+# against furniture (add a reflProbe seed to its space in plan_overlay.json); every reflection task reuses the layout.
+# 30 probes since 2026-10-24 (the laundry, walk-in and linen closet seeds): the last chunk is 21..30; check the count with
+# python3 bake/scripts/reflprobe_layout.py web/data/plan.json
 $B $S/scene_p_dry.blend -P scripts/reflprobe.py -- '{"slot": "noon"}' bakes/$V/refl_scratch 0 0 $O
 for SLOT in sunrise noon golden dusk; do
   case $SLOT in sunrise) SC=scene_p.blend;; dusk) SC=scene_p_dusk.blend;; *) SC=scene_p_dry.blend;; esac
-  for r in "0 7" "7 14" "14 21" "21 27"; do set -- $r
+  for r in "0 7" "7 14" "14 21" "21 30"; do set -- $r
     echo "$B $S/$SC -P scripts/reflprobe.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/refl $1 $2 $O" > tasks/pending/${V}_e_${SLOT}_refl_$1
   done
   echo "$B $S/$SC -P scripts/skypano.py -- '{\"slot\": \"$SLOT\"}' bakes/$V/$SLOT/sky_bg.hdr" > tasks/pending/${V}_e_${SLOT}_sky
 done
-for r in "0 7" "7 14" "14 21" "21 27"; do set -- $r
+for r in "0 7" "7 14" "14 21" "21 30"; do set -- $r
   echo "$B $S/scene_lmp_lampgroups.blend -P scripts/reflprobe.py -- '{\"slot\": \"dusk\"}' bakes/$V/lampgroups/refl $1 $2 $O --lamps $S/groups.json --max-layers 3" > tasks/pending/${V}_d_lamprefl_$1
 done
 # foliage per slot, on the slot's lightmap scene (sunrise scene_lm, noon/golden scene_lm_dry, dusk scene_lm_dusk):
@@ -185,7 +192,8 @@ python3 bake/validate/qa.py bakes/$V --switches scene/$V/switches.json --plan we
 It reads the bake folder as it stands (`<slot>/` with the layers, `half/`, `quarter/`, `probes.bin`, `refl/`; `lightmap_uv2.bin.gz`;
 `lampgroups/out`) and prints one line per check: files and encodings, per-unit coverage / black units on a non-black material
 (the vertex-colour bug) / no-texel units, tier bleed, lamp-group list, energy and footprint, probes in walls and SH sanity,
-reflection layout and black panoramas (thresholds: `bake/validate/qa_thresholds.json`). It exits non-zero on any failure
+reflection layout, black panoramas and coverage (a room with space for a probe whose floor falls back to another room's
+probe: give it a reflProbe seed) (thresholds: `bake/validate/qa_thresholds.json`). It exits non-zero on any failure
 that is not in `bake/validate/qa_baseline.json` (known violations of the shipped bake, shrink-only) and on any metric that
 moved beyond its tolerance. Fix the cause and rebake the affected part, or, once the owner has accepted the change,
 `--approve` (new expected failures also need `--allow-new-failures`) and commit the new baseline. The result must be clean
@@ -236,6 +244,8 @@ The lamp groups bake once, from the day scenes (sheers gathered), for every slot
 probes and reflections in the probe pose.
 
 ## Cost
+The v4 rebake (2026-10-24, 501 tasks: the same queue plus 5 Cycles references) ran on 22 GPUs with two stops for the
+quota (see Rules), so it gives no clean timing.
 Measured on the final rebake (2026-10-18, RTX A4000, 27 lamp groups, 496 tasks): 78 GPU-h in all (the pool 75), about
 20 min per sunrise lightmap task; prep (four exports, unwrap, 14 scenes, queue) about 50 min of wall time, the pool
 3 h on 25 GPUs, post-processing about 45 min with the composites and merges in parallel jobs.

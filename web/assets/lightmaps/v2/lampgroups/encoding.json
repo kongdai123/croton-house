@@ -4,8 +4,8 @@
  "lampK": 3000,
  "textures": 9,
  "size": [
-  5700,
-  5700
+  5656,
+  5659
  ],
  "groups": [
   {
@@ -24,8 +24,12 @@
      ],
      "name": "Track light 1",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "kitchen",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819129,
      "w": 0.3333
     },
     {
@@ -38,8 +42,12 @@
      ],
      "name": "Track light 2",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "kitchen",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819124,
      "w": 0.3333
     },
     {
@@ -52,23 +60,33 @@
      ],
      "name": "Track light 3",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "kitchen",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819146,
      "w": 0.3333
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "kitchen"
+   ],
+   "lm": 1350.0,
    "tex": 0,
    "ch": 0,
-   "K": 0.02067,
+   "K": 0.26108,
    "color": [
-    1.90975,
-    0.80654,
-    0.23747
+    1.19737,
+    0.96982,
+    0.71782
    ],
-   "gain": 2.0
+   "gain": 1.0
   },
   {
    "name": "kitchenPendant",
@@ -86,8 +104,12 @@
      ],
      "name": "Oak pendant",
      "exterior": false,
+     "space": "kitchen",
+     "lm": 2800,
+     "emitter": "linear",
      "lit": true,
-     "energy": 35.0,
+     "energy": 0.4375,
+     "luminance": 1.360069,
      "w": 1.0
     }
    ],
@@ -96,15 +118,19 @@
     "golden",
     "sunrise"
    ],
+   "spaces": [
+    "kitchen"
+   ],
+   "lm": 2800.0,
    "tex": 0,
    "ch": 1,
-   "K": 0.10678,
+   "K": 0.01,
    "color": [
-    1.88082,
-    0.81523,
-    0.23668
+    1.59677,
+    0.88043,
+    0.42717
    ],
-   "gain": 1.5
+   "gain": 1.0
   },
   {
    "name": "kitchenCabinet",
@@ -122,8 +148,12 @@
      ],
      "name": "Range hood lamp 1",
      "exterior": false,
-     "lit": false,
-     "energy": 10.0,
+     "space": "kitchen",
+     "lm": 200,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.174966,
+     "luminance": 2.831631,
      "w": 0.5
     },
     {
@@ -136,21 +166,31 @@
      ],
      "name": "Range hood lamp 2",
      "exterior": false,
-     "lit": false,
-     "energy": 10.0,
+     "space": "kitchen",
+     "lm": 200,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.174966,
+     "luminance": 2.457771,
      "w": 0.5
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "kitchen"
+   ],
+   "lm": 400.0,
    "tex": 0,
    "ch": 2,
-   "K": 0.03509,
+   "K": 0.01,
    "color": [
-    1.85439,
-    0.82206,
-    0.24681
+    1.47119,
+    0.90817,
+    0.52216
    ],
    "gain": 1.0
   },
@@ -170,8 +210,12 @@
      ],
      "name": "Track light 1",
      "exterior": false,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
      "lit": true,
-     "energy": 23.333,
+     "energy": 2.331804,
+     "luminance": 6.819114,
      "w": 0.3333
     },
     {
@@ -184,8 +228,12 @@
      ],
      "name": "Track light 2",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819115,
      "w": 0.3333
     },
     {
@@ -198,24 +246,33 @@
      ],
      "name": "Track light 3",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819134,
      "w": 0.3333
     }
    ],
    "defaultOn": [
     "dusk",
-    "golden"
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "living"
+   ],
+   "lm": 1350.0,
    "tex": 1,
    "ch": 0,
-   "K": 0.01814,
+   "K": 0.10797,
    "color": [
-    2.02358,
-    0.77635,
-    0.2014
+    1.25433,
+    0.95629,
+    0.68406
    ],
-   "gain": 1.5
+   "gain": 1.0
   },
   {
    "name": "livingNiche",
@@ -233,22 +290,31 @@
      ],
      "name": "Alcove recessed can",
      "exterior": false,
+     "space": "living",
+     "lm": 650,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 70.0,
+     "energy": 0.693512,
+     "luminance": 1.513798,
      "w": 1.0
     }
    ],
    "defaultOn": [
     "dusk",
-    "golden"
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "living"
+   ],
+   "lm": 650.0,
    "tex": 1,
    "ch": 1,
-   "K": 0.17916,
+   "K": 0.01,
    "color": [
-    1.83224,
-    0.82925,
-    0.24085
+    1.71451,
+    0.85891,
+    0.29363
    ],
    "gain": 1.0
   },
@@ -268,8 +334,12 @@
      ],
      "name": "Track light 1",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819132,
      "w": 0.3333
     },
     {
@@ -282,8 +352,12 @@
      ],
      "name": "Track light 2",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819124,
      "w": 0.3333
     },
     {
@@ -296,23 +370,33 @@
      ],
      "name": "Track light 3",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "living",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819138,
      "w": 0.3333
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "living"
+   ],
+   "lm": 1350.0,
    "tex": 1,
    "ch": 2,
-   "K": 0.01097,
+   "K": 0.05447,
    "color": [
-    2.2657,
-    0.70833,
-    0.16227
+    1.20706,
+    0.96686,
+    0.71857
    ],
-   "gain": 2.0
+   "gain": 1.0
   },
   {
    "name": "family",
@@ -330,8 +414,12 @@
      ],
      "name": "Track light 1",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "office",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819119,
      "w": 0.3333
     },
     {
@@ -344,8 +432,12 @@
      ],
      "name": "Track light 2",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "office",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819121,
      "w": 0.3333
     },
     {
@@ -358,23 +450,33 @@
      ],
      "name": "Track light 3",
      "exterior": false,
-     "lit": false,
-     "energy": 23.333,
+     "space": "office",
+     "lm": 450,
+     "emitter": "spot",
+     "lit": true,
+     "energy": 2.331804,
+     "luminance": 6.819129,
      "w": 0.3333
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "office"
+   ],
+   "lm": 1350.0,
    "tex": 2,
    "ch": 0,
-   "K": 0.01529,
+   "K": 0.2763,
    "color": [
-    2.11389,
-    0.74862,
-    0.21013
+    1.16704,
+    0.97631,
+    0.7428
    ],
-   "gain": 2.0
+   "gain": 1.0
   },
   {
    "name": "dining",
@@ -392,22 +494,31 @@
      ],
      "name": "Paper lantern",
      "exterior": false,
+     "space": "dining",
+     "lm": 1100,
+     "emitter": "omni",
      "lit": true,
-     "energy": 55.0,
+     "energy": 0.171875,
+     "luminance": 0.036324,
      "w": 1.0
     }
    ],
    "defaultOn": [
     "dusk",
-    "golden"
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "dining"
+   ],
+   "lm": 1100.0,
    "tex": 2,
    "ch": 1,
-   "K": 1.62966,
+   "K": 0.01856,
    "color": [
-    1.92137,
-    0.80533,
-    0.21526
+    1.95364,
+    0.79733,
+    0.19947
    ],
    "gain": 1.0
   },
@@ -427,8 +538,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "hall",
+     "lm": 500,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.399373,
+     "luminance": 7.762077,
      "w": 0.5
     },
     {
@@ -441,23 +556,34 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "hall",
+     "lm": 500,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.399373,
+     "luminance": 7.762074,
      "w": 0.5
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "hall"
+   ],
+   "lm": 1000.0,
    "tex": 2,
    "ch": 2,
-   "K": 0.20629,
+   "K": 0.01,
    "color": [
-    1.85373,
-    0.82313,
-    0.23814
+    1.5524,
+    0.8917,
+    0.44619
    ],
-   "gain": 0.6
+   "gain": 1.0
   },
   {
    "name": "primary",
@@ -475,8 +601,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "primaryBedroom",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 0.2
     },
     {
@@ -489,8 +619,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "primaryBedroom",
+     "lm": 700,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.559122,
+     "luminance": 10.866914,
      "w": 0.2
     },
     {
@@ -503,8 +637,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "primaryBedroom",
+     "lm": 700,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.559122,
+     "luminance": 10.866905,
      "w": 0.2
     },
     {
@@ -517,8 +655,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "primaryBedroom",
+     "lm": 700,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 0.2
     },
     {
@@ -531,21 +673,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "primaryBedroom",
+     "lm": 700,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.559122,
+     "luminance": 10.866902,
      "w": 0.2
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "primaryBedroom"
+   ],
+   "lm": 3500.0,
    "tex": 3,
    "ch": 0,
-   "K": 0.18048,
+   "K": 0.01,
    "color": [
-    1.88297,
-    0.81514,
-    0.23119
+    1.59103,
+    0.88187,
+    0.42981
    ],
    "gain": 1.0
   },
@@ -565,9 +717,13 @@
      ],
      "name": "Woven rattan egg lamp",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
-     "w": 0.5
+     "space": "primaryBedroom",
+     "lm": 450,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.070312,
+     "luminance": 0.06487,
+     "w": 0.4286
     },
     {
      "key": "props-rooms-linen-lamp@-2.64,2.38,0.28",
@@ -579,21 +735,31 @@
      ],
      "name": "Stoneware lamp with glowing linen shade",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
-     "w": 0.5
+     "space": "primaryBedroom",
+     "lm": 600,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.09375,
+     "luminance": 0.170826,
+     "w": 0.5714
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "primaryBedroom"
+   ],
+   "lm": 1050.0,
    "tex": 3,
    "ch": 1,
-   "K": 0.41471,
+   "K": 0.01,
    "color": [
-    1.92228,
-    0.80484,
-    0.21749
+    1.93921,
+    0.80058,
+    0.20978
    ],
    "gain": 1.0
   },
@@ -613,8 +779,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "primaryBath",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866914,
      "w": 0.5
     },
     {
@@ -627,21 +797,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "primaryBath",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 0.5
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "primaryBath"
+   ],
+   "lm": 1400.0,
    "tex": 3,
    "ch": 2,
-   "K": 0.52078,
+   "K": 0.01,
    "color": [
-    1.83447,
-    0.82838,
-    0.2428
+    1.54507,
+    0.89362,
+    0.44882
    ],
    "gain": 1.0
   },
@@ -661,21 +841,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "primaryBathCloset",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985866,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "primaryBathCloset"
+   ],
+   "lm": 450.0,
    "tex": 4,
    "ch": 0,
-   "K": 0.06935,
+   "K": 0.01,
    "color": [
-    1.94019,
-    0.79999,
-    0.21282
+    1.66781,
+    0.86374,
+    0.38328
    ],
    "gain": 1.0
   },
@@ -695,8 +886,12 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "bedroomB",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 0.5
     },
     {
@@ -709,21 +904,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "bedroomB",
+     "lm": 700,
+     "emitter": "downlight",
+     "lit": true,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 0.5
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "bedroomB"
+   ],
+   "lm": 1400.0,
    "tex": 4,
    "ch": 1,
-   "K": 0.12472,
+   "K": 0.01,
    "color": [
-    1.85611,
-    0.8223,
-    0.23939
+    1.56741,
+    0.88758,
+    0.4428
    ],
    "gain": 1.0
   },
@@ -743,9 +948,13 @@
      ],
      "name": "Rattan bedside lamp",
      "exterior": false,
+     "space": "bedroomB",
+     "lm": 450,
+     "emitter": "omni",
      "lit": true,
-     "energy": 30.0,
-     "w": 0.3333
+     "energy": 0.070312,
+     "luminance": 1.407816,
+     "w": 0.3
     },
     {
      "key": "nightstandPine@7.64,2.21,0.00",
@@ -757,9 +966,13 @@
      ],
      "name": "Rattan bedside lamp",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
-     "w": 0.3333
+     "space": "bedroomB",
+     "lm": 450,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.070312,
+     "luminance": 1.407814,
+     "w": 0.3
     },
     {
      "key": "props-rooms-linen-lamp@4.32,4.91,0.80",
@@ -771,21 +984,31 @@
      ],
      "name": "Stoneware lamp with glowing linen shade",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
-     "w": 0.3333
+     "space": "bedroomB",
+     "lm": 600,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.09375,
+     "luminance": 0.170826,
+     "w": 0.4
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "bedroomB"
+   ],
+   "lm": 1500.0,
    "tex": 4,
    "ch": 2,
-   "K": 0.46523,
+   "K": 0.01,
    "color": [
-    1.96973,
-    0.79137,
-    0.21122
+    1.88743,
+    0.81233,
+    0.24593
    ],
    "gain": 1.0
   },
@@ -805,21 +1028,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "bedroomBCloset",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985867,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "bedroomBCloset"
+   ],
+   "lm": 450.0,
    "tex": 5,
    "ch": 0,
-   "K": 0.20348,
+   "K": 0.01,
    "color": [
-    1.84971,
-    0.82423,
-    0.23906
+    1.55819,
+    0.89045,
+    0.44149
    ],
    "gain": 1.0
   },
@@ -839,21 +1073,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "bathB",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866906,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "bathB"
+   ],
+   "lm": 700.0,
    "tex": 5,
    "ch": 1,
-   "K": 0.21691,
+   "K": 0.01,
    "color": [
-    1.80446,
-    0.83667,
-    0.24907
+    1.50779,
+    0.90329,
+    0.46271
    ],
    "gain": 1.0
   },
@@ -873,21 +1117,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "hallBath",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866905,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "hallBath"
+   ],
+   "lm": 700.0,
    "tex": 5,
    "ch": 2,
-   "K": 0.16263,
+   "K": 0.01,
    "color": [
-    1.80598,
-    0.83628,
-    0.2485
+    1.51092,
+    0.90253,
+    0.46106
    ],
    "gain": 1.0
   },
@@ -907,21 +1161,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "hallCloset",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985866,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "hallCloset"
+   ],
+   "lm": 450.0,
    "tex": 6,
    "ch": 0,
-   "K": 0.27892,
+   "K": 0.01,
    "color": [
-    1.82939,
-    0.83029,
-    0.2389
+    1.52996,
+    0.89831,
+    0.44682
    ],
    "gain": 1.0
   },
@@ -941,21 +1206,31 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "bedroom3",
+     "lm": 700,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.559122,
+     "luminance": 10.866909,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "bedroom3"
+   ],
+   "lm": 700.0,
    "tex": 6,
    "ch": 1,
-   "K": 0.03152,
+   "K": 0.01,
    "color": [
-    1.86686,
-    0.81946,
-    0.2358
+    1.57444,
+    0.88573,
+    0.44049
    ],
    "gain": 1.0
   },
@@ -975,8 +1250,12 @@
      ],
      "name": "Rattan bedside lamp",
      "exterior": false,
+     "space": "bedroom3",
+     "lm": 450,
+     "emitter": "omni",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.070312,
+     "luminance": 1.407814,
      "w": 0.5
     },
     {
@@ -989,21 +1268,31 @@
      ],
      "name": "Rattan bedside lamp",
      "exterior": false,
-     "lit": false,
-     "energy": 30.0,
+     "space": "bedroom3",
+     "lm": 450,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.070312,
+     "luminance": 1.407816,
      "w": 0.5
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "sunrise"
    ],
+   "spaces": [
+    "bedroom3"
+   ],
+   "lm": 900.0,
    "tex": 6,
    "ch": 2,
-   "K": 0.40701,
+   "K": 0.01,
    "color": [
-    2.03126,
-    0.77446,
-    0.19751
+    1.88873,
+    0.81127,
+    0.25253
    ],
    "gain": 1.0
   },
@@ -1023,9 +1312,13 @@
      ],
      "name": "Garage opener lamp",
      "exterior": false,
-     "lit": false,
-     "energy": 15.0,
-     "w": 0.1111
+     "space": "garage",
+     "lm": 800,
+     "emitter": "omni",
+     "lit": true,
+     "energy": 0.125,
+     "luminance": 0.162868,
+     "w": 0.0909
     },
     {
      "key": "garage-shopLight@-5.70,-1.60,0.00",
@@ -1037,9 +1330,13 @@
      ],
      "name": "LED linear shop light 1.2 m",
      "exterior": false,
+     "space": "garage",
+     "lm": 4000,
+     "emitter": "linear",
      "lit": true,
-     "energy": 60.0,
-     "w": 0.4444
+     "energy": 0.625,
+     "luminance": 0.875891,
+     "w": 0.4545
     },
     {
      "key": "garage-shopLight@-4.40,-3.60,0.00",
@@ -1051,9 +1348,13 @@
      ],
      "name": "LED linear shop light 1.2 m",
      "exterior": false,
+     "space": "garage",
+     "lm": 4000,
+     "emitter": "linear",
      "lit": true,
-     "energy": 60.0,
-     "w": 0.4444
+     "energy": 0.625,
+     "luminance": 0.875891,
+     "w": 0.4545
     }
    ],
    "defaultOn": [
@@ -1062,13 +1363,17 @@
     "noon",
     "sunrise"
    ],
+   "spaces": [
+    "garage"
+   ],
+   "lm": 8800.0,
    "tex": 7,
    "ch": 0,
-   "K": 0.22466,
+   "K": 0.01,
    "color": [
-    1.78684,
-    0.83657,
-    0.30193
+    1.57638,
+    0.88202,
+    0.47148
    ],
    "gain": 1.0
   },
@@ -1088,21 +1393,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "laundry",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985867,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "laundry"
+   ],
+   "lm": 450.0,
    "tex": 7,
    "ch": 1,
-   "K": 0.07017,
+   "K": 0.01,
    "color": [
-    1.85639,
-    0.82106,
-    0.2508
+    1.52003,
+    0.89713,
+    0.48776
    ],
    "gain": 1.0
   },
@@ -1122,21 +1438,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "walkin",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985867,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "walkin"
+   ],
+   "lm": 450.0,
    "tex": 7,
    "ch": 2,
-   "K": 0.24315,
+   "K": 0.01,
    "color": [
-    2.00066,
-    0.78361,
-    0.19699
+    1.77384,
+    0.83715,
+    0.33454
    ],
    "gain": 1.0
   },
@@ -1156,21 +1483,32 @@
      ],
      "name": "Recessed can light",
      "exterior": false,
+     "space": "linen",
+     "lm": 450,
+     "emitter": "downlight",
      "lit": true,
-     "energy": 30.0,
+     "energy": 0.359435,
+     "luminance": 6.985869,
      "w": 1.0
     }
    ],
    "defaultOn": [
-    "dusk"
+    "dusk",
+    "golden",
+    "noon",
+    "sunrise"
    ],
+   "spaces": [
+    "linen"
+   ],
+   "lm": 450.0,
    "tex": 8,
    "ch": 0,
-   "K": 0.2058,
+   "K": 0.01,
    "color": [
-    1.99382,
-    0.78541,
-    0.19928
+    1.72503,
+    0.84915,
+    0.3594
    ],
    "gain": 1.0
   },
@@ -1190,9 +1528,13 @@
      ],
      "name": "Porch wall sconce (black, perforated)",
      "exterior": true,
+     "space": "porch",
+     "lm": 500,
+     "emitter": "omni",
      "lit": true,
-     "energy": 30.0,
-     "w": 0.5
+     "energy": 0.078125,
+     "luminance": 0.318522,
+     "w": 0.625
     },
     {
      "key": "outdoor-front-lamp@-3.25,-10.10,0.22",
@@ -1204,21 +1546,30 @@
      ],
      "name": "Front garden lantern",
      "exterior": true,
+     "space": "frontYard",
+     "lm": 300,
+     "emitter": "omni",
      "lit": true,
-     "energy": 30.0,
-     "w": 0.5
+     "energy": 0.046875,
+     "luminance": 0.028122,
+     "w": 0.375
     }
    ],
    "defaultOn": [
     "dusk"
    ],
+   "spaces": [
+    "frontYard",
+    "porch"
+   ],
+   "lm": 800.0,
    "tex": 8,
    "ch": 1,
-   "K": 0.41537,
+   "K": 0.01054,
    "color": [
-    1.77471,
-    0.84426,
-    0.26156
+    1.77614,
+    0.84333,
+    0.2665
    ],
    "gain": 1.0
   },
@@ -1229,34 +1580,37 @@
    "exterior": false,
    "members": [],
    "defaultOn": [
-    "sunrise",
-    "noon",
+    "dusk",
     "golden",
-    "dusk"
+    "noon",
+    "sunrise"
    ],
+   "spaces": [],
+   "lm": 0,
    "tex": 8,
    "ch": 2,
    "K": 0.01,
    "color": [
-    0.87048,
-    1.0317,
-    1.06733
+    0.86827,
+    1.03201,
+    1.07076
    ],
    "gain": 1.0
   }
  ],
+ "lmPerW": 6400.0,
  "rows": [
-  2850,
-  2850
+  2829,
+  2830
  ],
  "tiers": {
   "half": [
-   2850,
-   2850
+   2828,
+   2830
   ],
   "quarter": [
-   1425,
-   1425
+   1414,
+   1415
   ]
  },
  "probes": {
@@ -1265,6 +1619,6 @@
  },
  "refl": {
   "meta": "refl/meta.json",
-  "layers": 78
+  "layers": 93
  }
 }

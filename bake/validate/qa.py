@@ -379,7 +379,8 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
     # a unit through the outline (a door frame spanning wall and stucco skin: part of it outdoors) or in an exterior
     # opening (a glazed door's leaves, facing the garden on one side and the room on the other) holds the garden's light
     # beside the room's; it belongs to neither population (the garage side door's frame read 67x the garage's median at
-    # golden hour, the french doors' leaves 7x the office's at dusk: QA of the 2026-10-18 bake)
+    # golden hour, the french doors' leaves 7x the office's at dusk: QA of the 2026-10-18 bake). Only the outlier test
+    # leaves them out: the space means, the group footprints and the details keep the plain plan space.
     outdoor = {s['id'] for s in plan.spaces if s.get('zone') == 'exterior'}
     ext_open = [o for o in plan.openings if outdoor & set(o.get('connects') or [])]
     def straddles(u):
@@ -387,7 +388,7 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
         x, y = plan_xy(u['centre'])
         return len(ins) == 2 or any(o['x0'] - 0.05 <= x <= o['x1'] + 0.05 and o['y0'] - 0.05 <= y <= o['y1'] + 0.05 for o in ext_open)
     through = [straddles(u) for u in units]
-    space_of = [None if big[i] or through[i] else (plan.space_at(*centres[i], 0.3) or {}).get('id') for i in range(U)]
+    space_of = [None if big[i] else (plan.space_at(*centres[i], 0.3) or {}).get('id') for i in range(U)]
     rep.metric('units.throughOutline', sum(through))
     outliers = []; unit_means = {}
     for s in slotkeys:
@@ -400,6 +401,7 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
         for sp, idx in by.items():
             tot = sum(st['lum'][i] for i in idx); cnt = sum(st['covered'][i] for i in idx)
             rep.metric(f'slot.{s}.space.{sp}', tot / max(cnt, 1))
+            idx = [i for i in idx if not through[i]]
             if len(idx) < uT['outlierMinUnits']: continue
             lg = np.log(np.maximum(m[idx], uT['outlierFloor'])); med = np.median(lg); mad = max(np.median(np.abs(lg - med)) * 1.4826, uT['outlierMinSigma'])
             for j, i in enumerate(idx):
@@ -586,6 +588,36 @@ def check_probes(rep, A, T, plan, slots):
     rep.details['probeSH'] = info
 
 
+def refl_pick(meta, P, margin=0.25):
+    """The probe web/src/shaders/reflection.glsl.js reflProbe takes at three-frame point P, and how: 'box', 'margin' or
+    'nearest' (out of every box and margin: another room's panorama, through walls, without parallax)."""
+    best, score, how = None, 1e9, None
+    for m in meta:
+        lo, hi = m['min'], m['max']
+        if min(hi[0] - lo[0], hi[2] - lo[2]) < 0.3: continue
+        inb = all(lo[k] - 0.03 <= P[k] <= hi[k] + 0.03 for k in range(3)); near = all(lo[k] - margin <= P[k] <= hi[k] + margin for k in range(3))
+        sc = math.dist(P, m['p']) + (0 if inb else 100 if near else 1000)
+        if sc < score: best, score, how = m['i'], sc, 'box' if inb else 'margin' if near else 'nearest'
+    return best, how
+
+
+def refl_coverage(plan, meta, rT, step=0.1):
+    """Interior spaces with room for a probe whose floor falls to the nearest-probe fallback: the walk-in, linen closet
+    and laundry had no probe and reflected the garage's (its strip lights as a speckled pale patch, 2026-10-24)."""
+    if not meta: return []
+    out = []
+    for s in plan.spaces:
+        if s.get('zone') not in ('interior', 'annex'): continue
+        r = plan.rect_of(s['id'])
+        if min(r['x1'] - r['x0'], r['y1'] - r['y0']) < 2 * layoutlib.WALL_CLEARANCE: continue   # too narrow for a probe
+        picks = [refl_pick(meta, (x, 0.01, -y)) for x in np.arange(r['x0'] + step / 2, r['x1'], step) for y in np.arange(r['y0'] + step / 2, r['y1'], step)
+                 if (plan.space_at(x, y) or {}).get('id') == s['id']]
+        far = [p for p, how in picks if how == 'nearest']
+        if picks and len(far) > rT['maxFallback'] * len(picks):
+            out.append(f'{s["id"]}{SEP}{len(far) / len(picks):.0%} of its floor reflects probe(s) {sorted(set(far))} from out of every box: give it a reflProbe seed (web/data/plan_overlay.json)')
+    return out
+
+
 def check_refl(rep, A, T, plan, slots):
     rT = T['refl']; layout, place, black, cross = [], [], [], []
     import io, contextlib
@@ -645,6 +677,8 @@ def check_refl(rep, A, T, plan, slots):
             elif bl > rT['maxBlackFraction']: black.append(f'{s} probe {i}{SEP}{bl:.0%} of the panorama is black')
             elif float(mx.std()) < rT['minStd']: black.append(f'{s} probe {i}{SEP}panorama is uniform (std {mx.std():.3g})')
         if fr: rep.metric(f'refl.{s}.blackFractionMean', np.mean(fr)); rep.metric(f'refl.{s}.blackFractionMax', max(fr)); rep.metric(f'refl.{s}.panoramas', len(fr))
+    cover = refl_coverage(plan, first and sorted(read_json(A.aux_dir(first[0]) / 'refl' / 'meta.json'), key=lambda m: m['i']), rT)
+    rep.check('refl-coverage', f'interior spaces with room for a probe (>= {2 * layoutlib.WALL_CLEARANCE:g} m across) whose floor mostly reflects a probe out of every box (the shader\'s nearest-probe fallback, through walls and without parallax): over {rT["maxFallback"]:.0%} of the floor', 'fail', cover)
     rep.check('refl-layout', 'refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points %g m, boxes %g m)' % (rT['pointTol'], rT['boxTol']), 'fail', layout)
     rep.check('refl-placement', 'reflection probes inside a plan space, clear of walls, box holding the centre and stopping at walls except at openings', 'fail', place)
     rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]} in the daylight and every lamp layer) and not uniform', 'fail', black)

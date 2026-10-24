@@ -5,8 +5,10 @@ import { getDoors, setFrench, setHinged, setBifold, setSlider, getColliders, pos
 import { t, getLang } from './ui.js';
 import { scenicView, viewDepth, SEAT_LOOK_RANGE } from './view.js';
 import { otherSide, roomName } from './plan.js';
+import { fastPicks } from './pick_bvh.js';
 
 const WALL_BOX = new THREE.Box3(), WALL_HIT = new THREE.Vector3();
+
 
 // Name of a door as seen from plan point (px, py): the space on its far side from plan.json's openings ("Door to the
 // front bedroom"), or "Front door" when the front door leads outside.
@@ -38,6 +40,7 @@ export class Interact {
     this.shadowLights = []; scene.traverse(o => { if (o.isLight && o.castShadow) this.shadowLights.push(o); });
     this.lightRoots = []; scene.traverse(o => { if (!o.isLight && o.userData.lightSwitch) this.lightRoots.push(o); });
     this.pickRoots = [...this.layout.interactive, ...this.lightRoots];
+    this.heavy = fastPicks([...this.pickRoots, ...getDoors().map(d => d.group)]);
     const canvas = document.getElementById('gl');
     canvas.addEventListener('mousedown', (e) => {
       if (!player.locked) { this.pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); }
@@ -68,12 +71,18 @@ export class Interact {
     this.ray.setFromCamera(this.target(), this.camera);
     const wall = this.wallDist(this.ray.ray);
     let best = null;
+    // nothing past the first wall (or past a nearer pick, for doors) can be chosen: the ray stops there, so three skips
+    // every mesh whose bounds start beyond it (the per-frame aim cost ~1.5-5 ms on a 2.1 GHz Xeon, most of it far meshes)
+    const far = this.ray.far;
+    this.ray.far = Math.min(far, wall);
     for (const h of this.ray.intersectObjects(this.pickRoots, true)) {
       if (h.distance > wall) break;
       let o = h.object; while (o && !o.userData.interactiveRoot && !o.userData.lightSwitch) o = o.parent;
       if (o) { best = { root: o, point: h.point, dist: h.distance }; break; }
     }
+    this.ray.far = Math.min(far, wall + 0.05, best?.dist ?? Infinity);
     const dh = this.ray.intersectObjects(getDoors().map(d => d.group), true)[0];
+    this.ray.far = far;
     if (dh && dh.distance <= wall + 0.05 && (!best || dh.distance < best.dist)) { let o = dh.object; while (o && !o.userData.door) o = o.parent; if (o) return { door: o.userData.door, point: dh.point, dist: dh.distance }; }
     const pet = this.pets?.pick(this.ray.ray, Math.min(wall, best?.dist ?? Infinity, 2.2));
     if (pet) return pet;

@@ -163,7 +163,7 @@ export function batchStatic(roots, { skip = [], anchors = [], animated = [] } = 
     for (const list of by.values()) { const m = merge(list, root); if (m) frozen.add(m); }
     root.add(frozen);
     if (!anchorSet.has(root)) root.updateMatrixWorld = swayUMW;
-    lod.push({ root, frozen, parts, far: false });
+    lod.push({ root, frozen, parts, far: false, ...swaySets(root, frozen, parts) });
     stats.before += parts.length; stats.after += frozen.children.length;
   }
   stats.lod = lod; stats.lmIds = seen.size;
@@ -180,6 +180,18 @@ export function updateRoomVisibility(rooms, p) {
   }
 }
 
+// What a plant hides when far: whole branches of the root that hold nothing but its moving parts (a sway pivot and its
+// leaves: three's render walk then stops at the branch instead of visiting every pivot group of every far plant, ~4000
+// nodes in a garden view), and the parts outside such branches one by one. Shown or hidden, every mesh ends as before.
+function swaySets(root, frozen, parts) {
+  const set = new Set(parts), branches = [], loose = [];
+  const only = o => { let ok = true; o.traverse(x => { if (x.isMesh && !set.has(x)) ok = false; }); return ok; };
+  for (const c of root.children) if (c !== frozen && only(c)) branches.push(c);
+  const inBranch = o => { for (let p = o; p && p !== root; p = p.parent) if (branches.includes(p)) return true; return false; };
+  for (const o of parts) if (!inBranch(o)) loose.push(o);
+  return { hide: [...branches, ...loose] };
+}
+
 // Per frame: plants beyond SWAY_R show their frozen copy and stop animating (layout.animate skips userData.swayFar roots).
 const wp = new THREE.Vector3();
 export function updateSwayLod(lod, camPos) {
@@ -191,7 +203,7 @@ export function updateSwayLod(lod, camPos) {
     e.far = far; e.root.userData.swayFar = far;
     if (far) e.root.userData.animate(0);
     e.frozen.visible = far;
-    for (const o of e.parts) o.visible = !far;
+    for (const o of e.hide) o.visible = !far;
     if (far) e.root.updateMatrixWorld(true);
   }
 }

@@ -4,7 +4,7 @@
 // in one job, one after the other, so before/after numbers come from the same node. Refuses a software rasteriser: run
 // it in a scavenger GPU job (bake/validate/RENDER_GATE.md), never on a laptop.
 //   node perf_gpu.mjs --site <dir> --out <file.json> [--variants 'name=<dist dir>?<query>,...'] [--query 'tier=hq&lmres=full']
-//        [--size 2560x1440] [--cameras cameras.json] [--only id,id] [--dwell 4] [--settle 1.2] [--walk] [--profile]
+//        [--size 2560x1440] [--cameras cameras.json] [--only id,id] [--dwell 4] [--settle 1.2] [--walk] [--profile] [--mix]
 //   A variant serves <dist dir> (absolute, or relative to --site) as the site's dist/ and adds its query to --query, e.g.
 //   --variants 'before=/x/dist_before,after=dist,after_nocull=dist?cull=0'. Default: one variant, the site's own dist/.
 // Labels: update (JS outside any render), pass:<Pass> (composer passes, exclusive of what they nest), sunDepth (the PCSS
@@ -157,7 +157,8 @@ function installProbe() {
   A.scene.traverse(o => { if (!o.isMesh) return; meshes++; if (o.userData.batch) batched++; if (o.isInstancedMesh) instanced++; });
   A.scene.traverseVisible(o => { if (!o.isMesh) return; visible++; if (o.castShadow) casters++; });
   return { gpuTimer: !!ext, renderer: String(gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info')?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER)), canvas: [r.domElement.width, r.domElement.height],
-    meshes, visibleMeshes: visible, visibleCasters: casters, batchedMeshes: batched, instanced, programs: info.programs?.length ?? 0, sunShadow: { ...ss() }, fpsCap: A.state.fpsCap, quality: A.state.quality, build: globalThis.CROTON_BUILD ?? null };
+    meshes, visibleMeshes: visible, visibleCasters: casters, batchedMeshes: batched, instanced, programs: info.programs?.length ?? 0, sunShadow: { ...ss() }, fpsCap: A.state.fpsCap, quality: A.state.quality, build: globalThis.CROTON_BUILD ?? null,
+    merges: Object.fromEntries(['batch2', 'plantClusters', 'restClusters', 'stowed'].map(k => [k, A.state[k] ?? null])) };
 }
 
 // one window of frames: settle, then record for `seconds`, then wait for the GPU queries
@@ -196,16 +197,85 @@ function summarize(frames) {
     seg,
   };
 }
+// CPU profile of the page's own loop: self time per function, inclusive time (each function counted once per sample,
+// whatever its depth), and for the hottest native calls (no script location: getParameter, bufferData, ...) the
+// script functions that call them.
 async function profile(page, seconds) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
   await cdp.send('Profiler.start');
   await page.evaluate(s => new Promise(r => setTimeout(r, s * 1000)), seconds);
   const { profile } = await cdp.send('Profiler.stop');
-  const byId = new Map(profile.nodes.map(n => [n.id, n])), self = new Map(); let total = 0;
-  profile.samples.forEach((id, i) => { const f = byId.get(id).callFrame, k = `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}:${f.columnNumber + 1}`; const d = profile.timeDeltas[i] || 0; self.set(k, (self.get(k) || 0) + d); total += d; });
+  const byId = new Map(profile.nodes.map(n => [n.id, n])), parent = new Map(), self = new Map(), incl = new Map(), callers = new Map(); let total = 0;
+  for (const n of profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+  const key = f => `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber + 1}:${f.columnNumber + 1}`;
+  profile.samples.forEach((id, i) => {
+    const d = profile.timeDeltas[i] || 0, n = byId.get(id), k = key(n.callFrame); total += d;
+    self.set(k, (self.get(k) || 0) + d);
+    const seen = new Set();
+    for (let p = id; p != null; p = parent.get(p)) { const pk = key(byId.get(p).callFrame); if (!seen.has(pk)) { seen.add(pk); incl.set(pk, (incl.get(pk) || 0) + d); } }
+    if (!n.callFrame.url) {   // a native call: who calls it
+      let p = parent.get(id); while (p != null && !byId.get(p).callFrame.url) p = parent.get(p);
+      const m = callers.get(k) ?? new Map(); callers.set(k, m); const ck = p == null ? '(root)' : key(byId.get(p).callFrame); m.set(ck, (m.get(ck) || 0) + d);
+    }
+  });
   await cdp.detach();
-  return { totalMs: +(total / 1000).toFixed(0), top: [...self].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, v]) => [k, +(v / total * 100).toFixed(1)]) };
+  const pctOf = v => +(v / total * 100).toFixed(1);
+  const top = (m, n) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => [k, pctOf(v)]);
+  const natives = [...self].filter(([k]) => / :0:0$/.test(k) && !/^\((program|idle|garbage collector|root)\)/.test(k)).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  return { totalMs: +(total / 1000).toFixed(0), top: top(self, 40), inclusive: top(incl, 60),
+    callers: Object.fromEntries(natives.map(([k]) => [k, top(callers.get(k) ?? new Map(), 6)])) };
+}
+// --mix: one frame drawn with every draw call classified: per render (the composer pass, the scene's name, the camera)
+// the draws by kind (batch.js: static merged cells, frozen far plants, near plant parts, toggle parts, movables, doors,
+// instanced garden layers, skinned pets) and the largest kind / placement module / material groups; the nodes three's
+// projectObject visits per render of the scene (visible nodes and their hidden children).
+function mixFrame() {
+  const A = window.__app, r = A.renderer, sun = A.lighting.sun;
+  const anim = new Set(A.layout.animated), inter = new Set(A.layout.interactive), doors = new Set(A.getDoors().map(d => d.group));
+  const info = o => {
+    let frozen = false, door = false, animated = null, interactive = null, placed = null;
+    for (let p = o; p; p = p.parent) {
+      if (p.name === 'frozen' && p.userData.batch) frozen = true;
+      if (doors.has(p)) door = true;
+      if (anim.has(p)) animated = p;
+      if (inter.has(p)) interactive = p;
+      if (!placed && p.userData?.placement) placed = p;
+    }
+    const merged = o.userData.batch ? ' merged' : ' parts';
+    const kind = o.isInstancedMesh ? 'instanced' : o.isSkinnedMesh ? 'skinned' : frozen ? 'frozen plant' : (animated ?? interactive)?.userData.toggle ? 'toggle' + merged
+      : animated ? 'near plant' + merged : interactive ? 'movable' + merged : door ? 'door' + merged : o.userData.batch ? 'static merged' : 'single';
+    return { kind, mod: placed?.userData.placement?.m ?? (o.name || o.parent?.name || '?') };
+  };
+  const passes = [A.lighting.composer.passes, A.lighting.taa?.internal?.passes].filter(Boolean).flat();
+  let current = 'update';
+  const undo = [];
+  for (const pass of passes) { const fn = pass.render; pass.render = function (...a) { const was = current; current = pass.constructor?.name || 'Pass'; try { return fn.apply(this, a); } finally { current = was; } }; undo.push(() => { pass.render = fn; }); }
+  const out = {}, seenRender = new WeakSet();
+  let renderLabel = null;
+  const render = r.render;
+  r.render = function (scene, camera) {
+    const was = renderLabel;
+    const cam = camera === A.camera ? 'camera' : camera === sun.shadow.camera ? 'sun' : (camera?.name || camera?.type);
+    renderLabel = `${current} ${scene?.isMesh ? 'quad' : scene?.name || scene?.type}/${cam}`;
+    if (scene?.isScene && !seenRender.has(scene)) seenRender.add(scene);
+    try { return render.apply(this, arguments); } finally { renderLabel = was; }
+  };
+  undo.push(() => { r.render = render; });
+  const rbd = r.renderBufferDirect;
+  r.renderBufferDirect = function (camera, scene, geometry, material, object) {
+    const label = renderLabel ?? `${current} direct`, t = out[label] ??= { draws: 0, kinds: {}, detail: {} };
+    const { kind, mod } = info(object), d = `${kind} | ${mod} | ${material?.name || material?.type}`;
+    t.draws++; t.kinds[kind] = (t.kinds[kind] || 0) + 1; t.detail[d] = (t.detail[d] || 0) + 1;
+    return rbd.apply(this, arguments);
+  };
+  undo.push(() => { r.renderBufferDirect = rbd; });
+  try { window.renderAt(window.simTime() + 1 / 60); } finally { for (const u of undo.reverse()) u(); }
+  let visible = 0, hiddenChildren = 0, hiddenBatched = 0;
+  const walk = o => { if (!o.visible) { hiddenChildren++; if (o.userData.batched) hiddenBatched++; return; } visible++; for (const c of o.children) walk(c); };
+  walk(A.scene);
+  for (const t of Object.values(out)) t.detail = Object.fromEntries(Object.entries(t.detail).sort((a, b) => b[1] - a[1]).slice(0, 40));
+  return { renders: out, projectVisits: { visible, hiddenChildren, hiddenBatched } };
 }
 
 // --rounds N: the variants N times over, interleaved (a, b, a, b): pages on a shared node drift by 20% between loads, so a
@@ -244,6 +314,11 @@ for (let round = 0; round < ROUNDS; round++) for (const v of variants) {
       return { cpu: med(cpu), finishWait: med(wait) };
     });
     if (argv.includes('--profile')) s.profile = await profile(page, 2);
+    if (argv.includes('--mix')) {
+      s.mix = await page.evaluate(mixFrame);
+      const main = Object.entries(s.mix.renders).sort((a, b) => b[1].draws - a[1].draws).slice(0, 4);
+      console.log(`[${v.name}] ${c.id.padEnd(18)} mix: ${main.map(([k, t]) => `${k} ${t.draws} ${JSON.stringify(t.kinds)}`).join(' || ')} | visits ${JSON.stringify(s.mix.projectVisits)}`);
+    }
     await writeFile(OUT, JSON.stringify(result, null, 1));
     console.log(`[${v.name}] ${c.id.padEnd(18)} fps ${s.fps} | cpu ${s.cpuMed} (js ${s.jsMed}, render ${s.renderCpuMed}) | gpu ${s.gpuMed} | serial cpu ${s.serial.cpu} + wait ${s.serial.finishWait} | calls ${s.calls} tris ${s.tris} | shadow ${s.shadowRefreshPerS}/s`);
   }

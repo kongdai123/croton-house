@@ -35,7 +35,9 @@ async function compareInPage(name) {
   const grab = () => { r.setRenderTarget(null); const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
   // the SSR pass jitters its rays by a frame counter: every draw here gets the same one
   const ssr = A.lighting.reflections, f0 = ssr?.frame ?? 0;
-  const draw = () => { if (ssr) ssr.frame = f0; const calls = r.info.render.calls; r.info.autoReset = false; A.lighting.composer.render(); const n = r.info.render.calls - calls; r.info.autoReset = true; return n; };
+  // (and the temporal passes start afresh each draw: TAA and volumetric history, their noise frames, the contact
+  // shadows' frame and the film grain, so a draw depends only on the scene: window.freshDraw)
+  const draw = () => { if (ssr) ssr.frame = f0; window.freshDraw(); const calls = r.info.render.calls; r.info.autoReset = false; A.lighting.composer.render(); const n = r.info.render.calls - calls; r.info.autoReset = true; return n; };
   const wind = A.baked?.puddleRefl?.uniforms.uPuddleWind, windWas = wind?.value; if (wind) wind.value = 0;
   try {
     c.setEnabled(true); c.update(); const culled = c.stats.culled, off = c.stats.off;
@@ -78,6 +80,11 @@ for (const slot of slots) {
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 600000 });
   if (!(await page.evaluate(() => !!window.__app.culling))) { console.log('no room culling in this build'); process.exit(2); }
   await page.evaluate(`window.diffImages = ${diffImages.toString()}`);
+  await page.evaluate(() => { window.freshDraw = () => {
+    const A = window.__app, shafts = A.baked?.shafts, contact = A.scene.userData.contact?.march?.uFrame;
+    if (shafts) { shafts.reset(); shafts.frame = 0; } if (contact) contact.value = 63; if (A.lighting.grade?.seed) A.lighting.grade.seed.value = 0;
+    A.lighting.taa?.reset();
+  }; });
   await page.evaluate(() => { window.__app.player.move = () => {}; });
   // gate cameras, with their door states
   for (const c of cams) {
@@ -121,7 +128,7 @@ for (const slot of slots) {
       const r = await page.evaluate(async ([name, id]) => {
         const A = window.__app, r = A.renderer, gl = r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, pc = A.baked.sunShadow;
         const grab = () => { r.setRenderTarget(null); const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
-        const ssr = A.lighting.reflections, f0 = ssr?.frame ?? 0, draw = () => { if (ssr) ssr.frame = f0; A.lighting.composer.render(); };
+        const ssr = A.lighting.reflections, f0 = ssr?.frame ?? 0, draw = () => { if (ssr) ssr.frame = f0; window.freshDraw(); A.lighting.composer.render(); };
         const d = A.getDoors().find(d => d.id === id), leaves = d.pivot ? [d.pivot] : d.leaves.map(l => l.pivot), rest = leaves.map(p => p.rotation.y);
         pc.render(); await new Promise(res => setTimeout(res, 60)); draw(); const a = grab();
         const partials = pc.stats.partialRenders, full = pc.stats.staticRenders - partials;

@@ -16,6 +16,9 @@ import { Markers } from './markers.js';
 import { UI, t, setLang, getLang } from './ui.js';
 import { Human } from './human.js';
 import { batchStatic, stillParts, updateSwayLod, updateRoomVisibility } from './batch.js';
+import { batchBaked, stowSources } from './batch_baked.js';
+import { createPlantClusters } from './plant_clusters.js';
+import { createRestClusters } from './rest_clusters.js';
 import * as roles from './lighting_roles.js';
 import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
@@ -149,7 +152,7 @@ await step(0.68, 'finishing');
 const batch = Q.get('batch') === '0' ? { lod: [] } : batchStatic([houseRoot, layout.root], { skip: getDoors().map(d => d.group), anchors: layout.interactive, animated: layout.animated });
 roles.classifyLighting(scene);
 // Baked sunrise is the default. Keep the complete legacy setup until staging succeeds.
-let baked = null;
+let baked = null, batch2 = null, plantClusters = null, restClusters = null, stowed = null;
 state.baked = false;
 state.bakedFallback = bakedUnavailable;
 if (bakedWanted && !state.bakedFallback) {
@@ -161,9 +164,35 @@ if (bakedWanted && !state.bakedFallback) {
       onProgress: p => ui.progress(0.69 + p * 0.22) });
     state.baked = true; state.dusk = false;
     state.bakedSlots = baked.availableSlots; state.bakedSlot = baked.slotName;
+    // what batchStatic had to keep apart for the bake, merged now that it is applied (batch_baked.js); ?batch2=0: off
+    if (Q.get('batch2') !== '0') {
+      try {   // a failure leaves the scene as it was: the walkthrough draws the meshes unmerged
+        const plants = layout.animated.filter(o => !o.userData.toggle && roles.roleOf(o) === 'plant');
+        batch2 = batchBaked({ roots: [houseRoot, layout.root], skip: [...getDoors().map(d => d.group), ...layout.movables, ...plants], moving: layout.animated.filter(o => !plants.includes(o)) });
+        roles.classifyLighting(scene); baked.sunShadow.invalidate();
+        state.batch2 = batch2.stats;
+      } catch (err) { console.warn('runtime merges skipped', err); }
+    }
+    // the far plants' frozen copies per material and cell, for the walkthrough camera (plant_clusters.js); ?plantmerge=0: off
+    if (Q.get('plantmerge') !== '0' && batch.world) {
+      try { plantClusters = createPlantClusters({ lod: batch.lod, camera, parent: batch.world }); state.plantClusters = plantClusters.stats; }
+      catch (err) { console.warn('far plant merge skipped', err); plantClusters = null; }
+    }
+    // doors, toggles and carried pieces at rest, per material and cell, for the walkthrough camera (rest_clusters.js);
+    // ?restmerge=0: off
+    if (Q.get('restmerge') !== '0' && batch.world) {
+      const toggles = new Set([...layout.animated, ...layout.interactive].filter(o => o.userData.toggle));
+      try { restClusters = createRestClusters({ roots: [...getDoors().map(d => d.group), ...layout.movables, ...toggles], camera, parent: batch.world }); state.restClusters = restClusters.stats; }
+      catch (err) { console.warn('rest merge skipped', err); restClusters = null; }
+    }
+    // the merged meshes' hidden sources, per parent in one hidden group: the render walk skips them (?stow=0: off)
+    if (Q.get('stow') !== '0') {
+      try { stowed = stowSources([houseRoot, layout.root]); state.stowed = { groups: stowed.groups, sources: stowed.sources }; }
+      catch (err) { console.warn('stowing skipped', err); stowed = null; }
+    }
     // the enclosed fit-outs updateRoomVisibility shows and hides: tracked casters for the sun-shadow cache, so walking in
     // and out of their rooms redraws base around them, not all of it (a 60 ms hitch at bedroom 3's door)
-    if (batch.rooms?.length) baked.sunShadow.track(batch.rooms.flatMap(r => [r.group, ...r.roots]));
+    if (batch.rooms?.length) baked.sunShadow.track(batch.rooms.flatMap(r => [r.group, ...r.roots]), false, true);   // rigid: only shown and hidden
   } catch (err) { state.bakedFallback = err.message; }
 }
 if (lighting.taa && baked) lighting.taa.noise = baked.sunShadow.uniforms.uSunFrame;   // PCSS rotations integrate under TAA
@@ -259,8 +288,11 @@ function setQuality(name) {
 async function fallbackLegacy(err) {
   if (!baked) return;
   state.bakedFallback = err.message;
+  stowed?.undo(); stowed = null;
+  batch2?.undo(); batch2 = null;   // its merged meshes carry the baked materials
+  plantClusters?.dispose(); plantClusters = null; restClusters?.dispose(); restClusters = null;
   baked.dispose(); baked = null; state.baked = false;
-  if (window.__app) window.__app.baked = null;
+  if (window.__app) { window.__app.baked = null; window.__app.batch2 = null; }
   ui.renderHelp(); ui.syncLegends();
   const file = await daylightFile;
   if (!lighting.daylight?.load(file)) lighting.bakeDaylight();
@@ -395,11 +427,13 @@ function frame(dt) {
   markers.update(dt);
   updateSwayLod(batch.lod, camera.position);
   updateRoomVisibility(batch.rooms, camera.position);
+  plantClusters?.update();   // after both: which far plants show their frozen copy
   layout.animate(simT); if (!viewpoints.panoOpaque) soft('mirrors', () => layout.updateMirrors(camera, mirrorsOn(), renderer));
   garden.update(simT);
   minimap.draw();
   soft('lighting.update', () => lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1)));
   try { baked?.updateMovables(dt); } catch (err) { if (!gl0.isContextLost()) fallbackLegacy(err); }   // a lost context is not the bake's fault
+  restClusters?.update();   // after the sun-shadow cache's scan brought the tracked roots' matrices up to date
   if (culling) soft('room culling', culling.update);   // after everything that moves the camera or a door this frame
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
@@ -434,7 +468,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
+window.__app = { baked, batch2, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
 // Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
 // 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
 // the old 30 fps cap. Skipped display refreshes cost nothing.
@@ -444,6 +478,9 @@ state.fpsCap = fpsCap; state.pacing = pacing;
 let readyFrames = 0;
 // ?capture: the app stops drawing on its own so a recorder can step it frame by frame with renderAt (tools/promo.mjs).
 const CAPTURE = Q.has('capture');
+// ?simdt=<s>: the page's own frames advance the clock by this, not by the time that passed (two pages stepped alike draw
+// alike: tools/ab_check.mjs)
+const SIM_DT = Q.has('simdt') ? Math.min(0.1, Math.max(0, +Q.get('simdt') || 0)) : null;
 // Adaptive start (start_quality.js): a desktop's tier, guessed from its GPU's name, is timed once after the first frames
 // and stepped up or down once (a step up is timed again and may be handed back). J, ?tier=, ?capture, ?adapt=0 and ?fast
 // end it.
@@ -462,7 +499,7 @@ const loop = (now) => {
   startQuality.begin(now);
   if (document.hidden || viewpoints.panoActive || photo.active) startQuality.pause(now);
   const timed = startQuality.wants(now);
-  const dt = Math.min(0.1, clock.getDelta()), t0 = performance.now();
+  const dt = SIM_DT ?? Math.min(0.1, clock.getDelta()), t0 = performance.now();
   if (!document.hidden) soft('frame', () => frame(dt));
   const work = performance.now() - t0;
   if (timed) { gl0.finish(); startQuality.sample(work, performance.now() - t0, now); }   // the frame's whole cost, GPU included

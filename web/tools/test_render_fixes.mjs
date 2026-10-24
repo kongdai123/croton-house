@@ -56,6 +56,39 @@ try {
   scene.add(new THREE.Mesh(new THREE.BoxGeometry(), late)); taa.patchTextures(); assert.equal(taa.materials.size, 2);
   const clonedShader = { uniforms: {}, fragmentShader: '#include <map_fragment>' }; late.onBeforeCompile(clonedShader, renderer);
   assert.equal(clonedShader.fragmentShader.match(/uniform float uTaaLodBias/g).length, 1);
+  // per frame: the whole scene once (and after invalidateTextures), then a slice per frame; a drawn material at once
+  {
+    const s = new THREE.Scene(), cam = new THREE.PerspectiveCamera(), calls = [];
+    const r = { getPixelRatio: () => 1, domElement: { addEventListener() {}, removeEventListener() {} }, renderBufferDirect(...a) { calls.push(a); } };
+    const c = { passes: [], renderTarget1: new THREE.WebGLRenderTarget(1, 1), renderTarget2: new THREE.WebGLRenderTarget(1, 1),
+      insertPass(p, i) { this.passes.splice(i, 0, p); p.setSize(64, 64); }, removePass() {}, dispose() {} };
+    c.passes.push({ scene: s, isRenderPass: true, setSize() {} }, { isOutputPass: true });
+    const p = createTAA(r, cam, { composer: c, setQuality() {}, applyTime: async () => {} });
+    const textured = () => new THREE.MeshStandardMaterial({ map: new THREE.Texture() });
+    const group = new THREE.Group(); s.add(group);
+    for (let i = 0; i < 1000; i++) group.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+    const first = textured(); group.add(new THREE.Mesh(new THREE.BoxGeometry(), first));
+    p.updateTextures(); assert.ok(p.materials.has(first), 'the first frame visits the whole scene');
+    const late = textured(); group.add(new THREE.Mesh(new THREE.BoxGeometry(), late));
+    p.updateTextures(); assert.ok(!p.materials.has(late), 'later frames visit a slice, not the whole scene');
+    let frames = 1; while (!p.materials.has(late) && frames < 10) { p.updateTextures(); frames++; }
+    assert.ok(p.materials.has(late) && frames <= Math.ceil(1003 / 400) + 1, `the slices reach every node (${frames} frames)`);
+    // a material the scene draws inside the pass is patched before its program is chosen, and only once per version
+    const drawnLate = textured(), mesh = new THREE.Mesh(new THREE.BoxGeometry(), drawnLate); group.add(mesh);
+    p.drawing = true; r.renderBufferDirect(cam, s, mesh.geometry, drawnLate, mesh, null); p.drawing = false;
+    assert.ok(p.materials.has(drawnLate) && calls.length === 1, 'a drawn material is patched before its draw');
+    const other = textured(); r.renderBufferDirect(cam, new THREE.Scene(), mesh.geometry, other, mesh, null);
+    assert.ok(!p.materials.has(other), 'draws of other scenes (puddle copies, depth scenes) are left alone');
+    const hook = drawnLate.onBeforeCompile; p.drawing = true; r.renderBufferDirect(cam, s, mesh.geometry, drawnLate, mesh, null); p.drawing = false;
+    assert.equal(drawnLate.onBeforeCompile, hook);
+    const gained = new THREE.MeshStandardMaterial(), m2 = new THREE.Mesh(new THREE.BoxGeometry(), gained); group.add(m2);
+    p.drawing = true; r.renderBufferDirect(cam, s, m2.geometry, gained, m2, null); assert.ok(!p.materials.has(gained));
+    gained.map = new THREE.Texture(); gained.needsUpdate = true; r.renderBufferDirect(cam, s, m2.geometry, gained, m2, null); p.drawing = false;
+    assert.ok(p.materials.has(gained), 'a map that arrives later (a new material version) is patched at its next draw');
+    const inv = textured(); group.add(new THREE.Mesh(new THREE.BoxGeometry(), inv)); p.invalidateTextures(); p.updateTextures();
+    assert.ok(p.materials.has(inv), 'invalidateTextures: the whole scene at the next frame');
+    c.dispose();
+  }
   taa.dispose(); assert.equal(mat.onBeforeCompile, original); assert.equal(mat.customProgramCacheKey(), 'prior');
 
   const movables = [], contactScene = new THREE.Scene(), human = { root: new THREE.Group() }, player = { enabled: false };

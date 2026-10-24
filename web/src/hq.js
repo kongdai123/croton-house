@@ -139,7 +139,7 @@ export function prepareMirrors(scene, mirrors, house) {
   const walls = planPieces.map(p => new THREE.Box3(new THREE.Vector3(p.x0, p.z0, -p.y1), new THREE.Vector3(p.x1, p.z1, -p.y0)));
   scene.traverse(source => {
     if (source.isLight) lights.push(source);
-    if (!source.isMesh || source.isReflector || source.userData.batched || source.userData.lightHit) return;
+    if (!source.isMesh || source.isReflector || source.userData.batched || source.userData.mainOnly || source.userData.lightHit) return;   // mainOnly: plant_clusters.js
     if (source.isInstancedMesh && !source.boundingBox) source.computeBoundingBox();
     if (!source.geometry.boundingBox) source.geometry.computeBoundingBox();
     sources.push({ source, bounds: (source.boundingBox ?? source.geometry.boundingBox).clone().applyMatrix4(source.matrixWorld) });

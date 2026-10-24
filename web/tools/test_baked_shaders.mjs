@@ -137,6 +137,24 @@ try {
   renderer.render = () => { throw new Error('render fixture'); };
   assert.throws(() => pcss.render(), /render fixture/); assert.equal(mesh.material, material); assert.equal(mesh.visible, true); assert.equal(renderer.shadowMap.enabled, true); renderer.render = render;
   let depthDisposed = false; depth.addEventListener('dispose', () => { depthDisposed = true; }); pcss.dispose(); assert.ok(depthDisposed);
+  // Rigid tracked roots (a carried chair, a room's fit-out): while the root's world matrix and visibility hold, its casters
+  // are not scanned; the root moving or hiding is a change as before. A root with anything animated below is not rigid.
+  {
+    const s3 = new T.Scene(), sun3 = new T.DirectionalLight(); s3.add(sun3, sun3.target);
+    const r3 = { autoClear: false, capabilities: { maxTextureSize: 16384 }, shadowMap: { enabled: true }, target: null, getRenderTarget() { return this.target; }, setRenderTarget(t) { this.target = t; }, render() {} };
+    const chair = new T.Group(), seat = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); seat.castShadow = true; chair.add(seat); s3.add(chair);
+    const shade = new T.Group(), slat = seat.clone(); shade.add(slat); shade.userData.toggle = { on: false }; s3.add(shade);
+    s3.updateMatrixWorld(true);
+    const p3 = createSunPCSS(r3, s3, sun3, 256); p3.track(chair, false, true); p3.track(shade, false, true);
+    for (let i = 0; i < 30; i++) p3.update(0.1);
+    const v3 = p3.version;
+    seat.position.y = 0.2; for (let i = 0; i < 5; i++) p3.update(0.1); assert.equal(p3.version, v3, 'a quiet rigid root: its parts are not scanned');
+    seat.position.y = 0; chair.position.x = 1; p3.update(0.1); assert.ok(p3.version > v3 && p3.stats.hot >= 1, 'the root moving is a change');
+    for (let i = 0; i < 40; i++) p3.update(0.1); const v4 = p3.version;
+    chair.visible = false; p3.update(0.1); assert.ok(p3.version > v4, 'the root hiding is a change');
+    const v5 = p3.version; slat.position.y = 0.3; p3.update(0.1); p3.update(0.1); assert.ok(p3.version > v5, 'a toggled root is never rigid: its parts are scanned');
+    p3.dispose();
+  }
   // A tracked caster leaving base, and folding back, redraws only base's texels around it: the casters whose bounds reach
   // that rect, under a scissor, with the scene's lights as a full redraw has them; one far away is not drawn.
   {

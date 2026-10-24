@@ -132,8 +132,9 @@ class TAAPass extends Pass {
     super(); this.camera = camera; this.scale = scaleOf(value); this.frame = 0; this.valid = false; this.lastTime = 0;
     this.noise = { value: 0 };   // frame index (0-15) for screen-space noise that should integrate under TAA (main.js hands in the PCSS uniform)
     // mipBias: added to the internal scale's bias (log2 scale) on every surface map: the accumulated jittered frames
-    // resolve finer texture detail than one frame's mip selection assumes
-    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.4, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: 0, ...options };
+    // resolve finer texture detail than one frame's mip selection assumes. With sharpen 0.55, TAA at full scale keeps
+    // MSAA's texture detail (wood grain, cane weave) without its foliage dither and shadow speckle (gate-c stills, 2026-10-24).
+    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.55, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: -0.5, ...options };
     this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) + this.settings.mipBias }; this.materials = new Map();
     this.internal = new EffectComposer(renderer, target('TAA scene', true)); this.internal.setPixelRatio(1); this.internal.renderToScreen = false;
     for (const pass of passes) this.internal.addPass(pass);

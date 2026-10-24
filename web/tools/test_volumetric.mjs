@@ -23,7 +23,7 @@ try {
   for (const [name, m] of Object.entries(MEDIA)) {
     for (const k of MEDIA_KEYS) assert.ok(Number.isFinite(m[k]) && m[k] >= 0, `${name}.${k}`);
     assert.ok(m.mistHeight > 0.5, `${name}: mist height`);
-    // dust a beam can show in, short of a smoke machine (volumetric_slots.js: ~55% over the wall at 0.03 / m)
+    // dust a beam can show in, short of a bright shaft (volumetric_slots.js: ~7% over the wall at 0.004 / m, ~55% at 0.03)
     assert.ok(m.dust >= 0.002 && m.dust <= 0.025, `${name}: dust ${m.dust}`);
     // ground visibility (Koschmieder, 2% contrast): mist after rain >= 150 m, otherwise a clear-air haze >= 800 m
     const visibility = 3.912 / (m.haze + m.mist);

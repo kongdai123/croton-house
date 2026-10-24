@@ -9,12 +9,13 @@
 // The Cycles references (bake/export/setup.py) fill the lot and the house with a 0.006 / m volume (anisotropy 0.65) at
 // every slot; photo mode's after-rain mist is 0.0042 / m (sky.js, photo.js). Clean indoor air scatters far less (10-30
 // ug/m3 of fine particles: ~1e-4 / m); the beams people photograph in rooms are dust lifted into the low sun. Measured
-// on the site (gate-c cameras, visitor exposure): at 0.004 / m a beam adds ~7% to the wall behind it, below what reads
-// in a photograph; at 0.03 / m ~55% looking toward the sun, a smoke machine. Dust is 0.016 / m at the low sun: a beam
-// reads toward the window, from the side it is faint, and nothing is added outside the sunlit air.
+// on the site (sun-facing cameras in bedroom B and the office at sunrise): at 0.004 / m a beam adds ~7% to the wall
+// behind it, below what reads in a photograph; at 0.03 / m ~55%, a bright shaft. Dust is 0.016 / m at the low sun: a
+// beam reads toward the window, from the side it is faint, and nothing is added outside the sunlit air.
 export const MEDIA = {
-  // dawn after rain: ground mist in the garden (visibility ~250 m at the ground, ~2.5 m deep), dust in the low sun
-  sunrise: { haze: 0.0012, mist: 0.012, mistHeight: 2.5, dust: 0.016 },
+  // dawn after rain: ground mist in the garden (visibility ~300 m at the ground, scale height 3.5 m: 0.0045 / m in the
+  // tree crowns, as the Cycles references' 0.006), dust in the low sun
+  sunrise: { haze: 0.0018, mist: 0.011, mistHeight: 3.5, dust: 0.016 },
   // midday: a clear, light haze; the high sun draws short, subtle beams beside the windows
   noon: { haze: 0.0008, mist: 0, mistHeight: 2.5, dust: 0.006 },
   // evening: warmer, hazier air, long beams again

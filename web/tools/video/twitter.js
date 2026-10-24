@@ -126,9 +126,10 @@
     {
       // 2. Day over the front garden: from above the street, straight down toward the house and tilting up, until the
       // open door and its number sit between the palm and the banana leaves.
-      name: 'aerial', dur: beats(7), pre: 2.0, slot: TOUR, fov: 55, warp: 'soft',
+      // (50° keeps the placeholder neighbours at the frame's edges out of it)
+      name: 'aerial', dur: beats(7), pre: 2.0, slot: TOUR, fov: 50, warp: 'soft',
       setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, 0.9, -17.5, 7.4, 356, -24], [1, 0.3, -13.3, 3.8, 1, -12]],
+      keys: [[0, 0.9, -18.2, 7.6, 1, -24], [1, 0.4, -13.6, 3.9, 1, -12]],
     },
     {
       // 3. In through the door: the island, the living room and straight through the house to the garden beyond the glass.

@@ -13,7 +13,8 @@
 # windows closed, floor to ceiling), so furniture, door gaps and glass do not shape it: a fan of parallel rays per side,
 # the 30th-percentile distance (a doorway beside the probe is ignored, an open-plan side is not). Spaces marked
 # reflBox "bbox" (the garage, its sectional door raised: scene raycasts ran out through the open door) take their
-# bbox. The grounds' boxes come from scene raycasts (reflprobe.py), through glass and cloth.
+# bbox, clipped off the other spaces. The grounds' boxes come from scene raycasts (reflprobe.py), through glass and cloth,
+# clipped off the house's rooms (outdoor_box): a box holding a room's floor gives that floor its panorama.
 import math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import plan as planlib
@@ -171,20 +172,50 @@ def foreign_in(plan, sid, r, step=0.05):
     return out
 
 
-def bbox_box(plan, sid, step=0.05):
-    """A reflBox 'bbox' space's box: its bbox, pulled back from every other space it would hold, each time on the side
-    that keeps the most of the box. The shader takes the probe whose box holds a point, so the L-shaped garage's bbox
-    gave its probes the linen closet's south half: that floor reflected the garage and its strip lights (the pale
-    speckled patch by the walk-in, 2026-10-24)."""
-    b = plan.rect_of(sid); r = [b['x0'], b['x1'], b['y0'], b['y1']]
-    for _ in range(8):
-        f = foreign_in(plan, sid, r, step)
+def held(plan, r, ids, step=0.05):
+    """{space id: floor samples} of the spaces `ids` with floor inside rect r (x0, x1, y0, y1): each sampled every `step`
+    over where its bounds meet r only (an outdoor box spans 40 m)."""
+    out = {}
+    for sid in ids:
+        q = plan.rect_of(sid); x0, x1, y0, y1 = max(r[0], q['x0']), min(r[1], q['x1']), max(r[2], q['y0']), min(r[3], q['y1'])
+        if x1 - x0 < step / 2 or y1 - y0 < step / 2: continue
+        n = sum(1 for i in range(max(1, int((x1 - x0) / step))) for j in range(max(1, int((y1 - y0) / step)))
+                if (plan.space_at(x0 + (i + 0.5) * step, y0 + (j + 0.5) * step) or {}).get('id') == sid)
+        if n: out[sid] = n
+    return out
+
+
+def clip_box(plan, r, ids, keep=None, step=0.05):
+    """Rect r pulled back from every space of `ids` it holds, the largest first, each time on the side that keeps the most
+    of it (and the point `keep` inside). The shader takes the probe whose box holds a point, so a box that holds another
+    room's floor gives that floor its probe: the L-shaped garage's bbox gave the linen closet the garage's strip lights (the
+    pale speckled patch by the walk-in), the west court's and the patio's raycast boxes (through the glass) gave the primary
+    bath, the office and bedroom B the garden (2026-10-24)."""
+    r = list(r)
+    for _ in range(12):
+        f = held(plan, r, ids, step)
         if not f: break
-        q = plan.rect_of(max(f, key=lambda k: f[k][0]))   # the largest intruder first, by its exact bounds
+        q = plan.rect_of(max(f, key=f.get))   # the largest intruder first, by its exact bounds
         cand = [c for c in ([q['x1'], r[1], r[2], r[3]], [r[0], q['x0'], r[2], r[3]], [r[0], r[1], q['y1'], r[3]], [r[0], r[1], r[2], q['y0']])
-                if c[1] > c[0] and c[3] > c[2]]
+                if c[1] > c[0] and c[3] > c[2] and (keep is None or (c[0] <= keep[0] <= c[1] and c[2] <= keep[1] <= c[3]))]
+        if not cand: break
         r = max(cand, key=lambda c: (c[1] - c[0]) * (c[3] - c[2]))
     return [round(v, 3) for v in r]
+
+
+def bbox_box(plan, sid, step=0.05):
+    """A reflBox 'bbox' space's box: its bbox, clipped off every other space."""
+    b = plan.rect_of(sid)
+    return clip_box(plan, [b['x0'], b['x1'], b['y0'], b['y1']], [s['id'] for s in plan.spaces if s['id'] != sid], step=step)
+
+
+def outdoor_box(plan, p, ext):
+    """A grounds probe's box: its scene raycast extents (reflprobe.py, through glass and cloth: x+, x-, north+, north-,
+    up, down), clipped off the house's rooms (interior and annex spaces), so no room's floor takes the garden's panorama."""
+    x, y, z = p; e = list(ext)
+    rooms = [s['id'] for s in plan.spaces if s.get('zone') in ('interior', 'annex')]
+    x0, x1, y0, y1 = clip_box(plan, [x - e[1], x + e[0], y - e[3], y + e[2]], rooms, keep=(x, y))
+    return box(p, [round(v, 3) for v in (x1 - x, x - x0, y1 - y, y - y0)] + list(e[4:6]))
 
 
 def plan_box(plan, p):

@@ -24,11 +24,15 @@ try {
   assert.deepEqual(localMapSize(2560, 1440), [160, 90]);
   assert.deepEqual(localMapSize(3840, 2160), [192, 108]);
   assert.deepEqual(localMapSize(1, 1), [1, 1]);
-  // Room at log L=-4: a bright window drops, a corner lifts; half the log contrast survives, bounded at 1.5 EV.
-  assert.equal(localExposureEV(-4, -4), 0);
-  assert.equal(localExposureEV(-4, -2), -1); assert.equal(localExposureEV(-4, -6), 1);
-  assert.equal(localExposureEV(-4, 10), -1.5); assert.equal(localExposureEV(-4, -16), 1.5);
-  assert.equal((-2 + localExposureEV(-4, -2)) - (-6 + localExposureEV(-4, -6)), 2);
+  // Room at log L=-4: the room within the knee (1.5 stops) and its shadows stay as lit; a window drops by half of what lies
+  // past the knee, at most 1.5 EV. The first version (strength 0.5 both ways) lifted every dark region and halved the room's
+  // contrast (1.8 stops from p10 to p90 in the visitor's rooms, the listing photos 3.3).
+  assert.equal(settings.knee, 1.5); assert.equal(settings.lift, 0);
+  for (const l of [-4, -2.5, -5.5, -8, -16]) assert.equal(localExposureEV(-4, l), 0, `room and shadows at ${l}`);
+  assert.equal(localExposureEV(-4, -1.5), -0.5);   // a sunlit patch 2.5 stops up: 0.5 x the stop past the knee
+  assert.equal(localExposureEV(-4, 1), -1.5); assert.equal(localExposureEV(-4, 10), -1.5);   // windows: capped
+  assert.equal((1 + localExposureEV(-4, 1)) - (-4), 3.5);   // a window 5 stops up still reads 3.5 stops over the room
+  assert.equal(localExposureEV(-4, -8, 0.5, 1.5, 1.5, 0.5), 1.25);   // lift, where a caller asks for it
   assert.equal(localGuideWeight(-4, 3, -4, 3), 1);
   assert.equal(localGuideWeight(-4, 3, 0, 3), 0); // bright window on the same depth plane
   assert.equal(localGuideWeight(-4, 3, -4, 30), 0); // door edge, even with identical luminance

@@ -1,0 +1,231 @@
+{
+ "note": "The realism target for the visitor's exposure: how bright the listing photos of the house's rooms are. Rewritten by web/tools/listing_brightness.py.",
+ "interior": {
+  "photos": 31,
+  "median": 191.0,
+  "p10": 185.0,
+  "p90": 198.0,
+  "p10Luma": 104.0,
+  "p90Luma": 217.0,
+  "clip": 0.0028
+ },
+ "photos": {
+  "g08": {
+   "space": "living",
+   "median": 186.0,
+   "p10": 107.0,
+   "p90": 219.0,
+   "clip": 0.0021
+  },
+  "g09": {
+   "space": "living",
+   "median": 196.0,
+   "p10": 106.0,
+   "p90": 213.0,
+   "clip": 0.0007
+  },
+  "g10": {
+   "space": "living",
+   "median": 195.0,
+   "p10": 96.0,
+   "p90": 217.0,
+   "clip": 0.0026
+  },
+  "g11": {
+   "space": "living",
+   "median": 189.0,
+   "p10": 79.0,
+   "p90": 217.0,
+   "clip": 0.0026
+  },
+  "g12": {
+   "space": "living",
+   "median": 190.0,
+   "p10": 47.0,
+   "p90": 225.0,
+   "clip": 0.0071
+  },
+  "g13": {
+   "space": "kitchen",
+   "median": 189.0,
+   "p10": 56.0,
+   "p90": 217.0,
+   "clip": 0.0036
+  },
+  "g14": {
+   "space": "living",
+   "median": 190.0,
+   "p10": 57.0,
+   "p90": 219.0,
+   "clip": 0.0022
+  },
+  "g15": {
+   "space": "living",
+   "median": 187.0,
+   "p10": 71.0,
+   "p90": 216.0,
+   "clip": 0.0034
+  },
+  "g16": {
+   "space": "kitchen",
+   "median": 185.0,
+   "p10": 31.0,
+   "p90": 223.0,
+   "clip": 0.005
+  },
+  "g17": {
+   "space": "kitchen",
+   "median": 194.0,
+   "p10": 66.0,
+   "p90": 214.0,
+   "clip": 0.0062
+  },
+  "g18": {
+   "space": "kitchen",
+   "median": 175.0,
+   "p10": 23.0,
+   "p90": 214.0,
+   "clip": 0.0054
+  },
+  "g19": {
+   "space": "living",
+   "median": 191.0,
+   "p10": 87.0,
+   "p90": 220.0,
+   "clip": 0.0037
+  },
+  "g20": {
+   "space": "living",
+   "median": 197.0,
+   "p10": 108.0,
+   "p90": 229.0,
+   "clip": 0.0055
+  },
+  "g21": {
+   "space": "office",
+   "median": 188.0,
+   "p10": 93.0,
+   "p90": 217.0,
+   "clip": 0.0039
+  },
+  "g22": {
+   "space": "dining",
+   "median": 195.0,
+   "p10": 104.0,
+   "p90": 220.0,
+   "clip": 0.0031
+  },
+  "g23": {
+   "space": "office",
+   "median": 190.0,
+   "p10": 140.0,
+   "p90": 217.0,
+   "clip": 0.0021
+  },
+  "g24": {
+   "space": "living",
+   "median": 188.0,
+   "p10": 131.0,
+   "p90": 230.0,
+   "clip": 0.0035
+  },
+  "g25": {
+   "space": "dining",
+   "median": 163.0,
+   "p10": 90.0,
+   "p90": 207.0,
+   "clip": 0.0043
+  },
+  "g26": {
+   "space": "primaryBedroom",
+   "median": 192.0,
+   "p10": 129.0,
+   "p90": 220.0,
+   "clip": 0.0031
+  },
+  "g27": {
+   "space": "primaryBedroom",
+   "median": 198.0,
+   "p10": 113.0,
+   "p90": 211.0,
+   "clip": 0.0031
+  },
+  "g28": {
+   "space": "primaryBedroom",
+   "median": 198.0,
+   "p10": 113.0,
+   "p90": 210.0,
+   "clip": 0.0006
+  },
+  "g29": {
+   "space": "walkin",
+   "median": 174.0,
+   "p10": 119.0,
+   "p90": 221.0,
+   "clip": 0.0001
+  },
+  "g30": {
+   "space": "primaryBath",
+   "median": 191.0,
+   "p10": 56.0,
+   "p90": 214.0,
+   "clip": 0.0028
+  },
+  "g31": {
+   "space": "primaryBath",
+   "median": 196.0,
+   "p10": 173.0,
+   "p90": 210.0,
+   "clip": 0.0006
+  },
+  "g32": {
+   "space": "bedroomB",
+   "median": 204.0,
+   "p10": 130.0,
+   "p90": 216.0,
+   "clip": 0.0013
+  },
+  "g33": {
+   "space": "bedroomB",
+   "median": 199.0,
+   "p10": 85.0,
+   "p90": 215.0,
+   "clip": 0.0018
+  },
+  "g34": {
+   "space": "bathB",
+   "median": 189.0,
+   "p10": 151.0,
+   "p90": 210.0,
+   "clip": 0.0012
+  },
+  "g35": {
+   "space": "bedroom3",
+   "median": 199.0,
+   "p10": 77.0,
+   "p90": 213.0,
+   "clip": 0.0008
+  },
+  "g36": {
+   "space": "hallBath",
+   "median": 191.0,
+   "p10": 155.0,
+   "p90": 217.0,
+   "clip": 0.0006
+  },
+  "g51": {
+   "space": "living",
+   "median": 192.0,
+   "p10": 117.0,
+   "p90": 218.0,
+   "clip": 0.0006
+  },
+  "g52": {
+   "space": "primaryBedroom",
+   "median": 195.0,
+   "p10": 113.0,
+   "p90": 213.0,
+   "clip": 0.0051
+  }
+ }
+}

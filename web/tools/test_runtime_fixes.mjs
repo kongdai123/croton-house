@@ -109,7 +109,8 @@ try {
   // a point in the primary bedroom 2 cm off the bath wall, inside the bath probe's box grown by 25 cm: an ordinary
   // margin takes the bath probe, the mirrors' 3 cm the bedroom's (the plan-fitted layout of the final rebake)
   assert.equal(select([-5.873, 1.59, -4.5], 0.25), 2); assert.equal(select([-5.873, 1.59, -4.5], 0.03), 5);
-  const bath = meta.find(m => m.i === 26); assert.equal(select([bath.min[0] - 0.02, 1.59, -1.07], 0.03), 26);
+  const bath = meta.find(m => Math.abs(m.p[0] - 6.5) < 0.01 && Math.abs(m.p[2] + 1.07) < 0.01);   // bath B (27 since the primary bath has two)
+  assert.equal(select([bath.min[0] - 0.02, 1.59, -1.07], 0.03), bath.i);
   // degenerate boxes (under 0.3 m across) are skipped: the plan-fitted layout has none any more (probe 9's 0.07 m box
   // came from the partition it stood in), so a sliver is added beside probe 9 to keep the rule tested
   assert.ok(meta.every(m => Math.min(m.max[0] - m.min[0], m.max[2] - m.min[2]) >= 0.3));

@@ -1,7 +1,8 @@
 // Pure reference for the GPU meter/adaptation equations; no renderer or DOM needed.
 export const METER = { width: 64, height: 36, interval: 3, floor: 1e-5, ceiling: 60000 };
-// brighten = exposure rises on entering darkness; darken = exposure falls in brighter light.
-export const ADAPTATION = { key: 0.15, brighten: 0.8, darken: 0.4, ease: 0.12, teleport: 0.18, fastDuration: 0.6, meterTau: 0.2, deadBand: 0.1 };
+// brighten = exposure rises on entering darkness; darken = exposure falls in brighter light. The key (the level the meter's
+// log mean is shown at) is the slot's: lighting_slots.js autoExposure.key.
+export const ADAPTATION = { brighten: 0.8, darken: 0.4, ease: 0.12, teleport: 0.18, fastDuration: 0.6, meterTau: 0.2, deadBand: 0.1 };
 export const autoExposureEnabled = query => !query.has('rawtone') && !query.has('fixedexposure') && !query.has('capture') && query.get('autoexp') !== '0';
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -10,8 +11,8 @@ export function meterWeight(x, y) {
   return (0.15 + 0.85 * Math.exp(-2 * (dx * dx + dy * dy))) * (1 - 0.85 * smooth((y - 0.7) / 0.25));
 }
 export function targetExposureEV(luminance, slot, indoor = 1) {
-  const { minEV, maxEV } = slot.autoExposure;
-  const ev = clamp(Math.log2(ADAPTATION.key / clamp(luminance, METER.floor, METER.ceiling)), slot.ev + minEV, slot.ev + maxEV);
+  const { key, minEV, maxEV } = slot.autoExposure;
+  const ev = clamp(Math.log2(key / clamp(luminance, METER.floor, METER.ceiling)), slot.ev + minEV, slot.ev + maxEV);
   // Keep the garden's art-directed exposure, with a spatially smooth doorway boundary.
   return slot.ev + (ev - slot.ev) * clamp(indoor, 0, 1);
 }

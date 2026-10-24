@@ -1,6 +1,6 @@
 # Reflection probes: 360-degree panoramas at points through the house and garden, laid out in three's equirect convention
 # (centre east, right south, top up), each with a box for parallax correction (reflprobe_layout.py: rooms from the plan,
-# the garage and grounds from scene raycasts through glass and cloth).
+# the grounds from scene raycasts through glass and cloth, clipped off the house's rooms).
 #   day (default): one slot's daylight only (sky, sun, its bounces); no lamp, no lamp surface glows. Per slot.
 #     blender -b scene.blend -P scripts/reflprobe.py -- '<slot json>' out_dir [i0 i1] --plan scripts/plan.json --layout refl_layout.json
 #   lamps: the house's lamps by switch group, at the bake's physical level (lamp_groups.py scene: lights lampgrpNN_*,
@@ -113,7 +113,7 @@ def make_layout():
             # the kitchen's pantry tower: 81% of every slot's panorama black)
             t, back = scene_clearance(p)
             if back >= 2 or t < IN_PLAN_CLEAR: blocked.append(f'probe {i} at ({p[0]}, {p[1]}): {back} back faces, nearest surface {t:.2f} m')
-        b = L.plan_box(plan, p) or L.box(p, scene_extents(p))
+        b = L.plan_box(plan, p) or L.outdoor_box(plan, p, scene_extents(p))   # grounds: raycast, clipped off the rooms
         rows.append(dict(i=i, b=list(p), **b, where=L.room_of(plan, p[0], p[1])))
     if blocked: raise SystemExit('reflection probes inside or against scene geometry (add a reflProbe seed to the space in web/data/plan_overlay.json):\n  ' + '\n  '.join(blocked))
     return rows

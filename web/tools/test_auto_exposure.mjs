@@ -16,6 +16,8 @@ try {
   const { METER, ADAPTATION, autoExposureEnabled, meterWeight, targetExposureEV, adaptExposureEV, glideExposureEV, filterMeterLog,
     SLOTS, blendSlot, createBakedAutoExposure, blenderAgX, OutputPass, THREE: T } = await import(pathToFileURL(file));
   const near = (a, b, tolerance = 1e-10) => assert.ok(Math.abs(a - b) < tolerance, `${a} != ${b}`);
+  // the maximum lift above each slot's ev before the key moved to the listing photos' level (key 0.15)
+  const SLOT_NAMES = ['sunrise', 'noon', 'golden', 'dusk'], FIRST_MAX = { sunrise: 5, noon: 4.5, golden: 5, dusk: 3.5 };
   const query = s => new URLSearchParams(s);
   assert.equal(autoExposureEnabled(query('')), true);
   assert.equal(autoExposureEnabled(query('autoexp=1&lightmap=noon&tier=mobile')), true);
@@ -24,7 +26,7 @@ try {
   for (const slot of Object.values(SLOTS)) {
     near(targetExposureEV(1e-9, slot), slot.ev + slot.autoExposure.maxEV);
     near(targetExposureEV(1e9, slot), slot.ev + slot.autoExposure.minEV);
-    near(targetExposureEV(ADAPTATION.key / 2 ** slot.ev, slot), slot.ev);
+    near(targetExposureEV(slot.autoExposure.key / 2 ** slot.ev, slot), slot.ev);
     for (const lum of [0, 0.001, 0.1, 1, 10000]) near(targetExposureEV(lum, slot, 0), slot.ev);
   }
   assert.equal(targetExposureEV(0.001, SLOTS.dusk), SLOTS.dusk.ev + SLOTS.dusk.autoExposure.maxEV);
@@ -131,6 +133,7 @@ try {
   mood = half; indoor = 0.5; draw();
   assert.equal(draws[0].uniforms.uValid, 1); assert.equal(draws[0].uniforms.uIndoor, 0.5);
   assert.deepEqual(draws[0].uniforms.uSlot.toArray().map(v => +v.toFixed(6)), [(SLOTS.noon.ev + SLOTS.dusk.ev) / 2, -0.5, (SLOTS.noon.autoExposure.maxEV + SLOTS.dusk.autoExposure.maxEV) / 2].map(v => +v.toFixed(6)));
+  near(draws[0].uniforms.uKey, Math.sqrt(SLOTS.noon.autoExposure.key * SLOTS.dusk.autoExposure.key), 1e-12);   // the key fades in stops
   camera.rotation.y += Math.PI / 2; draw();
   assert.equal(draws.length, 5); assert.equal(draws[3].uniforms.uValid, 1); assert.equal(draws[3].uniforms.uFast, 1); assert.equal(draws[2].uniforms.uValid, 0);
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });
@@ -150,5 +153,65 @@ try {
   draws.length = 0; renderer.toneMapping = T.AgXToneMapping; outputPass.render(renderer, write, read);
   assert.equal(agx.uniforms.autoExposure.value, false); assert.equal(agx.uniforms.exposure.value, 0.5);
   assert.notEqual(outputPass.render, originalRender); // Blender output wrapper is retained
+  // ---- the key against the realism target. The meter's weighted log mean is shown at the slot's key; through the site's
+  // AgX (agx.js: Blender AgX, Medium High Contrast) the daylight key must read as the listing photos' interior median
+  // (tools/golden/listing_brightness.json, tools/listing_brightness.py), dusk lower (lamp-lit rooms, not day). The first key
+  // (0.15, a mid-grey meter) read 101/255 against the photos' 191; the gate measured the visitor's rooms at 100-108.
+  const { gunzipSync } = await import('node:zlib'), { readFileSync } = await import('node:fs');
+  const WEBDIR = fileURLToPath(new URL('../', import.meta.url));
+  const lutBytes = gunzipSync(readFileSync(join(WEBDIR, 'assets/agx/agx_lut.bin.gz'))), lut16 = new Uint16Array(lutBytes.buffer, lutBytes.byteOffset, lutBytes.byteLength / 2);
+  let off = 0;
+  const [lumLut, agxLut] = [37, 57].map(n => {   // as agx.js loadAgXLuts: red fastest, 16-bit deltas along red, / 64000
+    const d = new Float64Array(n * n * n * 3);
+    for (let row = 0; row < n * n; row++) for (let k = 0; k < 3; k++) {
+      let v = 0; for (let r = 0; r < n; r++) { v = (v + lut16[off + (row * n + r) * 3 + k]) & 0xffff; d[(row * n + r) * 3 + k] = v / 64000; }
+    }
+    off += n * n * n * 3; return { n, d };
+  });
+  const tetra = ({ n, d }, c) => {   // agx.js tetra (OCIO's tetrahedral interpolation)
+    const m = n - 1, x = c.map(v => Math.min(Math.max(v, 0), 1) * m), b = x.map(v => Math.min(Math.floor(v), m - 1)), f = x.map((v, i) => v - b[i]);
+    const at = (i, j, k) => [0, 1, 2].map(ch => d[((k * n + j) * n + i) * 3 + ch]);
+    const [r, g, bl] = f; let s1, s2, w;
+    if (r >= g) { if (g >= bl) { s1 = [1, 0, 0]; s2 = [1, 1, 0]; w = [r, g, bl]; } else if (r >= bl) { s1 = [1, 0, 0]; s2 = [1, 0, 1]; w = [r, bl, g]; } else { s1 = [0, 0, 1]; s2 = [1, 0, 1]; w = [bl, r, g]; } }
+    else if (g <= bl) { s1 = [0, 0, 1]; s2 = [0, 1, 1]; w = [bl, g, r]; } else if (r >= bl) { s1 = [0, 1, 0]; s2 = [1, 1, 0]; w = [g, r, bl]; } else { s1 = [0, 1, 0]; s2 = [0, 1, 1]; w = [g, bl, r]; }
+    const p0 = at(...b), p1 = at(b[0] + s1[0], b[1] + s1[1], b[2] + s1[2]), p2 = at(b[0] + s2[0], b[1] + s2[1], b[2] + s2[2]), p3 = at(b[0] + 1, b[1] + 1, b[2] + 1);
+    return [0, 1, 2].map(ch => (1 - w[0]) * p0[ch] + (w[0] - w[1]) * p1[ch] + (w[1] - w[2]) * p2[ch] + w[2] * p3[ch]);
+  };
+  const enc = c => c.map(v => (Math.log2(Math.max(v, 1e-10)) + 12.47393) / 25), dec = c => c.map(v => 2 ** (v * 25 - 12.47393));
+  const mul = (M, c) => [0, 1, 2].map(i => M[i][0] * c[0] + M[i][1] * c[1] + M[i][2] * c[2]);
+  const IN = [[0.559463047, 0.304775811, 0.135812941], [0.0762332609, 0.787952395, 0.135774849], [0.0655375095, 0.16454273, 0.769741528]];
+  const LOOK = [[0.967977806, 0.117887618, -0.0858536371], [0.131809967, 0.916062285, -0.047868188], [0.0468677678, 0.0124191066, 0.940833412]];
+  const VIEW = [[1.04730554, -0.135979098, 0.0886511001], [-0.153314683, 1.11078232, 0.0425245458], [-0.0501479231, -0.00788863052, 1.05790992]];
+  const agxLuma = x => {   // grey x (scene linear, after exposure) -> 8-bit luma of the display sRGB
+    let c = dec(tetra(lumLut, enc(mul(IN, [x, x, x]))));
+    c = dec(enc(mul(LOOK, c)).map(v => (v - 0.4) * 1.2 + 0.4));
+    c = tetra(agxLut, enc(mul(VIEW, c))).map(v => Math.max(v, 0) ** 2.4).map(v => v >= 0.00303993467 ? 1.055 * v ** (1 / 2.4) - 0.055 : v * 12.9232101);
+    return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) * 255;
+  };
+  assert.ok(Math.abs(agxLuma(0.18) - 120) < 4, `AgX mid grey ${agxLuma(0.18)}`);   // Blender AgX MHC: 18% grey ~ 47%
+  const photos = JSON.parse(readFileSync(join(WEBDIR, 'tools/golden/listing_brightness.json'), 'utf8')).interior;
+  for (const name of ['sunrise', 'noon', 'golden']) {
+    const shown = agxLuma(SLOTS[name].autoExposure.key);
+    assert.ok(Math.abs(shown - photos.median) <= 4, `${name}: the key ${SLOTS[name].autoExposure.key} reads ${shown.toFixed(1)}, the listing photos ${photos.median}`);
+  }
+  const dusk = agxLuma(SLOTS.dusk.autoExposure.key);
+  assert.ok(dusk > 145 && dusk < photos.p10 - 10, `dusk: the lamp-lit rooms below the daylight photos, still bright (${dusk.toFixed(1)})`);
+  assert.ok(agxLuma(0.15) < 110, 'the first key read as a mid-grey room');
+  // the maximum lift moved with the key: the same dark spaces meet it (laundry, hall closet), not the lit rooms
+  for (const name of SLOT_NAMES) near(SLOTS[name].autoExposure.maxEV - Math.log2(SLOTS[name].autoExposure.key / 0.15), FIRST_MAX[name], 0.06);
+  // gate (c)'s brightness band (bake/validate/thresholds.json) brackets the photos: the set band holds their median, the
+  // frame band their spread; dusk below daylight
+  const band = JSON.parse(readFileSync(join(WEBDIR, '../bake/validate/thresholds.json'), 'utf8')).brightness;
+  for (const name of ['sunrise', 'noon', 'golden']) {
+    const [lo, hi] = band.set[name], [flo, fhi] = band.frame[name];
+    assert.ok(lo < photos.median && photos.median < hi && hi - lo <= 25 && flo < photos.p10 && fhi > photos.p90, `${name} band ${band.set[name]} / ${band.frame[name]}`);
+  }
+  assert.ok(band.set.dusk[1] < band.set.noon[0] + 5 && band.set.dusk[0] < dusk && dusk < band.set.dusk[1], `dusk band ${band.set.dusk} around ${dusk.toFixed(0)}`);
+  // and the rooms' contrast: the shadow band holds the photos' darker tenth (local_adapt.js lifts no shadow)
+  for (const name of ['sunrise', 'noon', 'golden']) {
+    const [slo, shi] = band.shadows[name];
+    assert.ok(slo < photos.p10Luma && photos.p10Luma < shi && shi < band.set[name][0], `${name} shadows band ${band.shadows[name]} around the photos' ${photos.p10Luma}`);
+  }
+  console.log('auto exposure: the key against the listing photos (AgX), the bounds with it and the gate band OK');
   console.log('auto exposure: weighted meter, median/temporal/dead band, eased per-frame glide, 15–144 fps invariance, asymmetry, no meter-tick step/kink, slot blending, garden lock, teleport, output transforms, capture toggles and lifecycle OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

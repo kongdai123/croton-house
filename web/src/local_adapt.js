@@ -4,14 +4,20 @@ import * as THREE from 'three';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { autoExposureEnabled } from './auto_exposure_policy.js';
 
-export const LOCAL_ADAPTATION = { scale: 16, maxWidth: 192, strength: 0.5, maxEV: 1.5, temporal: 0.16, gateTau: 0.25, lumaSigma: 1.5, depthRelative: 0.03, depthAbsolute: 0.04, mesopic: 0 };
+// What it corrects, as a real-estate photo's exposure blend: only what is far brighter than the room (a window, the garden
+// through a door, a sun patch): `strength` of how far a region's log lies above the frame's log mean past `knee` stops, at
+// most maxEV. The room itself (within knee of its mean) and its shadows are left as lit (`lift` 0). The first version
+// worked both ways (strength 0.5 of every difference): it lifted every dark region and halved the room's contrast, the
+// visitor's rooms spanning 1.8 stops from p10 to p90 against the listing photos' 3.3 (2026-10-24; gate (c) brightness p10).
+export const LOCAL_ADAPTATION = { scale: 16, maxWidth: 192, strength: 0.5, maxEV: 1.5, knee: 1.5, lift: 0, temporal: 0.16, gateTau: 0.25, lumaSigma: 1.5, depthRelative: 0.03, depthAbsolute: 0.04, mesopic: 0 };
 export const localAdaptationEnabled = (query, tier = 'laptop') => autoExposureEnabled(query) && query.get('localadapt') !== '0' && !query.has('fast') && tier !== 'mobile';
 export function localMapSize(width, height, settings = LOCAL_ADAPTATION) {
   const scale = Math.max(settings.scale, width / settings.maxWidth);
   return [Math.max(1, Math.ceil(width / scale)), Math.max(1, Math.ceil(height / scale))];
 }
-export function localExposureEV(globalLog, localLog, strength = LOCAL_ADAPTATION.strength, maxEV = LOCAL_ADAPTATION.maxEV) {
-  return Math.max(-maxEV, Math.min(maxEV, strength * (globalLog - localLog)));
+export function localExposureEV(globalLog, localLog, strength = LOCAL_ADAPTATION.strength, maxEV = LOCAL_ADAPTATION.maxEV, knee = LOCAL_ADAPTATION.knee, lift = LOCAL_ADAPTATION.lift) {
+  const d = localLog - globalLog;
+  return -Math.min(maxEV, Math.max(0, strength * (d - knee))) + Math.min(maxEV, Math.max(0, lift * (-d - knee)));
 }
 // The same compact support in the low-res blur and full-res upsample: samples across an edge get zero weight.
 export function localGuideWeight(log, depth, otherLog, otherDepth, settings = LOCAL_ADAPTATION) {
@@ -83,7 +89,7 @@ void main() {
 const outputGLSL = `
 uniform sampler2D tLocalMap, tLocalDepth, tLocalGlobal;
 uniform vec2 uLocalSize, uLocalJitter;
-uniform float uLocalStrength, uLocalMaxEV, uLocalMesopic;
+uniform float uLocalStrength, uLocalMaxEV, uLocalKnee, uLocalLift, uLocalMesopic;
 ${guideGLSL}
 vec3 localAdapt(vec3 c, vec2 uv) {
   if (uLocalStrength <= 0.00001) return c;
@@ -101,7 +107,9 @@ vec3 localAdapt(vec3 c, vec2 uv) {
   // A frame narrower than one map cell may have no matching sample. Its own log is halo-free fallback.
   float adapted = (sum + l * 0.0001) / (weight + 0.0001);
   float globalLog = texture2D(tLocalGlobal, vec2(0.5)).b;
-  float ev = clamp(uLocalStrength * (globalLog - adapted), -uLocalMaxEV, uLocalMaxEV);
+  // localExposureEV: only what lies past the knee above the room is pulled down; shadows lift only with uLocalLift
+  float d = adapted - globalLog;
+  float ev = -clamp(uLocalStrength * (d - uLocalKnee), 0.0, uLocalMaxEV) + clamp(uLocalLift * (-d - uLocalKnee), 0.0, uLocalMaxEV);
   vec3 result = c * exp2(ev);
   // Optional mesopic hint in very dim scene-linear regions; disabled by default.
   float dusk = uLocalMesopic * (1.0 - smoothstep(-9.0, -5.0, adapted));
@@ -118,7 +126,8 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
     uLocalSize: { value: new THREE.Vector2(1, 1) }, uLocalJitter: { value: new THREE.Vector2() },
     uLocalNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
     uLocalDepthTolerance: { value: new THREE.Vector2(params.depthAbsolute, params.depthRelative) },
-    uLocalLumaSigma: { value: params.lumaSigma }, uLocalStrength: { value: 0 }, uLocalMaxEV: { value: params.maxEV }, uLocalMesopic: { value: params.mesopic },
+    uLocalLumaSigma: { value: params.lumaSigma }, uLocalStrength: { value: 0 }, uLocalMaxEV: { value: params.maxEV },
+    uLocalKnee: { value: params.knee }, uLocalLift: { value: 0 }, uLocalMesopic: { value: params.mesopic },
   };
   let resources = null, depthCopy = null, valid = false, index = 0, disposed = false, gate = 0, sceneDepth = null;
   const previousVP = new THREE.Matrix4(), previousView = new THREE.Matrix4(), inverseProjection = new THREE.Matrix4(), zeroJitter = new THREE.Vector2();
@@ -165,7 +174,7 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
       if (!enabled) { shared.uLocalStrength.value = 0; gate = 0; valid = false; return; }
       // Outdoors the correction is exactly zero, while the indoor boundary and initial appearance ease in.
       gate += (indoor - gate) * -Math.expm1(-dt / params.gateTau);
-      shared.uLocalStrength.value = indoor === 0 && gate < 0.0001 ? 0 : params.strength * gate;
+      shared.uLocalStrength.value = indoor === 0 && gate < 0.0001 ? 0 : params.strength * gate; shared.uLocalLift.value = params.lift * gate;
       if (shared.uLocalStrength.value <= 0.00001) { valid = false; return; }
       // After GTAO's swap the output may draw into the original scene target. Sampling an attached depth
       // texture there is a WebGL feedback loop even with depth writes off. Blit resolved depth only in that
@@ -194,7 +203,7 @@ export function createLocalAdaptation({ renderer, lighting, query, getTier = () 
       shared.tLocalDepth.value = depth; shared.tLocalGlobal.value = global;
       shared.uLocalNearFar.value.set(camera.near, camera.far);
       shared.uLocalDepthTolerance.value.set(params.depthAbsolute, params.depthRelative);
-      shared.uLocalLumaSigma.value = params.lumaSigma; shared.uLocalMaxEV.value = params.maxEV;
+      shared.uLocalLumaSigma.value = params.lumaSigma; shared.uLocalMaxEV.value = params.maxEV; shared.uLocalKnee.value = params.knee;
       shared.uLocalMesopic.value = params.mesopic;
       shared.uLocalJitter.value.copy(taa?.resolve.uniforms.uJitter.value ?? zeroJitter);
       if (taa) inverseProjection.multiplyMatrices(camera.matrixWorldInverse, taa.resolve.uniforms.uInvVP.value);

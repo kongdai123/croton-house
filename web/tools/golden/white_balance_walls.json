@@ -1,100 +1,58 @@
 {
  "why": "The light on the white walls of gate (c) frames (K), the reference for the white balance's adapting illuminant (white_balance.js adaptingIlluminant; test_white_balance_bake.mjs). Valid for the bake whose hashes are under \"bake\"; after a rebake, re-measure.",
- "frames": "gate (c) hq-visitor frames, 960x540, rendered with &wb=0 (white balance off) on master a906ee4 + the white balance branch; \"shipped\": the lamp gains as shipped, \"gains/64\": every lamp group gain / 64 in encoding.json (the lamp recalibration preview)",
- "measure": "python3 -I web/tools/wb_walls.py <run>/hq-visitor <label> web/tools/golden/white_balance_walls.json: median of the boxes, Blender AgX inverted, over the wall paint albedo",
+ "frames": "gate (c) hq-visitor frames, 960x540, rendered with &wb=0 (white balance off) on bake v4 (physical lamps, the lumen model) and integrate/gfx c692295 with the listing-photo exposure key; \"shipped\": the bake as shipped",
+ "measure": "python3 -I web/tools/wb_walls.py <run>/hq-visitor shipped web/tools/golden/white_balance_walls.json: median of the boxes, Blender AgX inverted, over the wall paint albedo",
  "walls": {
   "shipped": {
    "sunrise": {
-    "living_1": 2915,
-    "kitchen_1": 2915,
-    "dining_1": 3035,
-    "office_1": 3455,
-    "primaryBedroom_1": 4970,
-    "primaryBath_1": 5695,
-    "bedroom3_1": 6765,
-    "bathB_1": 5075
+    "living_1": 4320,
+    "kitchen_1": 4010,
+    "dining_1": 4070,
+    "office_1": 3895,
+    "primaryBedroom_1": 4240,
+    "primaryBath_1": 3770,
+    "bedroom3_1": 5525,
+    "bathB_1": 4660
    },
    "noon": {
-    "living_1": 5025,
-    "kitchen_1": 4750,
-    "dining_1": 5000,
-    "office_1": 4895,
-    "primaryBedroom_1": 6595,
-    "primaryBath_1": 6660,
-    "bedroom3_1": 6290,
-    "bathB_1": 7245
+    "living_1": 4970,
+    "kitchen_1": 4765,
+    "dining_1": 4985,
+    "office_1": 4885,
+    "primaryBedroom_1": 6600,
+    "primaryBath_1": 6785,
+    "bedroom3_1": 6245,
+    "bathB_1": 7325
    },
    "golden": {
-    "living_1": 2805,
-    "kitchen_1": 2835,
-    "dining_1": 2800,
-    "office_1": 2785,
-    "primaryBedroom_1": 5460,
-    "primaryBath_1": 6055,
-    "bedroom3_1": 4270,
-    "bathB_1": 4985
+    "living_1": 4105,
+    "kitchen_1": 4020,
+    "dining_1": 4640,
+    "office_1": 4370,
+    "primaryBedroom_1": 4140,
+    "primaryBath_1": 3735,
+    "bedroom3_1": 4115,
+    "bathB_1": 4525
    },
    "dusk": {
-    "living_1": 2760,
-    "kitchen_1": 2755,
-    "dining_1": 2755,
-    "office_1": 2765,
-    "primaryBedroom_1": 2785,
-    "primaryBath_1": 2865,
-    "bedroom3_1": 2690,
-    "bathB_1": 2995
-   }
-  },
-  "gains/64": {
-   "sunrise": {
-    "living_1": 4100,
-    "kitchen_1": 3815,
-    "dining_1": 4005,
-    "office_1": 3985,
-    "primaryBedroom_1": 5170,
-    "primaryBath_1": 5695,
-    "bedroom3_1": 6765,
-    "bathB_1": 5075
-   },
-   "noon": {
-    "living_1": 5025,
-    "kitchen_1": 4750,
-    "dining_1": 4950,
-    "office_1": 4895,
-    "primaryBedroom_1": 6590,
-    "primaryBath_1": 6660,
-    "bedroom3_1": 6290,
-    "bathB_1": 7245
-   },
-   "golden": {
-    "living_1": 3665,
-    "kitchen_1": 3495,
-    "dining_1": 4075,
-    "office_1": 3515,
-    "primaryBedroom_1": 6420,
-    "primaryBath_1": 6330,
-    "bedroom3_1": 4290,
-    "bathB_1": 4985
-   },
-   "dusk": {
-    "living_1": 2855,
-    "kitchen_1": 2860,
-    "dining_1": 2850,
-    "office_1": 2870,
-    "primaryBedroom_1": 2820,
-    "primaryBath_1": 2905,
-    "bedroom3_1": 2880,
-    "bathB_1": 3130
+    "living_1": 4180,
+    "kitchen_1": 3935,
+    "dining_1": 4025,
+    "office_1": 3340,
+    "primaryBedroom_1": 3415,
+    "primaryBath_1": 3595,
+    "bedroom3_1": 3235,
+    "bathB_1": 3830
    }
   }
  },
  "bake": {
-  "assets/lightmaps/sunrise/probes.bin": "fff48c587a76b137",
-  "assets/lightmaps/noon/probes.bin": "b6e032bc6396919d",
-  "assets/lightmaps/golden/probes.bin": "205cb5da5319cdeb",
-  "assets/lightmaps/dusk/probes.bin": "80c579579ba85812",
-  "assets/lightmaps/v2/lampgroups/probes.bin": "68fa9eeaf5c157d5",
-  "assets/lightmaps/v2/lampgroups/encoding.json": "f7004ccb38b16fcf"
+  "assets/lightmaps/sunrise/probes.bin": "25c71d2076fffded",
+  "assets/lightmaps/noon/probes.bin": "ac928d33b9931e90",
+  "assets/lightmaps/golden/probes.bin": "e62d76ef2358bf33",
+  "assets/lightmaps/dusk/probes.bin": "94f740b9028bfb12",
+  "assets/lightmaps/v2/lampgroups/probes.bin": "44558215234b43cc",
+  "assets/lightmaps/v2/lampgroups/encoding.json": "754f86d64ef0f15c"
  },
  "boxes": {
   "living_1": [

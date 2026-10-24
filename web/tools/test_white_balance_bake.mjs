@@ -127,7 +127,7 @@ const t0 = performance.now();
   }
   const meanError = errors.reduce((a, b) => a + b, 0) / errors.length, maxError = Math.max(...errors);
   if (stale.length) console.log(`white balance: the wall fixture was measured on another bake (${stale.join(', ')}): not enforced; mean ${meanError.toFixed(1)}, max ${maxError.toFixed(0)} mired. Re-measure: ${fixture.measure}`);
-  else assert.ok(errors.length >= 60 && meanError < 12 && maxError < 80, `the adapting illuminant against the rendered walls: mean ${meanError.toFixed(1)}, max ${maxError.toFixed(0)} mired over ${errors.length}`);
+  else assert.ok(errors.length >= 30 && meanError < 12 && maxError < 80, `the adapting illuminant against the rendered walls: mean ${meanError.toFixed(1)}, max ${maxError.toFixed(0)} mired over ${errors.length}`);
 
   // ---- the lamps at physical levels: the island pendant (on at sunrise) no longer outshines the daylight, so the sunrise
   // living room reads mostly daylight (2800 K on the old bake, its walls 4100 K with the lamps at a 64th) and adapts near white

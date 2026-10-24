@@ -67,6 +67,9 @@ def absolute(s, l, grid):
             if m.any(): cell = max(cell, np.bincount(hh[m], minlength=12).max() / m.size)
     return {
         'mean': float(L.mean()), 'p50': float(np.percentile(L, 50)), 'p99': float(np.percentile(L, 99)),
+        # as web/tools/listing_brightness.py measures the listing photos: 8-bit luma (ITU-R 601 on the sRGB values)
+        'luma50': float(np.median(np.round(s @ np.array([0.299, 0.587, 0.114], np.float32) * 255))),
+        'luma10': float(np.percentile(np.round(s @ np.array([0.299, 0.587, 0.114], np.float32) * 255), 10)),
         'zeroFrac': float((s.max(axis=2) == 0).mean()),
         'magentaFrac': float(((s[..., 0] > 0.85) & (s[..., 2] > 0.85) & (s[..., 1] < 0.25)).mean()),
         'nonFinite': int((~np.isfinite(l)).sum()),
@@ -167,7 +170,8 @@ def sheet(rows, path, header):
 def check(a):
     T = json.load(open(a.thresholds))
     grid = tuple(T.get('grid', [8, 6]))
-    cams = [c['id'] for c in json.load(open(a.cameras))['cameras']]
+    camlist = json.load(open(a.cameras))['cameras']; cams = [c['id'] for c in camlist]
+    B = T.get('brightness'); bright_cams = {c['id'] for c in camlist if B and c.get('kind') in B['kinds'] and c.get('space') not in B.get('excludeSpaces', [])}
     tiers = a.tiers.split(',') if a.tiers else sorted(d for d in os.listdir(a.run) if os.path.isdir(os.path.join(a.run, d)) and not d.startswith('compare'))
     states = a.states.split(',') if a.states else STATES
     os.makedirs(a.out, exist_ok=True)
@@ -193,6 +197,9 @@ def check(a):
                 fr['abs'] = absolute(s, l, grid)
                 f, sc = judge_abs(fr['abs'], abs_thr(tier, cam))
                 fr['fails'] += ['abs ' + x for x in f]; fr['absScore'] = sc; fr['score'] = max(fr['score'], sc)
+                if tier.endswith('-visitor') and cam in bright_cams and state in B['frame']:   # the visitor's exposure vs the listing photos
+                    lo, hi = B['frame'][state]; v = fr['abs']['luma50']
+                    if not lo <= v <= hi: (fr['fails'] if B.get('enforce', True) else fr['warn']).append(f'brightness: median luma {v:.0f} outside {lo}..{hi}')
                 refs = []
                 if a.baseline: refs.append(('baseline', os.path.join(a.baseline, tier, state, cam + '.png')))
                 # Cycles renders at the slot's fixed exposure: only the fixed set compares with it
@@ -222,16 +229,31 @@ def check(a):
         for e in r.get('shaderErrors') or []: page_fails.append(f'{k}: shader error {e[:200]}')
         if r.get('linkFailed'): page_fails.append(f'{k}: {len(r["linkFailed"])} programs failed to link')
         if r.get('fallback'): page_fails.append(f'{k}: baked fallback {r["fallback"]}')
+    # the visitor sets' brightness per state: the median over the rooms' frames against the listing photos' band
+    brightness = {}
+    for tier in [t for t in tiers if t.endswith('-visitor')] if B else []:
+        for state in states:
+            fs = [f for f in frames if f['tier'] == tier and f['state'] == state and f['cam'] in bright_cams]
+            v = [f['abs']['luma50'] for f in fs]
+            if not v or state not in B['set']: continue
+            m = float(np.median(v)); lo, hi = B['set'][state]; shadow = float(np.median([f['abs']['luma10'] for f in fs]))
+            brightness[f'{tier}/{state}'] = {'median': m, 'p10': float(np.percentile(v, 10)), 'p90': float(np.percentile(v, 90)), 'frames': len(v), 'band': [lo, hi], 'shadows': shadow}
+            if not lo <= m <= hi and B.get('enforce', True): page_fails.append(f'{tier}/{state}: brightness: the rooms\' median luma {m:.0f} outside {lo}..{hi} (listing photos: {B["photos"]})')
+            # contrast: the rooms' darker tenth must stay dark, as in the photos (a both-ways local adaptation lifted it to 145)
+            if state in B.get('shadows', {}):
+                slo, shi = B['shadows'][state]
+                if not slo <= shadow <= shi and B.get('enforce', True): page_fails.append(f'{tier}/{state}: contrast: the rooms\' median 10th-percentile luma {shadow:.0f} outside {slo}..{shi} (listing photos 104: the room flattened or crushed)')
     failed = [f for f in frames if f['fails']]
     # report
     rep = {'run': os.path.basename(os.path.abspath(a.run)), 'checked': len(frames), 'failed': len(failed), 'missing': missing,
-           'pageFailures': page_fails, 'runs': runinfo, 'thresholds': T,
+           'pageFailures': page_fails, 'runs': runinfo, 'thresholds': T, 'brightness': brightness,
            'frames': [{k: v for k, v in f.items() if k != 'path'} for f in frames]}
     json.dump(rep, open(os.path.join(a.out, 'report.json'), 'w'), indent=1)
     lines = [f'{len(frames)} frames checked, {len(failed)} failed, {len(missing)} missing, {len(page_fails)} page-level failures']
     for k, r in runinfo.items():
         lines.append(f'  {k:18s} load {r["loadSeconds"] or 0:6.0f} s  shots {r["seconds"] or 0:6.0f} s  programs {r["programs"]}  '
                      f'link failures {len(r["linkFailed"] or [])}  samplers {json.dumps(r["samplers"])[:80]}')
+    for k, b in brightness.items(): lines.append(f'  brightness {k:22s} rooms median luma {b["median"]:.0f} (p10 {b["p10"]:.0f}, p90 {b["p90"]:.0f}, {b["frames"]} frames), band {b["band"][0]}..{b["band"][1]}; shadows (their median p10 luma) {b["shadows"]:.0f}')
     lines += ['  ' + x for x in page_fails + missing[:20]]
     for f in sorted(frames, key=lambda f: -f['score']):
         if f['fails'] or f['warn']:

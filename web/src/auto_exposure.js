@@ -93,7 +93,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
   const adaptation = material(adaptShader, {
     tMeter: { value: null }, tPrevious: { value: null }, uSlot: { value: new THREE.Vector3() },
     uDt: { value: 0 }, uValid: { value: 0 }, uFast: { value: 0 }, uIndoor: { value: 0 },
-    uTimes: { value: new THREE.Vector4() }, uKey: { value: params.key },
+    uTimes: { value: new THREE.Vector4() }, uKey: { value: 1 },
   });
   const quad = new FullScreenQuad(null), position = new THREE.Vector3(), rotation = new THREE.Quaternion();
   let valid = false, meterValid = false, meterIndex = 0, index = 0, frame = 0, elapsed = 0, meterElapsed = 0, fast = 0, disposed = false;
@@ -132,7 +132,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
       u.uSlot.value.set(mood.ev, mood.autoExposure.minEV, mood.autoExposure.maxEV);
       u.uIndoor.value = indoorWeight(camera.position);
       u.uDt.value = dt; u.uValid.value = +valid; u.uFast.value = +(fast > 0);
-      u.uTimes.value.set(params.brighten, params.darken, params.ease, params.teleport); u.uKey.value = params.key;
+      u.uTimes.value.set(params.brighten, params.darken, params.ease, params.teleport); u.uKey.value = params.key ?? mood.autoExposure.key;   // settings.key: a test's override
       u.tMeter.value = meterHistory[meterIndex].texture;
       u.tPrevious.value = valid ? history[index].texture : reduced.texture;
       index = 1 - index; draw(history[index], adaptation);

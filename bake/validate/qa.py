@@ -602,18 +602,26 @@ def refl_pick(meta, P, margin=0.25):
 
 
 def refl_coverage(plan, meta, rT, step=0.1):
-    """Interior spaces with room for a probe whose floor falls to the nearest-probe fallback: the walk-in, linen closet
-    and laundry had no probe and reflected the garage's (its strip lights as a speckled pale patch, 2026-10-24)."""
+    """The probes the shader gives the house's floors (refl_pick), per interior / annex space:
+    - one wide enough for a probe whose floor falls to the nearest-probe fallback: the walk-in, linen closet and laundry
+      had no probe and reflected the garage's (its strip lights as a speckled pale patch, 2026-10-24);
+    - any whose floor takes a grounds probe (one standing outside the house): the west court's and the patio's raycast
+      boxes ran through the glass and gave the primary bath, its closet, the office and bedroom B the garden (2026-10-24)."""
     if not meta: return []
+    outside = {m['i'] for m in meta if not layoutlib.in_plan(plan, m['p'][0], -m['p'][2]) and not layoutlib.annex_of(plan, m['p'][0], -m['p'][2])}
     out = []
     for s in plan.spaces:
         if s.get('zone') not in ('interior', 'annex'): continue
-        r = plan.rect_of(s['id'])
-        if min(r['x1'] - r['x0'], r['y1'] - r['y0']) < 2 * layoutlib.WALL_CLEARANCE: continue   # too narrow for a probe
-        picks = [refl_pick(meta, (x, 0.01, -y)) for x in np.arange(r['x0'] + step / 2, r['x1'], step) for y in np.arange(r['y0'] + step / 2, r['y1'], step)
+        r = plan.rect_of(s['id']); narrow = min(r['x1'] - r['x0'], r['y1'] - r['y0']); d = step / 2 if narrow < 1 else step
+        picks = [refl_pick(meta, (x, 0.01, -y)) for x in np.arange(r['x0'] + d / 2, r['x1'], d) for y in np.arange(r['y0'] + d / 2, r['y1'], d)
                  if (plan.space_at(x, y) or {}).get('id') == s['id']]
+        if not picks: continue
+        garden = [p for p, how in picks if p in outside]
+        if len(garden) > rT['maxOutdoor'] * len(picks):
+            out.append(f'{s["id"]}{SEP}{len(garden) / len(picks):.0%} of its floor reflects grounds probe(s) {sorted(set(garden))}: their boxes reach into the house (reflprobe_layout.outdoor_box)')
+        if narrow < 2 * layoutlib.WALL_CLEARANCE: continue   # too narrow for a probe
         far = [p for p, how in picks if how == 'nearest']
-        if picks and len(far) > rT['maxFallback'] * len(picks):
+        if len(far) > rT['maxFallback'] * len(picks):
             out.append(f'{s["id"]}{SEP}{len(far) / len(picks):.0%} of its floor reflects probe(s) {sorted(set(far))} from out of every box: give it a reflProbe seed (web/data/plan_overlay.json)')
     return out
 
@@ -678,7 +686,7 @@ def check_refl(rep, A, T, plan, slots):
             elif float(mx.std()) < rT['minStd']: black.append(f'{s} probe {i}{SEP}panorama is uniform (std {mx.std():.3g})')
         if fr: rep.metric(f'refl.{s}.blackFractionMean', np.mean(fr)); rep.metric(f'refl.{s}.blackFractionMax', max(fr)); rep.metric(f'refl.{s}.panoramas', len(fr))
     cover = refl_coverage(plan, first and sorted(read_json(A.aux_dir(first[0]) / 'refl' / 'meta.json'), key=lambda m: m['i']), rT)
-    rep.check('refl-coverage', f'interior spaces with room for a probe (>= {2 * layoutlib.WALL_CLEARANCE:g} m across) whose floor mostly reflects a probe out of every box (the shader\'s nearest-probe fallback, through walls and without parallax): over {rT["maxFallback"]:.0%} of the floor', 'fail', cover)
+    rep.check('refl-coverage', f'the house\'s floors and their probes: a room wide enough for a probe (>= {2 * layoutlib.WALL_CLEARANCE:g} m) whose floor mostly reflects a probe out of every box (the shader\'s nearest-probe fallback, through walls and without parallax: over {rT["maxFallback"]:.0%}), or any room whose floor reflects a grounds probe (over {rT["maxOutdoor"]:.0%})', 'fail', cover)
     rep.check('refl-layout', 'refl/meta.json (every slot) equals what reflprobe_layout.py lays out now (points %g m, boxes %g m)' % (rT['pointTol'], rT['boxTol']), 'fail', layout)
     rep.check('refl-placement', 'reflection probes inside a plan space, clear of walls, box holding the centre and stopping at walls except at openings', 'fail', place)
     rep.check('refl-black', f'panoramas with at most {rT["maxBlackFraction"]:.0%} black pixels (max channel under {rT["blackLevel"]} in the daylight and every lamp layer) and not uniform', 'fail', black)

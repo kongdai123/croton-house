@@ -1,6 +1,6 @@
 {
  "version": 1,
- "probes": 30,
+ "probes": 31,
  "layers": [
   {
    "probe": 0,
@@ -716,47 +716,54 @@
    "probe": 26,
    "file": "lamp_083.hdr",
    "groups": {
-    "bathB": 1.0
+    "primaryBath": 1.0
    }
   },
   {
    "probe": 27,
    "file": "lamp_084.hdr",
    "groups": {
+    "bathB": 1.0
+   }
+  },
+  {
+   "probe": 28,
+   "file": "lamp_085.hdr",
+   "groups": {
     "laundry": 1.0
    }
   },
   {
-   "probe": 27,
-   "file": "lamp_085.hdr",
-   "groups": {
-    "garage": 1.0
-   }
-  },
-  {
-   "probe": 27,
+   "probe": 28,
    "file": "lamp_086.hdr",
    "groups": {
-    "always": 1.0
+    "garage": 1.0
    }
   },
   {
    "probe": 28,
    "file": "lamp_087.hdr",
    "groups": {
+    "always": 1.0
+   }
+  },
+  {
+   "probe": 29,
+   "file": "lamp_088.hdr",
+   "groups": {
     "closet": 1.0
    }
   },
   {
-   "probe": 28,
-   "file": "lamp_088.hdr",
+   "probe": 29,
+   "file": "lamp_089.hdr",
    "groups": {
     "primary": 1.0
    }
   },
   {
-   "probe": 28,
-   "file": "lamp_089.hdr",
+   "probe": 29,
+   "file": "lamp_090.hdr",
    "groups": {
     "primaryLamps": 0.62084,
     "linen": 0.29734,
@@ -764,22 +771,22 @@
    }
   },
   {
-   "probe": 29,
-   "file": "lamp_090.hdr",
+   "probe": 30,
+   "file": "lamp_091.hdr",
    "groups": {
     "linen": 1.0
    }
   },
   {
-   "probe": 29,
-   "file": "lamp_091.hdr",
+   "probe": 30,
+   "file": "lamp_092.hdr",
    "groups": {
     "primary": 1.0
    }
   },
   {
-   "probe": 29,
-   "file": "lamp_092.hdr",
+   "probe": 30,
+   "file": "lamp_093.hdr",
    "groups": {
     "primaryLamps": 0.70067,
     "closet": 0.19529,
@@ -1160,36 +1167,43 @@
    "probe": 26,
    "file": "lamp_m26.hdr",
    "groups": {
-    "bathB": 1.0
+    "primaryBath": 1.0
    }
   },
   {
    "probe": 27,
    "file": "lamp_m27.hdr",
    "groups": {
-    "laundry": 0.55479,
-    "garage": 0.44228,
-    "always": 0.00293
+    "bathB": 1.0
    }
   },
   {
    "probe": 28,
    "file": "lamp_m28.hdr",
    "groups": {
-    "closet": 0.76138,
-    "primary": 0.20186,
-    "primaryLamps": 0.02283,
-    "linen": 0.01093,
-    "kitchenPendant": 0.00301
+    "laundry": 0.58119,
+    "garage": 0.41492,
+    "always": 0.00389
    }
   },
   {
    "probe": 29,
    "file": "lamp_m29.hdr",
    "groups": {
-    "linen": 0.57381,
-    "primary": 0.384,
-    "primaryLamps": 0.02956,
+    "closet": 0.76094,
+    "primary": 0.20232,
+    "primaryLamps": 0.02281,
+    "linen": 0.01093,
+    "kitchenPendant": 0.00301
+   }
+  },
+  {
+   "probe": 30,
+   "file": "lamp_m30.hdr",
+   "groups": {
+    "linen": 0.57416,
+    "primary": 0.38363,
+    "primaryLamps": 0.02958,
     "closet": 0.00824,
     "kitchenPendant": 0.00439
    }

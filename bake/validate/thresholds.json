@@ -1,6 +1,9 @@
 {
  "note": "Gate (c) thresholds (compare.py). Stops are log2 ratios of linear luminance; cell = the largest per-cell difference over the grid; chroma = the largest per-cell shift of log2 R/G plus log2 B/G. visitorOnly: absolute checks applied to the visitor sets only (a closet is black at the slot's fixed exposure). enforce false: reported as warnings, not failures. cameras: per-camera overrides, e.g. {\"backGarden_1\": {\"absolute\": {\"hueFrac\": 0.2}}}.",
- "grid": [8, 6],
+ "grid": [
+  8,
+  6
+ ],
  "absolute": {
   "blackP99": 0.01,
   "zeroFrac": 0.3,
@@ -8,7 +11,10 @@
   "hueFrac": 0.6,
   "hueCell": 1.01
  },
- "visitorOnly": ["blackP99", "zeroFrac"],
+ "visitorOnly": [
+  "blackP99",
+  "zeroFrac"
+ ],
  "baseline": {
   "global": 0.15,
   "cell": 0.4,
@@ -30,6 +36,83 @@
   "enforce": false,
   "satCell": 0.3,
   "zeroCell": 0.3
+ },
+ "brightness": {
+  "note": "visitor sets only: the rooms' frames (cameras.json kind room; the garage left out, a dark annex whose listing photos read 63-66) against the listing photos (web/tools/golden/listing_brightness.json, web/tools/listing_brightness.py): the frame's median 8-bit luma within frame[state] (a broken frame; a room at the adaptation limit stays dim: the primary bath at noon, its lamps off by default, 107), the median over the rooms within set[state] and their median 10th-percentile luma within shadows[state] (contrast: the photos' darker tenth reads 104; a local adaptation that lifted every shadow read 145-157) (page-level failures). Daylight around the photos' 191, dusk lower: lamp-lit rooms, not day. test_auto_exposure.mjs keeps the daylight bands around the photos.",
+  "photos": "31 interiors, median luma 191 (p10 185, p90 198)",
+  "kinds": [
+   "room"
+  ],
+  "excludeSpaces": [
+   "garage"
+  ],
+  "frame": {
+   "sunrise": [
+    100,
+    225
+   ],
+   "noon": [
+    100,
+    225
+   ],
+   "golden": [
+    100,
+    225
+   ],
+   "dusk": [
+    70,
+    215
+   ],
+   "dusk_allon": [
+    70,
+    215
+   ]
+  },
+  "set": {
+   "sunrise": [
+    180,
+    202
+   ],
+   "noon": [
+    180,
+    202
+   ],
+   "golden": [
+    180,
+    202
+   ],
+   "dusk": [
+    145,
+    180
+   ],
+   "dusk_allon": [
+    145,
+    180
+   ]
+  },
+  "shadows": {
+   "sunrise": [
+    80,
+    135
+   ],
+   "noon": [
+    80,
+    135
+   ],
+   "golden": [
+    80,
+    135
+   ],
+   "dusk": [
+    45,
+    100
+   ],
+   "dusk_allon": [
+    45,
+    100
+   ]
+  },
+  "enforce": true
  },
  "cameras": {}
 }

@@ -6,7 +6,7 @@ sun patches and lamps), through Blender AgX inverted (a numpy port of web/src/ag
 paint's albedo (materials.js wallPaint 0xf7f5f1): the light's colour as CCT (K) and Duv. Exposure does not matter.
 
 usage: python3 -I web/tools/wb_walls.py <set dir: .../hq-visitor> <label> [fixture json to update]
-       (labels: 'shipped' for the bake as shipped, 'gains/64' with every lamp group's gain / 64 in encoding.json)
+       (label: 'shipped', the bake as shipped; the fixture is checked against the bake whose hashes it records)
 """
 import gzip, hashlib, json, os, sys
 import numpy as np

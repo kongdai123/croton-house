@@ -101,7 +101,7 @@ Paths in this section are relative to `web/src/`.
   `setQuality`, `setFeatures`, `register`, `updateMovables` and `dispose`.
 - `lightmap_slots.js`: slot changes on the GPU (`createSlotRuntime`): fetch and validate the next slot, then crossfade;
   the shared reflection array (`reflArray`).
-- `lighting_slots.js`: pure slot policy: `SLOTS` (sun, sky colour, display EV, auto-exposure range, wetness, lamp share),
+- `lighting_slots.js`: pure slot policy: `SLOTS` (sun, sky colour, display EV, auto-exposure key and range (the key: the listing photos' brightness by day), wetness, lamp share),
   `discoverSlots`, `nextSlot`, `blendSlot`, `slotRequests`.
 - `lightmap_assets.js`: resolves bake file names through `web/assets/lightmaps/manifest.json` in a packaged build.
 - `slot_progress.js`: counts completed slot requests for the loading bar.
@@ -135,7 +135,7 @@ Paths in this section are relative to `web/src/`.
   three's OutputPass (`blenderAgX`, `loadAgXLuts`).
 - `auto_exposure.js`, `auto_exposure_policy.js`: the GPU meter before output and the EV glide; the pure equations and
   `autoExposureEnabled`.
-- `local_adapt.js`: low-resolution bilateral local adaptation, fused into the output shader.
+- `local_adapt.js`: low-resolution bilateral local adaptation, fused into the output shader: pulls down only what is far brighter than the room (windows, sun patches), as a real-estate exposure blend; the room and its shadows stay as lit.
 - `white_balance.js`, `white_balance_policy.js`: the camera's white balance from the probe volume
   ([white-balance.md](white-balance.md)).
 - `taa.js`: `createTAA`: the jittered linear chain and its temporal resolve; it takes over every pass before the OutputPass.
@@ -601,7 +601,7 @@ right: the dev server, the build, frame pacing, room culling, the runtime merges
 conventions and the owner's constraints. Stale:
 
 - **"Graphics pass" and "Look and antialiasing"**: the custom tone curve, `tune`, and the fitted exposures and grade
-  values are legacy mode; baked mode uses Blender AgX, auto exposure with per-slot ranges (`SLOTS`) and white balance,
+  values are legacy mode; baked mode uses Blender AgX, auto exposure with per-slot keys and ranges (`SLOTS`) and white balance,
   and sets the grade neutral (the film grain stays). hq runs TAA (`taa: 1`), so its composer has no MSAA and no SMAA;
   `?taa=0` gives MSAA 4 and SMAA back. "A real Blender lightmap bake is still the larger step" is done.
 - **"Daylight bake is precomputed"** and **"Smooth entry"**: legacy mode only. Baked mode has four slots; N cycles

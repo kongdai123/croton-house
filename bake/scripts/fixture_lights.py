@@ -156,6 +156,17 @@ def _emits(m):
     return b if b is not None and b.inputs['Emission Strength'].default_value > 0 else None
 
 
+def _lamp_material(m):
+    """A lamp surface by the lighting manifest, glowing in the export or not: an exterior fixture's (the porch sconce, the
+    garden lantern) is off in the day state the scene is exported in, so it arrives dark."""
+    if _emits(m): return True
+    b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m and m.use_nodes else None
+    if b is None: return False
+    import lighting
+    rec = lighting.material(m, required=False)
+    return bool(rec) and lighting.lamp_surface(rec)
+
+
 def _area(ob):
     """World-space surface area of a mesh object (one side of every face)."""
     m = ob.matrix_world; me = ob.data; co = [m @ v.co for v in me.vertices]; tot = 0.0
@@ -176,9 +187,12 @@ def surfaces(scene, doc, order):
     by_switch = [(Vector(gl['c']), s) for s in doc['switches'] for gl in s['glows']]
     owner = {}
     for ob in scene.objects:
-        if ob.type != 'MESH' or not any(_emits(sl.material) for sl in ob.material_slots): continue
+        if ob.type != 'MESH': continue
+        glowing = any(_emits(sl.material) for sl in ob.material_slots)
+        if not glowing and not any(_lamp_material(sl.material) for sl in ob.material_slots): continue
         c = sum((ob.matrix_world @ Vector(v) for v in ob.bound_box), Vector()) / 8
         d, s = min((((c - p).length, s) for p, s in by_switch), key=lambda t: t[0]) if by_switch else (9, None)
+        if not glowing and d >= 0.3: continue   # a dark lamp surface counts only at its switch's fixture
         owner[ob] = s if d < 0.3 else None
         # a switched lamp surface: no shadow (the light inside passes it), and probe.py hides it from its camera rays so a
         # probe sees the fixture's light once, from the light itself
@@ -194,13 +208,13 @@ def surfaces(scene, doc, order):
     for ob, s in owner.items():
         g = order.index(s['group']) if s else order.index('always')
         for sl in ob.material_slots:
-            if _emits(sl.material): users.setdefault(sl.material, set()).add((g, s['key'] if s else None))
+            if _lamp_material(sl.material): users.setdefault(sl.material, set()).add((g, s['key'] if s else None))
     done = {}
     for ob, s in owner.items():
         g = order.index(s['group']) if s else order.index('always'); key = s['key'] if s else None
         for sl in ob.material_slots:
             m = sl.material
-            if not _emits(m): continue
+            if not _lamp_material(m): continue
             if len(users[m]) > 1:   # one material per (group, switch): a lamp material shared across switches is copied
                 tag = (g, key)
                 if tag not in done:

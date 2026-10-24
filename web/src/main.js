@@ -156,6 +156,9 @@ if (bakedWanted && !state.bakedFallback) {
       onProgress: p => ui.progress(0.69 + p * 0.22) });
     state.baked = true; state.dusk = false;
     state.bakedSlots = baked.availableSlots; state.bakedSlot = baked.slotName;
+    // the enclosed fit-outs updateRoomVisibility shows and hides: tracked casters for the sun-shadow cache, so walking in
+    // and out of their rooms redraws base around them, not all of it (a 60 ms hitch at bedroom 3's door)
+    if (batch.rooms?.length) baked.sunShadow.track(batch.rooms.flatMap(r => [r.group, ...r.roots]));
   } catch (err) { state.bakedFallback = err.message; }
 }
 await step(0.92, 'controls');

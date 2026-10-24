@@ -19,7 +19,6 @@ import { batchStatic, stillParts, updateSwayLod, updateRoomVisibility } from './
 import { batchBaked, stowSources } from './batch_baked.js';
 import { createPlantClusters } from './plant_clusters.js';
 import { createRestClusters } from './rest_clusters.js';
-import { createUniformArrayCache } from './uniform_cache.js';
 import * as roles from './lighting_roles.js';
 import { Pets } from './pets/roam.js';
 import { setAnisotropy, setTextureCap, setTextureSet, texturesDecoded } from './materials.js';
@@ -64,8 +63,6 @@ const bakedWanted = bakedRequested(location.search);
 let bakedUnavailable = bakedWanted ? bakedCapabilityError(renderer) : null;
 renderer.setPixelRatio(pixelRatio(preset));
 const scene = new THREE.Scene();
-// uniform arrays sent once per program and value, not at every material switch (uniform_cache.js); ?ucache=0: off
-const uniformCache = Q.get('ucache') === '0' ? null : createUniformArrayCache(renderer);
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 300);
 scene.add(camera);
 // Size the drawing buffer from the canvas box (CSS keeps #gl covering the viewport; setSize(..., false) writes no inline size).
@@ -418,7 +415,6 @@ repaint = () => { if (!document.hidden) frame(0); };
 function frame(dt) {
   if (photo.active) return;   // photo mode owns the canvas while it shows a still
   stats.begin();
-  uniformCache?.update();
   simT += dt;
   tourCtl.update(dt);
   demo.update(dt);
@@ -472,7 +468,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { baked, batch2, uniformCache, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
+window.__app = { baked, batch2, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
 // Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
 // 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
 // the old 30 fps cap. Skipped display refreshes cost nothing.

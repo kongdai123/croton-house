@@ -11,7 +11,7 @@ const dir = await mkdtemp(join(tmpdir(), 'croton-batch2-'));
 try {
   const built = await build({ stdin: { contents: `export * as T from 'three'; export { batchBaked, rigidParts } from './src/batch_baked.js';
     export { createPlantClusters, mainLayersTest } from './src/plant_clusters.js'; export { classifyLighting } from './src/lighting_roles.js';
-    export { createRestClusters } from './src/rest_clusters.js'; export { fastPicks } from './src/pick_bvh.js'; export { createUniformArrayCache } from './src/uniform_cache.js';
+    export { createRestClusters } from './src/rest_clusters.js'; export { fastPicks } from './src/pick_bvh.js';
     export { stillParts, batchStatic, updateSwayLod } from './src/batch.js';
     export { items as decor } from './src/furniture/decor.js'; export { items as outdoor } from './src/furniture/outdoor.js';
     export { items as garage } from './src/furniture/garage.js';`,
@@ -21,7 +21,7 @@ try {
   const deep = new Proxy(function () {}, { get: (t, k) => k === Symbol.toPrimitive ? () => 0 : k === 'then' ? undefined : deep, set: () => true, apply: () => deep });
   const element = () => ({ getContext: () => deep, addEventListener() {}, removeEventListener() {}, setAttribute() {}, style: {} });
   globalThis.document = { createElement: element, createElementNS: element };
-  const { T, batchBaked, createPlantClusters, createRestClusters, mainLayersTest, classifyLighting, stillParts, batchStatic, updateSwayLod, fastPicks, createUniformArrayCache, decor, outdoor, garage } = await import(pathToFileURL(file));
+  const { T, batchBaked, createPlantClusters, createRestClusters, mainLayersTest, classifyLighting, stillParts, batchStatic, updateSwayLod, fastPicks, decor, outdoor, garage } = await import(pathToFileURL(file));
 
   // what a camera on `layers` draws: per material, the world triangles (vertices to 0.01 mm), and the draw count
   const v = new T.Vector3();
@@ -226,24 +226,5 @@ try {
     assert.ok(hits > 100, 'the rays hit something');
     report.aim = `${rays} rays, ${hits} hits, all the same`;
   }
-  // uniform arrays (uniform_cache.js): a repeat of the values last sent to the program is skipped, any change is sent
-  {
-    const sent = [], set = function (gl, v) { sent.push(typeof v[0] === 'number' ? Array.from(v) : v.map(x => x.toArray()).flat()); };
-    const vec3s = { type: 0x8b51, size: 2, setValue: set }, floats = { type: 0x1406, size: 3, setValue: set }, sampler = { type: 0x8b5e, size: 2, setValue: set };
-    const struct = { seq: [{ type: 0x8b52, size: 1, setValue: set }] };
-    let ready = false;
-    const program = { isReady: () => ready, getUniforms: () => ({ seq: [vec3s, floats, sampler, struct] }) };
-    const cache = createUniformArrayCache({ info: { programs: [program] } });
-    cache.update(); assert.equal(vec3s.arrayCache, undefined, 'a program still compiling is left for later');
-    ready = true; cache.update(); assert.ok(vec3s.arrayCache && floats.arrayCache && struct.seq[0].arrayCache && !sampler.arrayCache);
-    const a = [new T.Vector3(1, 2, 3), new T.Vector3(4, 5, 6)];
-    vec3s.setValue(null, a); vec3s.setValue(null, a); assert.equal(sent.length, 1, 'a repeat is skipped');
-    a[1].z = 6.5; vec3s.setValue(null, a); assert.equal(sent.length, 2, 'a change is sent'); assert.deepEqual(sent[1], [1, 2, 3, 4, 5, 6.5]);
-    floats.setValue(null, new Float32Array([1, 2, 3])); floats.setValue(null, [1, 2, 3]); assert.equal(sent.length, 3);
-    floats.setValue(null, [1, 2]); floats.setValue(null, [1, 2]); assert.equal(sent.length, 5, 'a short array is always sent');
-    floats.setValue(null, [1, 2, 3]); floats.setValue(null, [1, 2, 3 + 1e-12]); assert.equal(sent.length, 6, 'values equal in float32 are a repeat');
-    sampler.setValue(null, [1, 2]); sampler.setValue(null, [1, 2]); assert.equal(sent.length, 8, 'samplers untouched');
-    report.uniforms = 'repeats skipped, changes sent';
-  }
-  console.log('batch_baked / plant_clusters / rest_clusters / sway LOD / aim BVH / uniform arrays: same triangles, materials and places in every pose;', JSON.stringify(report));
+  console.log('batch_baked / plant_clusters / rest_clusters / sway LOD / aim BVH: same triangles, materials and places in every pose;', JSON.stringify(report));
 } finally { await rm(dir, { recursive: true, force: true }); }

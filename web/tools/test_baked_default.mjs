@@ -36,7 +36,7 @@ try {
   assert.match(bakedCapabilityError({ getContext: () => ({}) }), /WebGL2/);
   for (const name of ['hq', 'laptop', 'mobile']) {
     assert.equal(TIERS[name].contact, name !== 'mobile'); assert.equal(TIERS[name].puddles, name === 'hq');
-    assert.equal(TIERS[name].shafts, false); assert.equal(TIERS[name].taa, false);
+    assert.equal(TIERS[name].shafts, name === 'hq'); assert.equal(TIERS[name].taa, name === 'hq' ? 1 : false);
     assert.equal(bakedResolution(name, ''), { hq: 'full', laptop: 'half', mobile: 'quarter' }[name]);
     const pair = qualityPair(name); assert.equal(pair[0], name); assert.equal(pair[1], name === 'mobile' ? 'laptop' : 'mobile');
   }

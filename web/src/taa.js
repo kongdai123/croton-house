@@ -131,8 +131,11 @@ class TAAPass extends Pass {
   constructor(renderer, camera, passes, value, options) {
     super(); this.camera = camera; this.scale = scaleOf(value); this.frame = 0; this.valid = false; this.lastTime = 0;
     this.noise = { value: 0 };   // frame index (0-15) for screen-space noise that should integrate under TAA (main.js hands in the PCSS uniform)
-    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.4, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, ...options };
-    this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) }; this.materials = new Map();
+    // mipBias: added to the internal scale's bias (log2 scale) on every surface map: the accumulated jittered frames
+    // resolve finer texture detail than one frame's mip selection assumes. With sharpen 0.55, TAA at full scale keeps
+    // MSAA's texture detail (wood grain, cane weave) without its foliage dither and shadow speckle (gate-c stills, 2026-10-24).
+    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.55, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: -0.5, ...options };
+    this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) + this.settings.mipBias }; this.materials = new Map();
     this.internal = new EffectComposer(renderer, target('TAA scene', true)); this.internal.setPixelRatio(1); this.internal.renderToScreen = false;
     for (const pass of passes) this.internal.addPass(pass);
     this.history = [target('TAA history 0'), target('TAA history 1')]; this.index = 0;
@@ -145,7 +148,7 @@ class TAAPass extends Pass {
     this.sharpen = material(sharpen, { tResolved: { value: null }, uTexel: { value: new THREE.Vector2() }, uSharpen: { value: 0 } }); this.quad = new FullScreenQuad(null);
   }
   reset() { this.valid = false; this.frame = 0; }
-  setScale(value) { this.scale = scaleOf(value); this.lodBias.value = Math.log2(this.scale); this.setSize(this.width, this.height); this.reset(); }
+  setScale(value) { this.scale = scaleOf(value); this.lodBias.value = Math.log2(this.scale) + this.settings.mipBias; this.setSize(this.width, this.height); this.reset(); }
   // The LOD bias on every surface map: a flag of the composed baked shader (shaders/baked_material.js setBakedTaa),
   // and for the legacy raster materials (no baked shader: the fallback) a wrapper of their hook.
   patchTextures() {

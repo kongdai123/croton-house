@@ -35,6 +35,8 @@ import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
 import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader, dryCompile } from './shaders/baked_material.js';
 import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
+import { VolumetricPass, installVolume } from './volumetric.js';
+import { featureWanted } from './volumetric_slots.js';
 
 // The bake's sun (scripts/make_tasks.py, slot "sunrise"): bearing, height, strength (W/m2 = irradiance) and colour.
 export { SLOTS } from './lighting_slots.js';
@@ -759,6 +761,24 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       catch (err) { console.warn('puddles deferred', err?.message ?? err); }
     }
     puddleRefl?.setEnabled(TIERS[name].puddles && (!multi || slots.params.wet > 0));
+    setShafts(name);
+  };
+  // Volumetric light (volumetric.js): ?shafts / ?shafts=0, else the tier's flag. Built once in the linear chain (TAA's
+  // internal composer when TAA is on), then switched with the tier. Its media follow the slot and the slot crossfade.
+  let removeShafts = null;
+  const shaftsState = () => {
+    const f = slots?.fading;
+    return { current: slots?.name ?? slot, next: f?.name ?? null, t: f?.t ?? 0, sky: skyBg, nextSky: f?.sky ?? null };
+  };
+  const setShafts = name => {
+    const want = featureWanted(location.search, 'shafts', TIERS[name]) && !!lighting.renderConfig?.hdr;
+    if (want && !api.shafts) {
+      try {
+        const pass = new VolumetricPass({ camera: lighting.camera, sun: lighting.sun, shadow: pcss, renderer, state: shaftsState });
+        removeShafts = installVolume(lighting.taa?.internal ?? lighting.composer, pass); api.shafts = pass;
+      } catch (err) { console.warn('volumetric light deferred', err?.message ?? err); }
+    }
+    if (api.shafts) api.shafts.enabled = want;
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
   const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
@@ -784,7 +804,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     renderer.toneMapping = legacyTone; renderer.toneMappingExposure = legacyExposure;
     if (lighting.gtao) lighting.gtao.blendIntensity = legacyAO;
     lighting.sun.shadow.camera.copy(legacySunCamera); lighting.sun.shadow.needsUpdate = true;
-    if (api.shafts) { (lighting.taa?.internal ?? lighting.composer)?.removePass(api.shafts); api.shafts.dispose(); }
+    removeShafts?.(); api.shafts?.dispose(); api.shafts = null;
     if (legacyShadow === undefined) delete lighting.sun.userData.bakedShadow; else lighting.sun.userData.bakedShadow = legacyShadow;
     groups?.dispose(); puddleRefl?.dispose(); windows?.dispose(); pcss.dispose(); if (!slots) envTarget?.dispose();
     if (multi || scene.background === skyBg) scene.background = originalBackground;

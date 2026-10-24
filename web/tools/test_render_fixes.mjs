@@ -45,13 +45,13 @@ try {
   const taa = createTAA(renderer, camera, lighting); taa.patchTextures();
   const shader = { uniforms: {}, fragmentShader: '#include <map_fragment>\n#include <alphamap_fragment>\n#include <normal_fragment_maps>\n#include <bumpmap_pars_fragment>\nvec4 shadow = texture2D(uSunDepth, uv); vec4 post = texture2D(tCurrent, uv);' };
   mat.onBeforeCompile(shader, renderer);
-  assert.equal(chained, 1); assert.equal(shader.uniforms.uTaaLodBias, taa.lodBias); assert.equal(taa.lodBias.value, Math.log2(0.75));
+  assert.equal(chained, 1); assert.equal(shader.uniforms.uTaaLodBias, taa.lodBias); assert.equal(taa.lodBias.value, Math.log2(0.75) + taa.settings.mipBias); assert.equal(taa.settings.mipBias, -0.5);
   for (const name of ['map', 'alphaMap', 'normalMap', 'bumpMap']) assert.match(shader.fragmentShader, new RegExp('taaSample\\(\\s*' + name + ','));
   assert.match(shader.fragmentShader, /texture2D\(uSunDepth, uv\)/); assert.match(shader.fragmentShader, /texture2D\(tCurrent, uv\)/);
-  assert.equal(mat.customProgramCacheKey(), 'prior|taa-lod-bias-v1'); assert.equal(taa.settings.sharpen, 0.4);
+  assert.equal(mat.customProgramCacheKey(), 'prior|taa-lod-bias-v1'); assert.equal(taa.settings.sharpen, 0.55);
   const hook = mat.onBeforeCompile; taa.patchTextures(); assert.equal(mat.onBeforeCompile, hook);
-  taa.valid = true; taa.setScale(0.5); assert.equal(shader.uniforms.uTaaLodBias.value, -1); assert.equal(taa.valid, false);
-  taa.setScale(1); assert.equal(shader.uniforms.uTaaLodBias.value, 0);
+  taa.valid = true; taa.setScale(0.5); assert.equal(shader.uniforms.uTaaLodBias.value, -1.5); assert.equal(taa.valid, false);
+  taa.setScale(1); assert.equal(shader.uniforms.uTaaLodBias.value, -0.5);
   const late = mat.clone(); late.onBeforeCompile = mat.onBeforeCompile; late.customProgramCacheKey = mat.customProgramCacheKey;
   scene.add(new THREE.Mesh(new THREE.BoxGeometry(), late)); taa.patchTextures(); assert.equal(taa.materials.size, 2);
   const clonedShader = { uniforms: {}, fragmentShader: '#include <map_fragment>' }; late.onBeforeCompile(clonedShader, renderer);

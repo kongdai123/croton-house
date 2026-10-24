@@ -127,6 +127,37 @@ English, mist, wet ground and puddles, a real camera (focal length on full frame
 focus), lens finish, sizes to 4K, PNG export and a gentle 30% GPU option. It remains the stills tool. Its sky and
 mood presets should drive the bake slots, so a mood looks the same in a still and in the live view.
 
+## Volumetric light and TAA, built 2026-10-24
+
+**Volumetric light** (`web/src/volumetric.js`; the media per slot in `web/src/volumetric_slots.js`): on for the hq tier,
+`?shafts=0` turns it off, `?shafts` turns it on for another tier. One pass in the linear chain after GTAO and before the
+OutputPass (inside TAA's internal chain), so auto exposure meters it and the tone curve maps it.
+- Single scattering of the live sun through the readable PCSS sun depth (`lightmap.js` `createSunPCSS`, 2 cm texels over
+  the lot; glass casts no sun shadow there: scene invariant `glass-casts-no-sun`), one jittered tap per step, 32 steps
+  per ray at half resolution, a reprojected history (it follows walking and turning, depth rejects what was hidden, a
+  jump drops it) and a depth-aware upsample. `shafts.params.debug = 1` shows where rays meet sunlit air in the house.
+- Media: outdoors a haze plus a ground mist falling off with height (sunrise after rain: ~300 m visibility at the
+  ground, scale height 3.5 m), lit by the sun and by the sky (the slot sky's mean radiance, read from its HDR, plus the
+  ground's share); indoors dust (0.016 / m at the low sun, 0.006 at noon), lit by the sun only: its in-scattering of the
+  room light and its extinction of it cancel, so only the beam is added (no veil, no probe lookups through walls).
+  Two-lobe Henyey-Greenstein phase functions. The media and the sky light follow the slot crossfade
+  (`lightmap_slots.js` `fading`). At dusk the sun is down: no beams, a faint sky-lit haze outdoors.
+- Where the sun gets in (debug view, gate-c cameras): at sunrise (az 58, el 8) through the north french doors and the
+  east windows: beams in the office, dining room and bedroom B, seen toward the windows. At noon short beams beside a
+  few windows (garage, bedroom 3). At golden hour (az 255, el 7) no sunlit air inside at all: at 7 deg the sun is
+  shaded before it reaches the west and south openings (the debug view sees no sunlit air even outside the primary
+  bath's west window), so golden-hour beams are outdoors (shafts through the trees, the haze lit around the sun).
+- Cost on an RTX 2080 Ti at 2560 x 1440 (GPU timer queries): 0.53-0.87 ms with MSAA, 0.39-0.63 ms under TAA.
+
+**TAA** (`web/src/taa.js`) is the hq default (`taa: 1` in `tier.js`: full internal resolution; `?taa=0` returns to MSAA 4
++ SMAA, `?taa=0.75` renders at 75% and upsamples). Measured against MSAA 4 + SMAA on the gate-c cameras: cleaner on
+foliage (no alpha-to-coverage dither), sun dapples (PCSS speckle), SSR edges and rugs; with a mip bias of -0.5 and
+sharpen 0.55 it keeps MSAA's texture detail; no visible ghosting on a dog walked across the view at 1.4 m/s, the front
+door swinging shut or a walk with a 45 deg/s turn; 2.2-3.3 ms cheaper per frame at 2560 x 1440 (13-16 ms against 15-18 ms;
+8-10 ms at scale 0.75). Tree crowns read a little denser than with alpha to coverage (the halved alpha cutoff without
+coverage dither). SSR, GTAO and contact shadows run inside TAA's jittered chain; the overlay layer (panoramas, photo
+cards) draws after the composer with the camera's unjittered projection.
+
 ## Sources
 
 - WebGPU ray tracing status: [gpuweb roadmap notes](https://kaelan.fyi/research/webgpu-future-roadmap/),

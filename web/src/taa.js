@@ -125,6 +125,10 @@ const target = (name, depth = false) => {
   if (depth) rt.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   return rt;
 };
+// nodes of the scene visited per frame for the TAA texture bias (updateTextures); the scene has ~16k
+const TAA_SLICE = 400;
+// ?taascan=1: the whole scene every frame, as before (A/B: tools/ab_check.mjs)
+const FULL_SCAN = new URLSearchParams(globalThis.location?.search ?? '').get('taascan') === '1';
 export const taaQuality = (preset, query) => query.has('taa') ? { ...preset, msaa: 0, smaa: false } : preset;
 
 class TAAPass extends Pass {
@@ -135,7 +139,7 @@ class TAAPass extends Pass {
     // resolve finer texture detail than one frame's mip selection assumes. With sharpen 0.55, TAA at full scale keeps
     // MSAA's texture detail (wood grain, cane weave) without its foliage dither and shadow speckle (gate-c stills, 2026-10-24).
     this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.55, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: -0.5, ...options };
-    this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) + this.settings.mipBias }; this.materials = new Map();
+    this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) + this.settings.mipBias }; this.materials = new Map(); this.seen = new WeakMap(); this.drawing = false;
     this.internal = new EffectComposer(renderer, target('TAA scene', true)); this.internal.setPixelRatio(1); this.internal.renderToScreen = false;
     for (const pass of passes) this.internal.addPass(pass);
     this.history = [target('TAA history 0'), target('TAA history 1')]; this.index = 0;
@@ -151,17 +155,48 @@ class TAAPass extends Pass {
   setScale(value) { this.scale = scaleOf(value); this.lodBias.value = Math.log2(this.scale) + this.settings.mipBias; this.setSize(this.width, this.height); this.reset(); }
   // The LOD bias on every surface map: a flag of the composed baked shader (shaders/baked_material.js setBakedTaa),
   // and for the legacy raster materials (no baked shader: the fallback) a wrapper of their hook.
+  patchMaterial(m) {
+    const e = this.materials.get(m);
+    if (e) { if (!e.baked || isBaked(m)) return; this.materials.delete(m); }   // its baked shader went (the legacy fallback)
+    let maps = false; for (let i = 0; i < TAA_MAPS.length && !maps; i++) maps = !!m[TAA_MAPS[i]];
+    if (!maps) return;
+    if (isBaked(m)) { this.materials.set(m, { baked: true }); m.needsUpdate = true; return; }
+    const prev = m.onBeforeCompile, key = m.customProgramCacheKey, sourceKey = key?.call(m) ?? '', bias = this.lodBias;
+    const hook = function(sh, renderer) { prev?.call(this, sh, renderer); textureBias(sh, bias); };
+    const programKey = () => sourceKey + '|taa-lod-bias-v1';
+    this.materials.set(m, { prev, key, hook, programKey }); m.onBeforeCompile = hook; m.customProgramCacheKey = programKey; m.needsUpdate = true;
+  }
+  visitMaterials(o) {
+    const m = o.material; if (!m) return;
+    if (Array.isArray(m)) { for (const x of m) if (x) this.patchMaterial(x); } else this.patchMaterial(m);
+  }
+  // Every material of the scene, now.
   patchTextures() {
     setBakedTaa(this.lodBias);
-    this.scene.traverse(o => { for (const m of [].concat(o.material ?? [])) {
-      if (this.materials.get(m)?.baked && !isBaked(m)) this.materials.delete(m);   // its baked shader went (the legacy fallback)
-      if (this.materials.has(m) || !TAA_MAPS.some(name => m[name])) continue;
-      if (isBaked(m)) { this.materials.set(m, { baked: true }); m.needsUpdate = true; continue; }
-      const prev = m.onBeforeCompile, key = m.customProgramCacheKey, sourceKey = key?.call(m) ?? '', bias = this.lodBias;
-      const hook = function(sh, renderer) { prev?.call(this, sh, renderer); textureBias(sh, bias); };
-      const programKey = () => sourceKey + '|taa-lod-bias-v1';
-      this.materials.set(m, { prev, key, hook, programKey }); m.onBeforeCompile = hook; m.customProgramCacheKey = programKey; m.needsUpdate = true;
-    } });
+    this.scene.traverse(o => this.visitMaterials(o));
+    this.walk = null;
+  }
+  // Per frame. Visiting the whole scene (~16k nodes) cost ~10 ms of CPU per frame on a 2.1 GHz Xeon, so it runs whole only
+  // on the first frame and after invalidateTextures() (quality and time changes, the legacy fallback). Every draw of the
+  // scene inside this pass checks its material first (drawn(): a new material, or one whose version moved, e.g. a map
+  // that arrived late), so whatever the camera sees is patched before its first draw as before; and a slice of the scene
+  // per frame (TAA_SLICE nodes, all of it within about a second) reaches what only other views draw (the mirrors).
+  updateTextures() {
+    if (this.texturesDirty !== false || FULL_SCAN) { this.texturesDirty = false; this.patchTextures(); return; }
+    setBakedTaa(this.lodBias);
+    const walk = this.walk ??= [this.scene];
+    for (let n = 0; n < TAA_SLICE; n++) {
+      const o = walk.pop();
+      if (!o) { walk.push(this.scene); break; }
+      this.visitMaterials(o);
+      const c = o.children; for (let i = c.length - 1; i >= 0; i--) walk.push(c[i]);
+    }
+  }
+  invalidateTextures() { this.texturesDirty = true; }
+  // renderBufferDirect of the scene while this pass draws it (createTAA): the material, before its program is chosen
+  drawn(material) {
+    if (this.seen.get(material) === material.version) return;
+    this.patchMaterial(material); this.seen.set(material, material.version);
   }
   setSize(w, h) {
     this.width = Math.max(1, Math.round(w)); this.height = Math.max(1, Math.round(h));
@@ -186,9 +221,11 @@ class TAAPass extends Pass {
       cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
       u.uInvVP.value.multiplyMatrices(cam.matrixWorld, cam.projectionMatrixInverse); u.uView.value.copy(cam.matrixWorldInverse);
       this.noise.value = this.frame % 16;
-      this.patchTextures();   // baked clones, quality swaps and late pets join before their first draw
+      this.updateTextures();   // baked clones, quality swaps and late pets join (updateTextures and drawn say when)
       // GTAO swaps colour; the scene's depth remains on the buffer that RenderPass started with.
-      u.tDepth.value = this.internal.readBuffer.depthTexture; this.internal.render(); u.tCurrent.value = this.internal.readBuffer.texture;
+      u.tDepth.value = this.internal.readBuffer.depthTexture;
+      this.drawing = true; try { this.internal.render(); } finally { this.drawing = false; }
+      u.tCurrent.value = this.internal.readBuffer.texture;
       const next = this.history[this.index], previous = this.history[1 - this.index]; u.tHistory.value = previous.texture; u.uValid.value = +this.valid;
       if (!this.valid) renderer.initRenderTarget(previous);
       for (const key of ['feedback', 'gamma', 'depthAbsolute', 'depthRelative', 'reactive']) u['u' + key[0].toUpperCase() + key.slice(1)].value = this.settings[key];
@@ -220,12 +257,18 @@ export function createTAA(renderer, camera, lighting, value = '', options = {}) 
   const pass = new TAAPass(renderer, camera, composer.passes.splice(0, output), value, options); composer.insertPass(pass, 0);
   // Quality switches keep SSR/GTAO presets but never restore multisampling or SMAA. Full-resolution buffers stay single-sample.
   const quality = lighting.setQuality.bind(lighting), time = lighting.applyTime.bind(lighting);
-  lighting.setQuality = next => { quality({ ...next, msaa: 0, smaa: false }); pass.reset(); };
-  lighting.applyTime = async (...args) => { pass.reset(); try { return await time(...args); } finally { pass.reset(); } };
+  lighting.setQuality = next => { quality({ ...next, msaa: 0, smaa: false }); pass.reset(); pass.invalidateTextures(); };
+  lighting.applyTime = async (...args) => { pass.reset(); pass.invalidateTextures(); try { return await time(...args); } finally { pass.reset(); pass.invalidateTextures(); } };
+  // the scene's own draws inside the pass: each material is checked for the texture bias before its program is chosen
+  const direct = renderer.renderBufferDirect;
+  if (direct) renderer.renderBufferDirect = function (camera, scene, geometry, material, object, group) {
+    if (pass.drawing && scene === pass.scene && material) pass.drawn(material);
+    return direct.call(this, camera, scene, geometry, material, object, group);
+  };
   for (const rt of [composer.renderTarget1, composer.renderTarget2]) { if (rt.samples) { rt.samples = 0; rt.dispose(); } }
   for (const p of composer.passes) if (p instanceof SMAAPass) p.enabled = false;
   const reset = () => pass.reset(), dispose = composer.dispose.bind(composer);
   renderer.domElement.addEventListener('webglcontextrestored', reset);
-  composer.dispose = () => { renderer.domElement.removeEventListener('webglcontextrestored', reset); pass.dispose(); dispose(); };
+  composer.dispose = () => { renderer.domElement.removeEventListener('webglcontextrestored', reset); if (direct) renderer.renderBufferDirect = direct; pass.dispose(); dispose(); };
   return pass;
 }

@@ -2,9 +2,8 @@
 // The real house and lamp groups built headless (harness/baked.mjs), each slot's probe volume filled as the runtime fills
 // it (the slot's default switches), and the adapting illuminant read at gate (c)'s cameras (bake/validate/cameras.json)
 // as the runtime reads it each frame: the lamp-lit living room at dusk is warm and adapts to warm-white, the noon garden
-// is near neutral daylight, daylight rooms read as daylight, blue hour outside stays blue. Also the lamp calibration's
-// next balance (every group's gain / 64, lamps no longer 10-70x the daylight in the same room): a sunrise living room
-// becomes mostly daylight, dusk stays warm. No browser, no GPU.
+// is near neutral daylight, daylight rooms read as daylight, blue hour outside stays blue, and with the lamps at physical
+// levels (bake v4's lumen model) a sunrise living room is mostly daylight. No browser, no GPU.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,14 +40,16 @@ const t0 = performance.now();
     const D = W.adaptationDegree(indoor), M = W.temperatureMatrix(c.mired, c.duv, D), out = W.apply(M, e);
     return { e, c, D, out, rel: v => v.map(x => x / v[1]) };
   };
-  const report = [], gains = lg.groups.map(g => g.gain ?? 1);
+  const report = [];
   const note = (label, r) => report.push(`${label}: ${Math.round(r.c.raw.kelvin)} K ${r.c.raw.duv.toFixed(4)} -> ${Math.round(r.c.kelvin)} K D ${r.D.toFixed(2)}, adapted ${r.rel(r.out).map(v => v.toFixed(2)).join('/')}`);
 
-  // ---- dusk (every switch on by default at dusk): lamp-lit rooms are warm and adapt to warm-white, not orange
+  // ---- dusk (every switch on by default at dusk): lamp-lit rooms are warm and adapt to warm-white, not orange. The 3000 K
+  // fixtures at physical levels mix with the blue hour through the windows: 3200-4000 K on bake v4, well below the noon
+  // daylight rooms (5100-7200 K). The old lamps, 10-70x too bright, drowned the window light (2700-3100 K).
   let v = await volumeFor('dusk');
   for (const id of ['living_1', 'kitchen_1', 'dining_1', 'primaryBedroom_1', 'bedroom3_1', 'bathB_1']) {
     const r = reading(v, id); note(`dusk ${id}`, r);
-    assert.ok(r.e[0] > r.e[1] && r.e[1] > r.e[2] && r.c.raw.kelvin < 3300, `${id} at dusk: warm (${r.e})`);
+    assert.ok(r.e[0] > r.e[1] && r.e[1] > r.e[2] && r.c.raw.kelvin < 4300, `${id} at dusk: warm (${Math.round(r.c.raw.kelvin)} K, ${r.e})`);
     const [R, , B] = r.rel(r.out);
     assert.ok(R >= 1 && B <= 1 && R / B < 1.6, `${id} at dusk: adapted warm-white, R/B ${(R / B).toFixed(2)} (was ${(r.e[0] / r.e[2]).toFixed(1)})`);
   }
@@ -74,13 +75,14 @@ const t0 = performance.now();
   }
   v.uniforms.uProbeSH.value.dispose();
 
-  // ---- a switch refills the volume and the reading follows: bedroom 3 at golden hour, its lamps off then on
+  // ---- a switch refills the volume and the reading follows: bedroom 3 at golden hour (its lamps on by default), off then on
   v = await volumeFor('golden');
-  const off = reading(v, 'bedroom3_1');
-  for (const r of lg.records) if (r.group?.name.startsWith('bedroom3')) { r.toggle.manual = true; r.toggle.on = true; }
-  lg.update(1, 'golden'); lg.update(1, 'golden');
-  const on = reading(v, 'bedroom3_1'); note('golden bedroom3_1 lamps off', off); note('golden bedroom3_1 lamps on', on);
-  assert.ok(on.c.raw.kelvin < off.c.raw.kelvin - 300 && W.luminance(on.e) > W.luminance(off.e), 'switching the lamps on warms the illuminant');
+  const bedroom3 = on => { for (const r of lg.records) if (r.group?.name.startsWith('bedroom3')) { r.toggle.manual = true; r.toggle.on = on; } lg.update(1, 'golden'); lg.update(1, 'golden'); };
+  bedroom3(false); const off = reading(v, 'bedroom3_1');
+  bedroom3(true); const on = reading(v, 'bedroom3_1'); note('golden bedroom3_1 lamps off', off); note('golden bedroom3_1 lamps on', on);
+  // two 3000 K lamps at physical levels against the low golden sun through the window: 4400 -> 4200 K on bake v4 (11 mired)
+  const warmer = 1e6 / on.c.raw.kelvin - 1e6 / off.c.raw.kelvin;
+  assert.ok(warmer > 5 && W.luminance(on.e) > W.luminance(off.e), `switching the lamps on warms the illuminant (${warmer.toFixed(1)} mired)`);
   // the slot crossfade (lightmap_slots.js: uProbeNextSH, uProbeBlend): the reading is the blend of the two volumes'
   const noon = await volumeFor('noon'), { cam } = camera('living_1');
   const a = W.probeIlluminant(v.uniforms, cam.position), z = W.probeIlluminant(noon.uniforms, cam.position);
@@ -113,8 +115,7 @@ const t0 = performance.now();
   const hash = p => createHash('sha256').update(readFileSync(join(WEB, p))).digest('hex').slice(0, 16);
   const stale = Object.entries(fixture.bake).filter(([p, h]) => hash(p) !== h).map(([p]) => p);
   const errors = [];
-  for (const [label, scale] of [['shipped', 1], ['gains/64', 1 / 64]]) {
-    lg.groups.forEach((g, i) => { g.gain = gains[i] * scale; });
+  for (const label of ['shipped']) {
     for (const [slot, walls0] of Object.entries(fixture.walls[label])) {
       v = await volumeFor(slot);
       for (const [id, K] of Object.entries(walls0)) {
@@ -124,28 +125,17 @@ const t0 = performance.now();
       v.uniforms.uProbeSH.value.dispose();
     }
   }
-  lg.groups.forEach((g, i) => { g.gain = gains[i]; });
   const meanError = errors.reduce((a, b) => a + b, 0) / errors.length, maxError = Math.max(...errors);
   if (stale.length) console.log(`white balance: the wall fixture was measured on another bake (${stale.join(', ')}): not enforced; mean ${meanError.toFixed(1)}, max ${maxError.toFixed(0)} mired. Re-measure: ${fixture.measure}`);
   else assert.ok(errors.length >= 60 && meanError < 12 && maxError < 80, `the adapting illuminant against the rendered walls: mean ${meanError.toFixed(1)}, max ${maxError.toFixed(0)} mired over ${errors.length}`);
 
-  // ---- the lamp calibration's next balance (preview: every group's gain / 64)
-  lg.groups.forEach((g, i) => { g.gain = gains[i] / 64; });
-  try {
-    v = await volumeFor('sunrise');
-    // as shipped the island pendant (on at sunrise) outshines the daylight: about 2800 K; recalibrated, the room's walls read 4100 K
-    const r = reading(v, 'living_1'); note('gains/64 sunrise living_1', r);
-    assert.ok(r.c.raw.kelvin > 3500, `sunrise living room with the recalibrated lamps: mostly daylight (${Math.round(r.c.raw.kelvin)} K)`);
-    { const [R, , B] = r.rel(r.out); assert.ok(R / B < 1.3 && B / R < 1.1, `sunrise living room adapted near white: ${r.rel(r.out)}`); }
-    v.uniforms.uProbeSH.value.dispose();
-    v = await volumeFor('dusk');
-    for (const id of ['living_1', 'primaryBedroom_1']) {
-      const d = reading(v, id); note(`gains/64 dusk ${id}`, d);
-      assert.ok(d.c.raw.kelvin < 3300, `${id} at dusk with the recalibrated lamps: still lamp-lit (${Math.round(d.c.raw.kelvin)} K)`);
-      const [R, , B] = d.rel(d.out); assert.ok(R / B < 1.6 && R >= 1, `${id} adapted warm-white`);
-    }
-    v.uniforms.uProbeSH.value.dispose();
-  } finally { lg.groups.forEach((g, i) => { g.gain = gains[i]; }); lg.reset('sunrise'); }
+  // ---- the lamps at physical levels: the island pendant (on at sunrise) no longer outshines the daylight, so the sunrise
+  // living room reads mostly daylight (2800 K on the old bake, its walls 4100 K with the lamps at a 64th) and adapts near white
+  v = await volumeFor('sunrise');
+  { const r = reading(v, 'living_1'); note('sunrise living_1', r);
+    assert.ok(r.c.raw.kelvin > 3500, `sunrise living room: mostly daylight (${Math.round(r.c.raw.kelvin)} K)`);
+    const [R, , B] = r.rel(r.out); assert.ok(R / B < 1.3 && B / R < 1.1, `sunrise living room adapted near white: ${r.rel(r.out)}`); }
+  v.uniforms.uProbeSH.value.dispose(); lg.reset('sunrise');
   if (process.env.REPORT) console.log(report.join('\n'));
-  console.log(`white balance on the shipped bake: dusk rooms warm -> warm-white, blue hour stays blue, noon daylight near neutral, switches and crossfade followed, ${n} camera readings within the clamp, against ${errors.length} rendered walls mean ${meanError.toFixed(1)} max ${maxError.toFixed(0)} mired${stale.length ? ' (not enforced: another bake)' : ''}, gains/64 preview (${((performance.now() - t0) / 1000).toFixed(1)} s) OK`);
+  console.log(`white balance on the shipped bake: dusk rooms warm -> warm-white, blue hour stays blue, noon daylight near neutral, switches and crossfade followed, ${n} camera readings within the clamp, against ${errors.length} rendered walls mean ${meanError.toFixed(1)} max ${maxError.toFixed(0)} mired${stale.length ? ' (not enforced: another bake)' : ''}, sunrise mostly daylight (${((performance.now() - t0) / 1000).toFixed(1)} s) OK`);
 }

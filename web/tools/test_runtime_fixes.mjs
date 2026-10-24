@@ -14,7 +14,7 @@ try {
   const built = await build({ stdin: { contents: `export * as THREE from 'three'; export * from './src/tour.js';
     export { Viewpoints } from './src/viewpoints.js'; export { Interact } from './src/interact.js';
     export { getColliders, addAABB } from './src/house.js'; export { buildGrid } from './src/nav.js';
-    export { createLampGroups } from './src/lamp_groups.js'; export { collectLightSwitches } from './src/furniture/light_switch.js';
+    export { createLampGroups, lampGroupRes } from './src/lamp_groups.js'; export { glowLevel } from './src/lighting_roles.js'; export { collectLightSwitches } from './src/furniture/light_switch.js';
     export { setLang } from './src/ui.js'; export { probeLit, reflGLSL } from './src/lightmap.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
     bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
@@ -24,7 +24,12 @@ try {
   globalThis.addEventListener = globalThis.dispatchEvent = () => {};
   globalThis.location = { search: '?agx=three' };
   globalThis.window = { __app: { state: { baked: true }, baked: { slotName: 'sunrise' } } };
-  const { THREE: T, Tour, STOPS, Viewpoints, Interact, getColliders, addAABB, buildGrid, createLampGroups, collectLightSwitches, setLang, probeLit, reflGLSL } = await import(pathToFileURL(file));
+  const { THREE: T, Tour, STOPS, Viewpoints, Interact, getColliders, addAABB, buildGrid, createLampGroups, lampGroupRes, glowLevel, collectLightSwitches, setLang, probeLit, reflGLSL } = await import(pathToFileURL(file));
+  // lamp groups at the atlas tier's resolution (full on hq), ?lmgroups=half caps them
+  // baked lamp surfaces at the bake's physical luminance (encoding.json member), else 1.8x their base; wash cards by opacity
+  assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5, luminance: 3 }), 1.5); assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5 }), 0.9);
+  assert.equal(glowLevel({ base: 0.4, wash: true }, { baked: true, level: 0.5, luminance: 3 }), 0.2);
+  assert.equal(lampGroupRes('full', ''), 'full'); assert.equal(lampGroupRes('half', ''), 'half'); assert.equal(lampGroupRes('full', '?lmgroups=half'), 'half'); assert.equal(lampGroupRes('quarter', '?lmgroups=half'), 'quarter');
   let caption = '';
   const ui = { setCaption(s) { caption = s; }, setLabel() {}, toast() {}, toggleLegends() {} };
   const player = { pos: new T.Vector3(), camera: new T.PerspectiveCamera(), yaw: 0, pitch: 0, eye: 1.58, keys: new Set(), resetJump() {}, forward() { return new T.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); } };

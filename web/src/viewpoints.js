@@ -1,7 +1,7 @@
 // Zillow viewpoints: fly to the exact spot a listing photo or 3D-Home panorama was taken, then compare the real image with
 // the 3D view (wipe slider), or step into the panorama itself (C toggles).
 import { THREE } from './kit.js';
-import { t } from './ui.js';
+import { t, esc } from './ui.js';
 import { buildGrid, navPath } from './nav.js';
 import { getDoors, setFrench, setHinged, setBifold } from './house.js';
 import { doorIsOpen } from './interact.js';
@@ -116,7 +116,7 @@ export class Viewpoints {
   row(v) {
     const el = document.createElement('div'); el.className = 'vp' + (this.current?.id === v.id ? ' active' : '');
     const img = document.createElement('img'); img.loading = 'lazy'; img.src = v.img || v.thumb; el.appendChild(img);
-    const tx = document.createElement('div'); tx.innerHTML = `<div class="t"><span class="dot ${v.kind}"></span>${v.kind === 'pano' ? t(v.title) : t('photo') + ' ' + v.title}</div><div class="s">${v.kind === 'pano' ? t('pano') : `${Math.round(v.heading)}°`}</div>`; el.appendChild(tx);
+    const tx = document.createElement('div'); tx.innerHTML = `<div class="t"><span class="dot ${v.kind}"></span>${esc(v.kind === 'pano' ? t(v.title) : t('photo') + ' ' + v.title)}</div><div class="s">${v.kind === 'pano' ? t('pano') : `${Math.round(v.heading)}°`}</div>`; el.appendChild(tx);
     el.onclick = () => { this.goTo(v); this.ui.closePanel(); this.panelOpen = false; };
     return el;
   }

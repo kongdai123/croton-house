@@ -1,5 +1,8 @@
 // Studio Hu Dwelling's RedNote (小红书) posts about this house, each pinned to the spot in the model it was shot from.
-import { t, getLang } from './ui.js';
+import { t, getLang, esc } from './ui.js';
+
+// Post links open only on RedNote itself (the data file is first-party; a javascript: or other URL never becomes a link).
+const RN_URL = /^https:\/\/www\.xiaohongshu\.com\//;
 
 // slug -> where to stand (plan x, y), heading (deg, 0 = north), pitch, and whether to switch to dusk.
 const SPOTS = {
@@ -37,7 +40,7 @@ export class RedNote {
       el.innerHTML = `<h4>${esc(p.title)}</h4><div style="font-size:12px;color:#8a847a">${date}${s ? ' · ' + (zh ? s.zh : s.en) : ''}</div>${p.desc ? `<p>${esc(p.desc.replace(/#[^#\[]+\[话题\]#/g, '').trim())}</p>` : ''}`;
       if (p.video) { const v = document.createElement('video'); v.src = `assets/rednote/${p.video}`; v.controls = true; v.preload = 'metadata'; v.playsInline = true; v.poster = p.media[0] ? `assets/rednote/${p.media[0]}` : ''; el.appendChild(v); }
       else for (const m of p.media) { const img = document.createElement('img'); img.loading = 'lazy'; img.src = `assets/rednote/${m}`; el.appendChild(img); }
-      const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = zh ? '在小红书打开 ↗' : 'Open on RedNote ↗'; el.appendChild(a);
+      if (RN_URL.test(p.url)) { const a = document.createElement('a'); a.href = p.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = zh ? '在小红书打开 ↗' : 'Open on RedNote ↗'; el.appendChild(a); }
       if (s) { const b = document.createElement('button'); b.className = 'go'; b.textContent = t('goto'); b.onclick = () => { this.ui.closePanel(); this.panelOpen = false; this.go(p.slug); }; el.appendChild(document.createElement('br')); el.appendChild(b); }
       body.appendChild(el);
     }
@@ -45,4 +48,3 @@ export class RedNote {
   }
   go(slug) { const pin = this.viewpoints.markers?.pins.find(p => p.kind === 'rn' && p.post.slug === slug); if (pin) { this.viewpoints.markers.activate({ pin }); return; } const tg = this.targetFor(slug); if (!tg) return; if (tg.dusk && !window.__app.state.dusk) this.ui.toggleDusk(); this.viewpoints.goTo(tg, { onDone: () => { const p = this.posts.find(q => q.slug === slug); const s = SPOTS[slug]; this.ui.toast(`${p.title} · ${getLang() === 'zh' ? s.zh : s.en}`, 3500); } }); }
 }
-function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

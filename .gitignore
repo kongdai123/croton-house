@@ -22,3 +22,9 @@ web/tools/out/
 /qa.txt
 # UI smoke run output (web/tools/smoke/run.mjs --out)
 web/smoke-artifacts/
+# agent worktrees and notes that must never be committed (cluster hosts and paths live in them)
+.claude/
+bake/AGENTS_BRIEF.md
+bake/INTEGRATION_TODO.md
+# also a symlinked node_modules (a worktree's link to the main checkout's), which the directory pattern above misses
+web/node_modules

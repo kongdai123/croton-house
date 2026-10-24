@@ -27,7 +27,7 @@ Three.js (r183) walkthrough of 2513 Croton Ave in `web/`.
 - The architect is credited as *Studio Hu* (from the landing page); no name or bio exists in the repo yet.
 
 ## Earlier (committed)
-- Background music: the copyright-free Tuscany track, then AIR's acoustic Mike Mills; the commercial Brush recording stays off the public site.
+- Background music: Oak Studios' "Tuscany" (CC BY-ND 4.0, credited with source and licence in the help sheet; Oak Studios asks for permission outside YouTube/Instagram/Facebook), then a cover of AIR's "Mike Mills" shared by its performer (the composition itself is not licensed); the commercial Brush recording stays off the public site.
 - Map pins start hidden. **H** toggles all three legends together; quality moved to **J**.
 - The front door opens on arrival. Textures default to 1K (phones 512, `?tex=2k` for the full library); Enter turns on only when the bar is full, and before shader compile so Windows drivers can leave the landing.
 - The garage is lit from the shop bars, shades start raised, and foliage and the kitchen wall no longer show through.

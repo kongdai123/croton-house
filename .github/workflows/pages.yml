@@ -6,14 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege: every job reads only; the deploy job alone may publish (security review, 2026-10-24).
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# Pull requests get their own group: sharing "pages" let a queued PR run cancel a pending master deploy.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -46,15 +46,16 @@ jobs:
   # house alone takes over 7 minutes to load, so the job could only time out. They run on a GPU instead, after every
   # bake and before pushing UI changes (bake/validate/RENDER_GATE.md).
 
-  deploy:
+  # Build in a job without publishing rights (npm ci runs install scripts), then hand the artifact to a deploy job
+  # that holds only the Pages and OIDC permissions.
+  build:
     if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -75,5 +76,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4

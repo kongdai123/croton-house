@@ -1,7 +1,7 @@
 // Photo, panorama and RedNote pins in the 3D world: a pulsing floor ring with a heading arrow, a thin stem and a floating thumbnail of the post.
 // Clicking a pin flies to the spot it was shot from and floats the post's photo (or video) beside the view as a framed card.
 import { THREE } from './kit.js';
-import { getLang, t } from './ui.js';
+import { getLang, t, store } from './ui.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
 
 const COLORS = { rn: '#ff2442', pano: '#2f6fe0', photo: '#2fa66a' }, STORE = { rn: 'croton-pins-rn', pano: 'croton-pins-pano', photo: 'croton-pins-photo' };
@@ -60,8 +60,8 @@ export class Markers {
   }
   toggle(kind = 'rn', on = !this.enabled[kind]) {
     if (typeof kind === 'boolean') { on = kind; kind = 'rn'; }
-    this.enabled[kind] = on; localStorage.setItem(STORE[kind], on ? '1' : '0');
-    if (kind === 'rn') localStorage.setItem('croton-pins', on ? '1' : '0');
+    this.enabled[kind] = on; store.set(STORE[kind], on ? '1' : '0');
+    if (kind === 'rn') store.set('croton-pins', on ? '1' : '0');
     this.ui.syncLegends();
     if (!on && this.card?.pin.kind === kind) this.closeCard();
     this.update(0);

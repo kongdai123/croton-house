@@ -1,6 +1,6 @@
 // Photo mode panel: describe a mood in words or set it by hand, choose lens, quality and size, render, save.
 // Frame the shot in the walkthrough first; the still is taken from the current eye. I opens and closes the panel.
-import { getLang } from './ui.js';
+import { getLang, esc } from './ui.js';
 import { DEFAULT_MOOD } from './sky.js';
 
 const S = {
@@ -16,7 +16,6 @@ const S = {
     render: 'Render', stop: 'Stop', save: 'Save PNG', close: 'Close', ready: 'Frame the shot, then render', rendering: 'Rendering', done: 'Done', stopped: 'Stopped', preparing: 'Preparing the scene', snapshot: 'Collecting the scene', merge: 'Preparing surfaces', bvh: 'Preparing light paths', upload: 'Loading the scene', compile: 'Preparing the render' },
 };
 const tr = k => (S[getLang()] ?? S.en)[k] ?? k;
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 const PRESETS = [
   ['live', null],

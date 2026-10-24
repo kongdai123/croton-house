@@ -34,17 +34,26 @@ const HELP = {
      ['房子', [['G', '狗'], ['K', '猫'], ['N', '白天 · 黄昏'], ['B', '音乐'], ['J', '画质'], ['Z', '显示按键 · 全部隐藏 · 恢复'], ['L', '中文 · English'], ['?', '本页'], ['Esc', '菜单 · 关闭']]]],
   ],
 };
-let lang = localStorage.getItem('croton-lang') || 'en';
+// Site storage can be blocked (private modes, disabled site data: every access throws) or hold a stray value from another
+// page on the shared github.io origin: read and write through these, and accept only known values.
+export const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* not stored: the choice lasts for this visit */ } },
+};
+const LANGS = ['en', 'zh'];
+// Text into HTML strings (titles and descriptions from the data files): escaped, never markup.
+export const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+let lang = LANGS.includes(store.get('croton-lang')) ? store.get('croton-lang') : 'en';
 export const getLang = () => lang;
 export const t = (k) => DICT[lang][k] ?? DICT.en[k] ?? k;
-export function setLang(l) { lang = l; localStorage.setItem('croton-lang', l); document.documentElement.lang = l; for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n); for (const el of document.querySelectorAll('[data-i18n-title]')) { el.title = t(el.dataset.i18nTitle); if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title); }  for (const b of document.querySelectorAll('[data-lang]')) b.classList.toggle('on', b.dataset.lang === l); dispatchEvent(new Event('langchange')); }
+export function setLang(l) { if (!LANGS.includes(l)) return; lang = l; store.set('croton-lang', l); document.documentElement.lang = l; for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n); for (const el of document.querySelectorAll('[data-i18n-title]')) { el.title = t(el.dataset.i18nTitle); if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.title); }  for (const b of document.querySelectorAll('[data-lang]')) b.classList.toggle('on', b.dataset.lang === l); dispatchEvent(new Event('langchange')); }
 // Landing plan drawing from the plan model (walls incl. the garage annex, doors and windows): walls solid, openings
 // cut out, windows as a single glazing line; scale bar and north mark.
 function drawPlan(h) {
   const svg = document.getElementById('lcPlan'); if (!svg) return;
   const [vx, vy, vw, vh] = h.viewBox, p = 0.3;
   svg.setAttribute('viewBox', `${vx - p} ${-(vy + vh) - p} ${vw + 2 * p} ${vh + 2 * p + 0.9}`);
-  const rect = (o, c) => `<rect class="${c}" x="${o.x0}" y="${-o.y1}" width="${o.x1 - o.x0}" height="${o.y1 - o.y0}"/>`;
+  const rect = (o, c) => `<rect class="${c}" x="${+o.x0}" y="${-o.y1}" width="${o.x1 - o.x0}" height="${o.y1 - o.y0}"/>`;   // numbers only (+, -)
   let s = h.walls.map(w => rect(w, 'w')).join('');
   s += '<path class="v" d="M-0.95 -1.9 L-1.75 -3.6 L-0.15 -3.6 Z"/><circle class="vp" cx="-0.95" cy="-1.9" r="0.22"/>';   // where the landing photo looks from
   for (const o of h.openings) {
@@ -52,7 +61,7 @@ function drawPlan(h) {
     s += rect(o, 'o');
     if (o.kind !== 'window') continue;
     const mx = (o.x0 + o.x1) / 2, my = -(o.y0 + o.y1) / 2;
-    s += o.dir === 'H' ? `<line class="g" x1="${o.x0}" x2="${o.x1}" y1="${my}" y2="${my}"/>` : `<line class="g" x1="${mx}" x2="${mx}" y1="${-o.y1}" y2="${-o.y0}"/>`;
+    s += o.dir === 'H' ? `<line class="g" x1="${+o.x0}" x2="${+o.x1}" y1="${my}" y2="${my}"/>` : `<line class="g" x1="${mx}" x2="${mx}" y1="${-o.y1}" y2="${-o.y0}"/>`;
   }
   const by = -vy + 0.75;
   // Scale: five 1 m segments, alternately filled, labelled in metres and feet (the listing is in feet).
@@ -140,7 +149,7 @@ export class UI {
   bind({ player, viewpoints, rednote, markers, tour, minimap, pets, toggleDusk, toggleQuality }) {
     this.player = player; this.viewpoints = viewpoints; this.rednote = rednote; this.markers = markers; this.toggleDusk = toggleDusk; this.toggleQuality = toggleQuality;
     const coarse = matchMedia('(pointer:coarse)').matches;
-    this.enterBtn.onclick = () => { this.title.classList.add('hidden'); if (localStorage.getItem('croton-music') !== '0') setMusic(true); if (!this.firstStepsShown) { this.firstStepsShown = true; this.showFirstSteps(coarse); } else if (!coarse) player.lock(); };
+    this.enterBtn.onclick = () => { this.title.classList.add('hidden'); if (store.get('croton-music') !== '0') setMusic(true); if (!this.firstStepsShown) { this.firstStepsShown = true; this.showFirstSteps(coarse); } else if (!coarse) player.lock(); };
     this.state.onLock = (locked) => { if (!locked && !this.panelOpen && !document.getElementById('bigmap').classList.contains('hidden') === false && !this.suppressTitle) { /* keep hud */ } };
     for (const [kind, id] of [['rn', 'btn-views'], ['pano', 'btn-panos'], ['photo', 'btn-photos']]) {
       document.getElementById(id).onclick = () => markers.toggle(kind);
@@ -176,7 +185,7 @@ export class UI {
     let track = 0;
     music.volume = 0.45;
     const playTrack = (i) => { track = (i + tracks.length) % tracks.length; if (!music.src.endsWith(tracks[track])) music.src = tracks[track]; return music.play(); };
-    const setMusic = (on) => { localStorage.setItem('croton-music', on ? '1' : '0'); musicBtn.classList.toggle('on', on); musicBtn.setAttribute('aria-pressed', String(on)); if (on) playTrack(track).catch(() => musicBtn.classList.remove('on')); else music.pause(); };
+    const setMusic = (on) => { store.set('croton-music', on ? '1' : '0'); musicBtn.classList.toggle('on', on); musicBtn.setAttribute('aria-pressed', String(on)); if (on) playTrack(track).catch(() => musicBtn.classList.remove('on')); else music.pause(); };
     music.addEventListener('ended', () => { if (musicBtn.classList.contains('on')) playTrack(track + 1).catch(() => musicBtn.classList.remove('on')); });
     musicBtn.onclick = () => setMusic(!musicBtn.classList.contains('on'));
     document.getElementById('btn-tour').onclick = () => tour.toggle();
@@ -297,9 +306,12 @@ export class UI {
       }
       body.appendChild(grid);
     }
-    const credit = document.createElement('div'); credit.className = 'music-credit'; credit.append(t('musicCredit'), ' · ');
-    const link = document.createElement('a'); link.href = 'https://www.youtube.com/watch?v=8uxzIVzzeVg'; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'YouTube';
-    credit.append(link); body.appendChild(credit);
+    // Attribution as the licences ask: "Tuscany" is CC BY-ND 4.0 (title, author, source, licence); the cover links to its video.
+    const link = (href, text) => { const a = document.createElement('a'); a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = text; return a; };
+    const credit = document.createElement('div'); credit.className = 'music-credit';
+    credit.append(t('musicCredit'), ' · ', link('https://youtu.be/6XbF5WffCvs', 'Tuscany'), ' (', link('https://creativecommons.org/licenses/by-nd/4.0/', 'CC BY-ND 4.0'), ') · ',
+      link('https://www.youtube.com/watch?v=8uxzIVzzeVg', 'Mike Mills'));
+    body.appendChild(credit);
   }
   // First steps: a pop-up over the first view with the four essentials. It sits in the HUD, under the loading screen,
   // so it appears with the first frame. A click anywhere closes it (on the scene or the box it also starts mouse look);
@@ -333,7 +345,7 @@ export class UI {
   }
   toggleHelp(on = !this.helpOpen) {
     this.helpOpen = on; this.controls.classList.toggle('hidden', !on); document.getElementById('btn-help').classList.toggle('on', on); document.getElementById('btn-help').setAttribute('aria-pressed', String(on));
-    if (on) { this.toggleLegends(false); this.renderHelp(); this.player?.unlock(); } else localStorage.setItem('croton-controls-dismissed', '1');
+    if (on) { this.toggleLegends(false); this.renderHelp(); this.player?.unlock(); } else store.set('croton-controls-dismissed', '1');
   }
   setLabel(text) { if (!text) { this.label.classList.remove('show'); return; } this.label.textContent = text; this.label.classList.add('show'); }
   toast(text, ms = 2200) { this.toastEl.textContent = text; this.toastEl.classList.add('show'); clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => this.toastEl.classList.remove('show'), ms); }

@@ -323,7 +323,8 @@ export function validateLighting(root) {
 //   defaultOn: the time slots the switch starts on (lighting_slots.js names); undeclared, the rule of defaultSlots
 //   plate:     [x, y, ry] the wall plate (plan metres, facing), on the switch nearest the placement's origin
 //   lights:    'spec' (the live light layout.js made from the fixture's light spec) or 'children' (lights inside it)
-//   output:    the fixture's light as the bake makes it (FIXTURE_OUTPUT: lm, beam, emitter), over its kind's
+//   output:    the fixture's light as the bake makes it: its kind's FIXTURE_OUTPUT (lm, beam, emitter), with the declaration's
+//              and the placement row's output over it
 export const SLOTS = ['sunrise', 'noon', 'golden', 'dusk'];
 export const CIRCUITS = { main: '', lamps: 'Lamps', pendant: 'Pendant', cabinet: 'Cabinet', niche: 'Niche', center: 'Center' };
 export const FIXTURE_KINDS = { ceiling: 'main', track: 'main', pendant: 'main', wall: 'main', lantern: 'main', opener: 'main', strip: 'main', lamp: 'lamps', cabinet: 'cabinet', niche: 'niche' };
@@ -353,8 +354,8 @@ export const FIXTURE_OUTPUT = {
 // Is daylight let into a plan space: a window or door of it opens to an exterior space.
 export const daylit = id => openings.some(o => o.connects?.includes(id) && o.connects.some(c => c !== id && spaceById(c)?.zone === 'exterior'));
 // The slots a switch starts on unless its fixture declares them (a staged showing): every interior switch at sunrise,
-// golden hour and dusk, and at noon too where no daylight reaches (closets, the hall, the laundry: daylit); an exterior
-// switch (the porch's) at dusk only.
+// golden hour and dusk, and at noon too where no daylight reaches (closets, the hall, the laundry: see daylit); an
+// exterior switch (the porch's) at dusk only.
 export function defaultSlots({ space, exterior }) {
   if (exterior) return ['dusk'];
   return SLOTS.filter(s => s !== 'noon' || !daylit(space));

@@ -69,6 +69,11 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     // luminance: the glow the bake gave the switch's lamp surfaces (physical, from its lumens), drawn the same when on
     records.push({ toggle, group: best?.g ?? null, luminance: best?.m.luminance ?? null, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
   }
+  // Lamp surfaces glow in their group's light: the emissive colour is the group's baked lamp colour (encoding.json color:
+  // 3000 K through the room, luminance 1), the intensity its physical luminance (applyGlow), one rule for every lamp
+  // surface. The authored emissive tints ran 3300-5500 K (paper lanterns 0xffe6bf), cooler than the light they give, so
+  // under white balance a lantern glowed pale blue. Set before lightmap.js clones the lightmapped copies (they keep it).
+  for (const r of records) if (r.group) for (const g of r.toggle.glows) if (!g.wash && g.material.emissive) g.material.emissive.setRGB(...r.group.color);
   // each group's default slots: the bake's, else its switches' (lighting manifest)
   const defaults = new Map(groups.map(g => [g, g.defaultOn ? g : null]));
   for (const r of records) if (r.group && !defaults.get(r.group) && r.toggle.lighting) defaults.set(r.group, { always: r.group.always, defaultOn: r.toggle.lighting.defaultOn });

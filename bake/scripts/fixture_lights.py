@@ -230,6 +230,18 @@ def _camera_glow(m, strength):
     fixture's light already carries its lumens)."""
     nt = m.node_tree; b = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
     b.inputs['Emission Strength'].default_value = strength; m['lamp_luminance'] = strength
+    if not m.get('lamp_cct'):
+        # the glow's colour is the lamp's own (LAMP_K blackbody) times the luminance of the authored colour or texture (its
+        # pattern: a perforated panel's holes): the authored tints ran 3300-5500 K, cooler than the light (the site does the
+        # same with its group's baked colour, lamp_groups.js)
+        ec = b.inputs['Emission Color']; bb = nt.nodes.new('ShaderNodeBlackbody'); bb.inputs[0].default_value = LAMP_K
+        if ec.is_linked:
+            bw = nt.nodes.new('ShaderNodeRGBToBW'); nt.links.new(ec.links[0].from_socket, bw.inputs[0])
+            mul = nt.nodes.new('ShaderNodeMixRGB'); mul.blend_type = 'MULTIPLY'; mul.inputs[0].default_value = 1
+            nt.links.new(bb.outputs[0], mul.inputs[1]); nt.links.new(bw.outputs[0], mul.inputs[2]); nt.links.new(mul.outputs[0], ec)
+        else:
+            nt.links.new(bb.outputs[0], ec)
+        m['lamp_cct'] = LAMP_K
     out = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'); surf = out.inputs['Surface']
     if not surf.is_linked or m.get('lamp_camera_only'): return
     src = surf.links[0].from_socket

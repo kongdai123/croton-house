@@ -76,13 +76,15 @@ try {
     scene.add(root); members.push({ id: root.userData.id, root: [i, 0, 0], w: (i + 1) / 15 });
   }
   const switches = collectLightSwitches(scene, fixtures), groups = [
-    { index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1, 1, 1], members: members.slice(0, 5) },
+    { index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1.25, 0.95, 0.62], members: members.slice(0, 5) },
     { index: 1, tex: 0, ch: 1, name: 'garage', K: 1, color: [1, 1, 1], members: members.slice(5) },
     { index: 2, tex: 0, ch: 2, name: 'always', always: true, K: 1, color: [1, 1, 1], members: [] },
   ];
   const lamps = createLampGroups({ meta: { groups, textures: 1 }, switches });
   const tick = dt => { for (const s of switches) s.toggle.tick(dt); lamps.update(dt, 'dusk'); lamps.applyGlow(); };
   lamps.reset('dusk'); tick(0); assert.equal(lamps.matched, 6);
+  // lamp surfaces glow in their group's baked light colour (not the authored, cooler emissive tint)
+  assert.deepEqual(switches[0].toggle.glows[0].material.emissive.toArray(), [1.25, 0.95, 0.62]); assert.deepEqual(switches[5].toggle.glows[0].material.emissive.toArray(), [1, 1, 1]);
   switches[2].toggle.set(false); tick(0.125);
   assert.ok(switches.slice(0, 5).every(s => s.toggle.manual && !s.toggle.on)); assert.equal(lamps.levels[0], 0.5);
   assert.ok(switches.slice(0, 5).every(s => s.toggle.value === 0.5 && s.toggle.moving));

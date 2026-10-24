@@ -1,6 +1,6 @@
 // House shell built from data/house.json (Zillow floor plan, metres, +y north).
 // World frame: X = plan x (east), Y up, Z = -plan y (north is -Z). Ceiling 2.44 m.
-import { THREE, M, box, cyl, plane, group, shadow, tube } from './kit.js';
+import { THREE, M, box, cyl, plane, group, tube } from './kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { plan, rectOf, opening } from './plan.js';
 import { declare } from './lighting_roles.js';
@@ -643,7 +643,7 @@ function fencePanel(w, h, mat) {
 // ---- Neighbours: simple white block houses with low roofs and some trees, so the horizon isn't empty ----
 function buildNeighbourhood() {
   const g = new THREE.Group();
-  const white = M.stucco(), roof = M.roof();
+  const roof = M.roof();
   const house = (x, y, w, d, ry = 0, col = 0xf2efe8, roofCol = null) => { const h = new THREE.Group(); const wm = new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 }); h.add(box(w, 2.7, d, wm, { y: 1.35 })); const rm = roofCol ? new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.8 }) : roof; h.add(hipRoof(w + 1.2, d + 1.2, 2.72, 1.3, rm)); for (const [wx, wz] of [[-w / 4, d / 2], [w / 4, d / 2]]) h.add(box(1.2, 1.1, 0.06, M.glass(), { x: wx, y: 1.4, z: wz + 0.01 })); h.position.set(x, 0, -y); h.rotation.y = ry; return h; };
   g.add(house(-24, 2, 14, 11, 0, 0xe6ddd0)); g.add(house(24, 1, 13, 12, 0, 0xf5f2ea, 0x6d6a66)); g.add(house(-22, 30, 14, 11)); g.add(house(4, 31, 15, 11)); g.add(house(26, 30, 13, 12));
   g.add(house(-20, -32, 13, 11, 0, 0xf3e4d6, 0x9b3b2e)); g.add(house(3, -33, 15, 11, 0, 0xe9e2d6, 0x8a6a52)); g.add(house(25, -32, 13, 11));

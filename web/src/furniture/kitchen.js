@@ -3,9 +3,9 @@
 // matte-black 0.10 m square tile + vertical finger tile behind the range, black appliances, waterfall island with an
 // oak V-groove board seating side, rush-seat teak counter stools, oak LED linear pendant.
 // Wall runs: BACK at local -Z against the wall, FRONT at +Z. Origins on the floor at the footprint centre.
-import { THREE, M, box, cyl, lathe, extrude, tube, sphere, torus, addSeat, setMovable, autoCollider, setCollider, describe, declare } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, sphere, addSeat, setMovable, autoCollider, setCollider, describe, declare } from '../kit.js';
 import { KITCHEN_WINDOW } from '../house.js';
-import { TOP, CT, KICK, DT, REV, UP_D, UP_Y0, UP_Y1, L, wuv, bake, rrect, fronts, tile, quartz, range, hood, dishwasher, barPull, shaker } from './kitchen_parts.js';
+import { TOP, CT, KICK, DT, REV, UP_D, UP_Y0, UP_Y1, L, wuv, bake, rrect, fronts, tile, quartz, range, hood, dishwasher, shaker } from './kitchen_parts.js';
 
 const RUN_D = 0.62, BACK = -RUN_D / 2, FACE = BACK + 0.58;   // carcass 0.58 deep, fronts 0.019, quartz to +0.31
 const white = () => M.cabinetWhite();

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { warmPrograms } from './shader_warmup.js';
 import { createLighting } from './lighting.js';
-import { buildHouse, CEIL, getDoors, LOW_WALLS } from './house.js';
+import { buildHouse, getDoors, LOW_WALLS } from './house.js';
 import { buildGarden } from './grass.js';
 import { Player } from './player.js';
 import { Layout } from './layout.js';
@@ -13,7 +13,7 @@ import { RedNote } from './rednote.js';
 import { Tour } from './tour.js';
 import { buildGrid } from './nav.js';
 import { Markers } from './markers.js';
-import { UI, t, setLang, getLang } from './ui.js';
+import { UI, t } from './ui.js';
 import { Human } from './human.js';
 import { batchStatic, stillParts, updateSwayLod, updateRoomVisibility } from './batch.js';
 import { batchBaked, stowSources } from './batch_baked.js';
@@ -106,7 +106,7 @@ const photoSpots = await fetch('data/photo_spots.json').then(r => r.ok ? r.json(
 await guard.waitForContext();
 const lighting = createLighting(renderer, scene, camera, house, preset);
 if (bakedWanted && !lighting.renderConfig.hdr) bakedUnavailable = 'HDR framebuffer unavailable';
-const { fixtures, composer, gtao } = lighting;
+const { fixtures, composer } = lighting;
 post = composer; fitView();
 // TAA (taa.js): ?taa[=internal scale] / ?taa=0, else the tier's flag (a number: the scale). It takes over the linear chain
 // before any other pass joins it (contact, volumetric light, local adaptation find it as lighting.taa).
@@ -383,7 +383,7 @@ try {
   console.warn('warmup', err);
   try { renderer.render(scene, camera); } catch (_) {}
 }
-lapStart = lap('draw', lapStart);
+lap('draw', lapStart);
 // Room visibility (visibility.js): from here on the walkthrough camera skips what the plan's walls hide from it; shadows,
 // mirrors and reflections still see everything. ?cull=0 turns it off.
 const culling = Q.get('cull') === '0' ? null : soft('room culling', () => createRoomCulling({ THREE, camera, roots: [houseRoot, layout.root, garden.group, batch.world],

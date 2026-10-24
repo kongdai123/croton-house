@@ -373,7 +373,6 @@ invariant('lighting-manifest-complete', 'every visible mesh has a lighting manif
 }
 
 // ---- report ---------------------------------------------------------------------------------------------------------------------------
-const known = existsSync(KNOWN) ? JSON.parse(readFileSync(KNOWN, 'utf8')) : { invariants: {} };
 if (process.env.UPDATE_KNOWN) {
   const doc = { note: 'Known invariant violations (docs/audit). The invariants test fails on any offender not listed here and lists entries that disappeared. Regenerate with UPDATE_KNOWN=1 only to shrink the list or when a violation is accepted.', invariants: {} };
   for (const r of results) if (r.offenders.length) doc.invariants[r.id] = { title: r.title, count: r.offenders.length, offenders: r.offenders };

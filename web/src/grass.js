@@ -268,7 +268,7 @@ function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, ca
 }
 
 // ---------- where things grow ----------
-const FRONT = polyBox(FRONT_BED), ISL = ISLAND_BEDS.map(polyBox), GARD = polyBox(GARDEN);
+const FRONT = polyBox(FRONT_BED), ISL = ISLAND_BEDS.map(polyBox);
 // Lawn on our lot: outside the fences, off paving, the shell front bed and the mulched islands, north of the sidewalk.
 function lawnLot(x, y) {
   if (y < -14.1) return false;

@@ -2,7 +2,7 @@
 // ceiling track + recessed lights, ripplefold sheer curtains, cellular shades, thermostat, the porch's wrought-iron
 // scroll columns, the perforated porch sconce, house number, and table-top accessories (vases, tray, bottles, books…).
 // Frame: origin on the floor at the footprint centre, +Z = front. Wall items keep their back face at -Z.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, cushion,
+import { THREE, M, box, cyl, lathe, extrude, tube, plane, at, cushion,
          autoCollider, describe, shadow , declare } from '../kit.js';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { animatedToggle } from './outdoor_parts.js';
@@ -249,7 +249,7 @@ function curtainSheer() {
   const carriers = new THREE.Group(); root.add(carriers);
   // snap carriers at the back of every fold (where the ripplefold tape clips to the track)
   for (let i = 0; i <= FOLDS * 2; i++) {
-    const u = i / (FOLDS * 2), x = (u - 0.5) * CURT_W, z = AMP * 0.86 * Math.sin(u * FOLDS * Math.PI * 2);
+    const u = i / (FOLDS * 2), x = (u - 0.5) * CURT_W;
     if (i % 2) continue;
     carriers.add(cyl(0.006, 0.006, CEIL - 0.022 - CURT_TOP + 0.012, W, { seg: 8, x, y: (CEIL - 0.022 + CURT_TOP - 0.012) / 2, z: 0 }));
   }

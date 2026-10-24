@@ -76,7 +76,7 @@ export const materialKey = m => { const p = materialProps(m); return `${p.name |
 // ---- objects.json ----------------------------------------------------------------------------------------------------
 
 export function captureObjects(world, ix) {
-  const { T, layout, doors, scene } = world;
+  const { T, doors, scene } = world;
   const box = new T.Box3();
   const bbox = o => { box.makeEmpty(); box.expandByObject(o, true); return box.isEmpty() ? null : [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].map(r3); };
   const materials = {}, matKey = new Map();
@@ -127,7 +127,7 @@ export function captureObjects(world, ix) {
   // switch records hang off the object that owns the fixture; heads / owners below the fixture get their own entry
   const switches = {};
   let n = 0;
-  for (const [root, rec] of switchOf) { let k = `${rec.fixture}|${rec.root}|${rec.label}`; if (switches[k]) k += `#${++n}`; switches[k] = rec; }
+  for (const rec of switchOf.values()) { let k = `${rec.fixture}|${rec.root}|${rec.label}`; if (switches[k]) k += `#${++n}`; switches[k] = rec; }
 
   const lights = {};
   scene.traverse(o => {

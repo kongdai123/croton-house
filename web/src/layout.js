@@ -282,7 +282,7 @@ frontPlant('cordyline',-0.95,-11.2,1.1,'palmBand');
 // --- Procedural planting: the real garden is packed (aerial g50, panos). Beds are filled with a seeded scatter,
 //     layered by size: bromeliads/coleus near edges, shrubs/crotons mid, bananas/palms as accents. The ground-cover
 //     carpet and the ornamental-grass drifts over the same BEDS are instanced in grass.js.
-import { LOUNGE, PATIO, COURT_A, COURT_B, COURT_PAD, PORCH, WALK, DRIVE, PAD, AC_UNITS, GARDEN, SIDE_PATHS, ISLAND_BEDS, FRONT_WALK } from './house.js';
+import { LOUNGE, PATIO, COURT_A, COURT_B, COURT_PAD, PORCH, WALK, DRIVE, PAD, AC_UNITS, GARDEN, SIDE_PATHS, FRONT_WALK } from './house.js';
 const HOUSE_KEEP = { x0: -8.36, x1: 8.36, y0: -6.16, y1: 5.8 };            // house + garage incl. stucco skin and stem wall
 const STEP = { x0: PORCH.x0 + 0.2, x1: PORCH.x1 - 0.2, y0: PORCH.y0 - 0.42, y1: PORCH.y0 };
 export const PAVED = [HOUSE_KEEP, PORCH, STEP, WALK, DRIVE, PAD, PATIO, COURT_A, COURT_B, COURT_PAD, AC_UNITS];   // no plant footprint on these

@@ -19,10 +19,10 @@ try {
         export class PMREMGenerator { fromEquirectangular() { const t = new WebGLRenderTarget(2, 1); globalThis.fixturePmrem.targets.push(t); return t; } dispose() { globalThis.fixturePmrem.generators++; } }`, loader: 'js' };
     });
   } };
-  const result = await build({ stdin: { contents: "export { applyLightmaps, applyBakedSun } from './src/lightmap.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'silent', plugins: [contact, lifecycle] });
+  const result = await build({ stdin: { contents: "export { applyLightmaps, applyBakedSun } from './src/lightmap.js'; export { SLOTS } from './src/lighting_slots.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'silent', plugins: [contact, lifecycle] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, result.outputFiles[0].contents);
   globalThis.location = { search: '?agx=three&foliagebake=0' };
-  const { applyLightmaps, applyBakedSun, THREE } = await import(pathToFileURL(file));
+  const { applyLightmaps, applyBakedSun, SLOTS, THREE } = await import(pathToFileURL(file));
   console.info = console.warn = () => {};
   const requests = [], closed = [], base = 'https://fixture.invalid/lightmaps';
   let shipped = ['sunrise'], groupMeta = null;
@@ -170,7 +170,7 @@ try {
   const stagedSlot = slotProgress.find(p => p.phase === 'staged');
   assert.equal(stagedSlot.loaded, 7); assert.equal(stagedSlot.total, 7); assert.equal(stagedSlot.fraction, 1);
   assert.equal(slotProgress.at(-1).phase, 'transition'); assert.equal(slotProgress.at(-1).name, 'dusk');
-  assert.equal(baked4.slotName, 'dusk'); assert.equal(sun4.intensity, 0); assert.equal(renderer.toneMappingExposure, 1);
+  assert.equal(baked4.slotName, 'dusk'); assert.equal(sun4.intensity, 0); assert.ok(Math.abs(renderer.toneMappingExposure - 2 ** SLOTS.dusk.ev) < 1e-9);
   assert.equal(toggle4.manual, false); assert.equal(toggle4.on, true);
   assert.equal(multiShader.uniforms.uSlotBlend.value, 0); assert.equal(multiShader.uniforms.uWet.value, 0);
   assert.equal(mesh4.material.lightMap, baked4.target.texture);

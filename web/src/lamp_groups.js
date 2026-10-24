@@ -19,8 +19,10 @@ import { glowLevel } from './lighting_roles.js';
 // members agree (validateSwitches); a bake writes the group's slots into encoding.json, older ones take its switches'.
 // The always-on group (lamp surfaces without a switch) is always on.
 export const defaultOn = (slot, group) => !!group && (!!group.always || !!group.defaultOn?.includes(slot));
-// Cap the array at half resolution unless ?lmgroups=full: each full-size RGBA8 layer with mips is ~177 MiB.
-const capRes = res => res === 'full' && new URLSearchParams(location.search).get('lmgroups') !== 'full' ? 'half' : res;
+// The array at the atlas tier's resolution (baked_mode.js bakedResolution: full on the hq tier, whose GPUs hold the nine
+// full-size RGBA8 layers, ~177 MiB each with mips; half on laptops, quarter on mobile); ?lmgroups=half caps it.
+export const lampGroupRes = (res, search = location.search) => res === 'full' && new URLSearchParams(search).get('lmgroups') === 'half' ? 'half' : res;
+const capRes = res => lampGroupRes(res);
 export const lampGroupsWanted = (search = location.search) => !['0', 'off'].includes(new URLSearchParams(search).get('lmgroups'));
 
 export function validGroupEncoding(m) {
@@ -64,7 +66,8 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
       if (d < bestD) { best = { g, m }; bestD = d; }
     }
     if (best) matched++;
-    records.push({ toggle, group: best?.g ?? null, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
+    // luminance: the glow the bake gave the switch's lamp surfaces (physical, from its lumens), drawn the same when on
+    records.push({ toggle, group: best?.g ?? null, luminance: best?.m.luminance ?? null, level: 0, from: 0, t: 1, on: toggle.on, manual: toggle.manual });
   }
   // each group's default slots: the bake's, else its switches' (lighting manifest)
   const defaults = new Map(groups.map(g => [g, g.defaultOn ? g : null]));
@@ -130,7 +133,7 @@ export function createLampGroups({ meta, switches, probeSH = null, renderer, dir
     },
     // lamp-surface glow per switch: its level (full glow when on, as at dusk before)
     applyGlow() {
-      for (const r of records) for (const g of r.toggle.glows) g.material[g.wash ? 'opacity' : 'emissiveIntensity'] = glowLevel(g, { baked: true, level: r.level });
+      for (const r of records) for (const g of r.toggle.glows) g.material[g.wash ? 'opacity' : 'emissiveIntensity'] = glowLevel(g, { baked: true, level: r.level, luminance: r.luminance });
     },
     async setResolution(wanted) {
       wanted = capRes(wanted);

@@ -145,20 +145,12 @@ export function captureObjects(world, ix) {
     doorTable[k] = { kind: d.kind, open: typeof d.open === 'number' ? r4(d.open) : d.open, bbox: bbox(g), plan: d.plan ? Object.fromEntries(Object.entries(d.plan).map(([a, b]) => [a, typeof b === 'number' ? r3(b) : b])) : undefined };
   }
 
-  // The records bake/export/switch_groups.mjs:32-52 writes for scripts/lamp_groups.py (quoted: that script runs in a browser page).
-  const plan = v => [+v.x.toFixed(3), +(-v.z).toFixed(3), +v.y.toFixed(3)];
+  // The records bake/export/switch_groups.mjs writes for the bake's lamps (lighting_roles.js bakeSwitchRecord, the same function).
   const bakeSwitches = {};
-  world.switches.forEach(({ root, toggle, meshes }, i) => {
-    let fixture = root; while (fixture && !fixture.userData.placement) fixture = fixture.parent;
-    const spec = (fixture ?? root).userData.light, pl = fixture?.userData.placement;
-    const id = fixture?.userData.id || root.userData.id || root.name;
-    const glows = meshes.map(m => { const b = new T.Box3().setFromObject(m), c = b.getCenter(new T.Vector3()), sz = b.getSize(new T.Vector3()); return { c: plan(c), size: [+sz.x.toFixed(3), +sz.z.toFixed(3), +sz.y.toFixed(3)], mat: m.material.name || '', emissive: !!m.material.emissive }; });
-    const wpos = root.getWorldPosition(new T.Vector3());
-    let key = `${id}@${plan(wpos).map(v => v.toFixed(2)).join(',')}`; for (let n = 1; bakeSwitches[key]; n++) key = key.replace(/#\d+$/, '') + '#' + n;
-    bakeSwitches[key] = { i, key, id, name: toggle.label.en.replace(/^Turn on · /, ''), root: plan(wpos), group: toggle.lighting.group, space: toggle.lighting.space,
-      exterior: toggle.lighting.exterior, kind: toggle.lighting.kind, circuit: toggle.lighting.circuit, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
-      lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new T.Vector3())), intensity: l.userData.base !== undefined ? r4(l.userData.base) : l.userData.switchBase !== undefined ? r4(l.userData.switchBase) : undefined })),
-      spec: spec ? { ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])), p: plan(new T.Vector3(...world.roles.lightLocal(spec)).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null, glows };
+  world.switches.forEach((entry, i) => {
+    const rec = world.roles.bakeSwitchRecord(entry, i, T);
+    let key = rec.key; for (let n = 1; bakeSwitches[key]; n++) key = key.replace(/#\d+$/, '') + '#' + n;
+    bakeSwitches[key] = { ...rec, key };
   });
 
   const counts = { meshes: ix.meshes.length, placed: ix.placed.length, withLmId: ix.meshes.filter(e => e.node.userData.lmId).length, lmSkip: ix.meshes.filter(e => e.node.userData.lmSkip).length };

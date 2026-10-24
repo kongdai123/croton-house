@@ -2,6 +2,7 @@
 # usage: blender -b scene.blend -P render.py -- '<json>'
 # json: {"out": path, "res": [w, h], "samples": n, "cam": {"x","y","z","h","p","lens","fstop","focus"},
 #        "sun": {"az","el","strength"}, "ev": bias, "exposure": fixed or null, "mist": density, "clouds": [lo, hi],
+#        "lampsOn": "default" | "all" | [group indices] (scenes with lamp groups; see below), "lamps": level otherwise,
 #        "raw": true for Standard view transform and no lens compositing}
 # Plan coordinates: x east, y north, z up. Heading h: 0 north, clockwise. Sun azimuth likewise.
 import bpy, sys, json, math, os, time
@@ -52,15 +53,33 @@ tint.inputs[1].default_value = tuple(cfg.get('cloud_shade', [0.62, 0.66, 0.78]))
 tint.inputs[2].default_value = tuple(cfg.get('cloud_lit', [2.6, 1.45, 0.95])) + (1,)
 for o in scene.objects:
     if o.type == 'LIGHT' and o.name.startswith('lamp'):
-        o.data.energy *= cfg.get('lamps', 1.0)
         bb = next((n for n in o.data.node_tree.nodes if n.type == 'BLACKBODY'), None) if o.data.node_tree else None
-        if bb: bb.inputs[0].default_value = cfg.get('lampK', cfg.get('lamp_k', 2700))
-# every glowing surface (lamp shades and lenses, screens) dims with the lamps: the lamps bake holds all emission at unit
-# level and the site scales that layer and the emissive materials by the lamp level (lightmap.js syncEmissionCopies), so
-# a reference with full-strength shades at sunrise's 0.25 was brighter than the site could be (living view +6%)
-for m in bpy.data.materials:
-    b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
-    if b and b.inputs['Emission Strength'].default_value > 0: b.inputs['Emission Strength'].default_value *= cfg.get('lamps', 1.0)
+        if bb: bb.inputs[0].default_value = cfg.get('lampK', cfg.get('lamp_k', 3000))
+# Lamps: a scene with lamp groups (setup.py / lamp_groups.py: scripts/fixture_lights.py, one physical light per switch)
+# lights each group at its full physical output or not at all, as the site's switches do: "lampsOn" = "default" (the
+# groups whose switches start on in this slot: the manifest's default slots), "all", or a list of group indices; the
+# switched-off groups' lamp surfaces go dark. Without "lampsOn" (or in a scene without lamp groups) every lamp and glowing
+# surface scales by "lamps" (the slot's level), the old shared-lamps reference.
+groups = json.loads(scene.get('lamp_groups') or 'null')
+on = cfg.get('lampsOn')
+if groups and on is not None:
+    if on == 'all': on = [g['index'] for g in groups['groups']]
+    elif on == 'default': on = [g['index'] for g in groups['groups'] if g['always'] or cfg.get('slot') in g['defaultOn']]
+    on = set(on)
+    for o in scene.objects:
+        if o.type == 'LIGHT' and o.name.startswith('lampgrp'): o.hide_render = int(o.name[7:9]) not in on
+    for m in bpy.data.materials:
+        b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
+        if b and 'lamp_group' in m.keys() and m['lamp_group'] not in on: b.inputs['Emission Strength'].default_value = 0
+    print('lamp groups on', [g['name'] for g in groups['groups'] if g['index'] in on])
+else:
+    # every glowing surface (lamp shades and lenses, screens) dims with the lamps: the site scales the shared lamps layer
+    # and the emissive materials by the lamp level (lightmap.js syncEmissionCopies)
+    for o in scene.objects:
+        if o.type == 'LIGHT' and o.name.startswith('lamp'): o.data.energy *= cfg.get('lamps', 1.0)
+    for m in bpy.data.materials:
+        b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.use_nodes else None
+        if b and b.inputs['Emission Strength'].default_value > 0: b.inputs['Emission Strength'].default_value *= cfg.get('lamps', 1.0)
 
 w, h = cfg.get('res', [2560, 1440])
 scene.render.resolution_x, scene.render.resolution_y = w, h

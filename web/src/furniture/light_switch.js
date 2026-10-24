@@ -1,6 +1,6 @@
 import { THREE, box } from '../kit.js';
 import { meshId } from '../batch.js';
-import { declare, fixtureOf, fixturesIn, glowLevel, lampGroupAt, lightLevel, ownedLights } from '../lighting_roles.js';
+import { declare, defaultSlots, fixtureOf, fixturesIn, glowLevel, lampGroupAt, lightLevel, ownedLights } from '../lighting_roles.js';
 import { getColliders } from '../house.js';
 
 // a fixture's lamp surfaces: whatever glows inside it (the switch turns them into switched emitters)
@@ -131,7 +131,9 @@ export function collectLightSwitches(scene, fixtures) {
   const add = (f, root, meshes, lights, label, required = true) => {
     if (required && !meshes.length) return null;
     const at = meshes.length ? centre(meshes) : root.getWorldPosition(new THREE.Vector3());
-    const record = { id: f.id, kind: f.kind, circuit: f.circuit, defaultOn: f.defaultOn, ...lampGroupAt(f, at.x, -at.z) };
+    const place = lampGroupAt(f, at.x, -at.z);
+    // default slots: the fixture's declaration, else the manifest's rule for its space (lighting_roles.js defaultSlots)
+    const record = { id: f.id, kind: f.kind, circuit: f.circuit, defaultOn: f.defaultOn ?? defaultSlots(place), output: f.output, ...place };
     const entry = switchLight(root, meshes, lights, { ...label, exterior: record.exterior, day: f.spec?.day !== undefined });
     entry.lighting = entry.toggle.lighting = record;
     entries.push(entry); return entry;

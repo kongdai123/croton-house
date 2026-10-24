@@ -18,6 +18,8 @@ import { createMirror, prepareMirrors, warmMirrors, updateMirrors } from './hq.j
 const S = 0, N = Math.PI, E = Math.PI / 2, W = -Math.PI / 2;
 const d2r = (d) => THREE.MathUtils.degToRad(d);
 
+// Closet and hall cans: smaller downlights than a room's (lighting_roles.js FIXTURE_OUTPUT ceiling, 700 lm)
+const CLOSET_CAN = { lm: 450 }, HALL_CAN = { lm: 500 };
 // ---- The placement table. {m: module, i: item, x, y (plan), h (height offset), ry, n (name override), light: false to skip its light,
 // bake: true for a lamp that exists only in the bake, lamp: { plate: [x, y, ry], circuit, defaultOn } the fixture's switch
 // (lighting_roles.js: the plate is the room's wall switch for this fixture's lamp group)}
@@ -29,7 +31,7 @@ export const PLACEMENTS = [
   { m: 'living', i: 'coffeeTable', x: 2.52, y: -2.85, ry: 0, zh: '圆茶几', n: 'Round coffee table' },
   { m: 'living', i: 'sideBench', x: 3.78, y: -2.78, ry: W, zh: '松木长凳 · 红画', n: 'Pine console & red canvas' },
   { m: 'decor', i: 'cellularShade', x: 2.17, y: -4.54, h: -0.08, ry: N, sx: 0.93 },
-  { m: 'decor', i: 'trackLight', x: 3.0, y: -2.35, ry: E, lamp: { defaultOn: ['golden', 'dusk'], plate: [0.62, -4.594, N] } },
+  { m: 'decor', i: 'trackLight', x: 3.0, y: -2.35, ry: E, lamp: { plate: [0.62, -4.594, N] } },
   { m: 'decor', i: 'trackLight', x: 0.2, y: -0.2, ry: E, light: false, lamp: { circuit: 'center', plate: [0.73, -4.594, N] } },
   { m: 'decor', i: 'thermostat', x: 3.96, y: -0.3, ry: W },
   // Kitchen (g11-g18, pano ee4635b067): fridge beside the front door, sink + dishwasher under the window, range centred on
@@ -113,10 +115,10 @@ export const PLACEMENTS = [
   { m: 'closet', i: 'shoes', x: 6.62, y: -1.79 },
   { m: 'closet', i: 'travel', x: 7.65, y: -1.63, ry: W },
   { m: 'closet', i: 'yoga', x: 5.74, y: -1.53 },
-  { m: 'decor', i: 'recessedLight', x: -5.59, y: 0.8755, light: false, bake: true, lamp: { plate: [-4.942, 0.72, W] } },
+  { m: 'decor', i: 'recessedLight', x: -5.59, y: 0.8755, light: false, bake: true, lamp: { plate: [-4.942, 0.72, W], output: CLOSET_CAN } },
   // Hallway + closets
   // windowless, between shut bath and closet doors: lamps in the baked lighting only (see the primary bath's cans)
-  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true, lamp: { plate: [4.096, -1.65, E] } }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true },
+  { m: 'decor', i: 'recessedLight', x: 4.55, y: -0.2, light: false, bake: true, lamp: { plate: [4.096, -1.65, E], output: HALL_CAN } }, { m: 'decor', i: 'recessedLight', x: 4.55, y: 1.0, light: false, bake: true, lamp: { output: HALL_CAN } },
   // Laundry nook (x -7.9..-6.36, y 0.16..1.48, open to the garage) and garage (x -7.9..-3.51, y -5.74..0.16), g07 / g48 / g49
   { m: 'garage', i: 'laundryPlinth', x: -7.5, y: 1.07, ry: S },
   { m: 'bath', i: 'washerDryer', x: -7.5, y: 1.1, h: 0.10, ry: S, zh: '叠放洗烘机', n: 'Washer & dryer' },
@@ -136,8 +138,6 @@ export const PLACEMENTS = [
   // Porch & front
   { m: 'decor', i: 'ironColumn', x: -1.15, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' }, { m: 'decor', i: 'ironColumnMirror', x: 1.2, y: -5.95, ry: 0, zh: '铁艺柱', n: 'Wrought-iron column' },
   { m: 'decor', i: 'wallLightBlack', x: 0.8, y: -4.912, ry: S, lamp: { plate: [0.62, -4.882, S] } }, { m: 'decor', i: 'houseNumber', x: -0.95, y: -4.9, ry: S },
-  { m: 'decor', i: 'ironColumn', x: 4.98, y: -5.92, h: .9, scale: .5, sx: 2.1 },
-  { m: 'decor', i: 'ironColumnMirror', x: 6.93, y: -5.92, h: .9, scale: .5, sx: 2.1 },
   { m: 'outdoor', i: 'frontPallet', x: -2.45, y: -9.45, h: .22, ry: S, zh: '前院木平台', n: 'Front garden pallet platform' },
   { m: 'outdoor', i: 'frontRoundPot', x: -3.05, y: -9.45, h: .447 },
   { m: 'flowers', i: 'frontGeranium', x: -3.05, y: -9.45, h: .85, seed: 13 },
@@ -476,7 +476,7 @@ function closetLights(rows) {
     if (!CLOSET_KINDS.has(s.kind) || rows.some(p => p.i === 'recessedLight' && inPlanPoly(p.x, p.y, s.polygon))) continue;
     const b = bbox(s.polygon), plate = platePlace(s);
     if (!plate) { console.warn('closet rule: no wall for a switch plate in', s.id); continue; }
-    out.push({ m: 'decor', i: 'recessedLight', x: r3((b.x0 + b.x1) / 2), y: r3((b.y0 + b.y1) / 2), light: false, bake: true, lamp: { plate }, rule: 'closet', space: s.id });
+    out.push({ m: 'decor', i: 'recessedLight', x: r3((b.x0 + b.x1) / 2), y: r3((b.y0 + b.y1) / 2), light: false, bake: true, lamp: { plate, output: CLOSET_CAN }, rule: 'closet', space: s.id });
   }
   return out;
 }

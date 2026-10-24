@@ -101,7 +101,7 @@ function linenLamp() {
   root.add(lathe([[0.114, 0.238], [0.115, 0.241], [0.086, 0.398], [0.083, 0.40]], L.shade(), { seg: 32 }));
   for (const [R, y] of [[0.114, 0.241], [0.084, 0.399]]) root.add(torus(R, 0.002, linen(), { y, rx: PI / 2, seg: 32, tube: 6 }));
   root.add(tube([[0.03, 0.011, -0.025], [0.07, 0.005, -0.04], [0.085, 0.003, -0.06]], 0.0018, L.dark(), { seg: 8, radial: 4 }));
-  declare(root, { fixture: { kind: 'lamp' } });
+  declare(root, { fixture: { kind: 'lamp', output: { lm: 600 } } });   // a table lamp with a linen shade
   return finish(root, 'linen-lamp', 'Stoneware lamp with glowing linen shade', '陶瓷亚麻台灯', 'Additional console styling, no scene light');
 }
 const lattice = once(() => {

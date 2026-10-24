@@ -25,7 +25,7 @@ assert.deepEqual(await discoverSlots('', null, async url => {
   return { ok: true, json: async () => { throw Error('bad JSON'); } };
 }), ['sunrise']);
 const mid = blendSlot(SLOTS.sunrise, SLOTS.dusk, 0.5);
-assert.equal(mid.lamps, 0.625); assert.equal(mid.wet, 0.5); assert.equal(mid.ev, -0.35);
+assert.equal(mid.lamps, 1); assert.equal(mid.wet, 0.5); assert.ok(Math.abs(mid.ev - 1.2) < 1e-12);
 for (const [k, v] of Object.entries(blendSlot(SLOTS.noon, SLOTS.golden, 1))) assert.deepEqual(v, SLOTS.golden[k]);
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const tick = () => new Promise(setImmediate);
@@ -46,7 +46,7 @@ for (const name of SLOT_ORDER) {
   for (const k of ['ev', 'wet', 'lamps']) assert.equal(cfg[k], SLOTS[name][k]);
   assert.deepEqual(cfg.autoExposure, SLOTS[name].autoExposure);
 }
-assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { minEV: -0.5, maxEV: 3.5 }, wet: 1, lamps: 0.25 });
+assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { minEV: -0.5, maxEV: 5 }, wet: 1, lamps: 1 });
 const dir = await mkdtemp(join(tmpdir(), 'croton-slots-'));
 try {
   const built = await build({ stdin: { contents: "export { createSlotRuntime } from './src/lightmap_slots.js'; export { bakeFoliage } from './src/foliage_bake.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
@@ -80,7 +80,7 @@ try {
   pendingLoad.resolve(); pendingLoad = null; await tick();
   assert.deepEqual(begunFoliage, ['noon']);
   runtime.update(0.75); assert.equal(runtime.uniforms.uSlotBlend.value, 0.5);
-  assert.equal(params.at(-1).wet, 0.5); assert.equal(params.at(-1).lamps, 0.125); assert.equal(commits.length, 0);
+  assert.equal(params.at(-1).wet, 0.5); assert.equal(params.at(-1).lamps, (SLOTS.sunrise.lamps + SLOTS.noon.lamps) / 2); assert.equal(commits.length, 0);
   runtime.update(0.75); await noon;
   assert.equal(runtime.name, 'noon'); assert.equal(runtime.uniforms.uSlotBlend.value, 0);
   assert.deepEqual(commits, ['noon']); assert.equal(scene.background.name, 'noon/sky');

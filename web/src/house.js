@@ -181,7 +181,7 @@ export function buildHouse(house, mods, opts = {}) {
   wash.target.position.set(3.94, 1.72, -1.254); wash.castShadow = false;
   can.add(wash, wash.target); interior.add(can);
   // lighting manifest: the alcove's own switch (plate on the alcove's south pier), its light the wash inside the can
-  declare(can, { fixture: { kind: 'niche', lights: 'children', label: { en: 'Alcove recessed can', zh: '壁龛筒灯' }, defaultOn: ['golden', 'dusk'], plate: [3.958, 1.12, -Math.PI / 2] } });
+  declare(can, { fixture: { kind: 'niche', lights: 'children', label: { en: 'Alcove recessed can', zh: '壁龛筒灯' }, plate: [3.958, 1.12, -Math.PI / 2] } });
 
   // ---- Header beam at the living -> dining/office opening (dropped soffit, as in the photos) ----
   interior.add(box(3.35 - 0.42, CEIL - 2.13, 0.32, wallMat, { x: (0.42 + 3.35) / 2, y: (CEIL + 2.13) / 2, z: -1.765 }));
@@ -335,12 +335,17 @@ function buildDoor(o, house) {
   const cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2, thick = isH ? o.y1 - o.y0 : o.x1 - o.x0;
   g.position.set(cx, 0, -cy); g.rotation.y = isH ? 0 : Math.PI / 2;   // local x runs along the opening, local z through the wall
   const jamb = 0.016, trimW = 0.07, tm = type === 'pineOpening' || type === 'bifold' && !DOOR_SPEC[o.id]?.white ? M.pine() : M.trim();
+  // the casing's faces (local z = s: plan y - s on H walls, plan x + s on V walls), but not a face the exterior wall's stucco
+  // skin covers: the skin stands 0.15 m out, flush with the opening, and a casing there was buried in it (black in the bake;
+  // invariant nothing-under-the-skin), as the baseboards were
+  const skinned = s => { const d = s * (thick / 2 + 0.05); return !pointInPoly(isH ? [cx, cy - d] : [cx + d, cy], EXT_FP); };
+  const faces = [-1, 1].filter(s => !skinned(s));
   if (type !== 'opening') {
-    // jambs + casing both sides
+    // jambs + casing on the open faces
     g.add(box(jamb, H, thick + 0.02, tm, { x: -w / 2 + jamb / 2, y: H / 2 })); g.add(box(jamb, H, thick + 0.02, tm, { x: w / 2 - jamb / 2, y: H / 2 })); g.add(box(w, jamb, thick + 0.02, tm, { y: H - jamb / 2 }));
-    for (const s of [-1, 1]) { g.add(box(w + trimW * 2, trimW, 0.014, tm, { y: H + trimW / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: -w / 2 - trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: w / 2 + trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); }
+    for (const s of faces) { g.add(box(w + trimW * 2, trimW, 0.014, tm, { y: H + trimW / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: -w / 2 - trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); g.add(box(trimW, H + trimW, 0.014, tm, { x: w / 2 + trimW / 2, y: (H + trimW) / 2, z: s * (thick / 2 + 0.007) })); }
   } else {
-    for (const s of [-1, 1]) g.add(box(w + trimW * 2, trimW, 0.014, M.trim(), { y: H + trimW / 2, z: s * (thick / 2 + 0.007) }));
+    for (const s of faces) g.add(box(w + trimW * 2, trimW, 0.014, M.trim(), { y: H + trimW / 2, z: s * (thick / 2 + 0.007) }));
   }
   const leafW = w - jamb * 2, leafT = 0.04;
   if (type === 'door' || type === 'front') {

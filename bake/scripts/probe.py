@@ -19,9 +19,12 @@ for d in prefs.devices: d.use = d.type == 'OPTIX'
 c.device = 'GPU'
 layer = configure(scene, cfg)
 if layer == 'lamps':
-    # lamps must be seen by camera rays, or the probes would miss their direct light
+    # lamps must be seen by camera rays, or the probes would miss their direct light; their lamp surfaces (shades, lenses:
+    # fixture_lights.py) not, or a probe would see a fixture twice (its light and its glowing shade) or not at all (a bulb
+    # behind its shade)
     for o in scene.objects:
         if o.type == 'LIGHT' and o.name.startswith('lamp'): o.visible_camera = True
+        elif o.type == 'MESH' and o.get('lamp_surface'): o.visible_camera = False
 
 W, H = 64, 32
 cam = scene.camera

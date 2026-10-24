@@ -6,7 +6,8 @@
 #     luminance (Rec. 709) per texel and one colour (its mean lit chromaticity, luminance 1) in color.json.
 #   pack (any Python with numpy + Pillow): every group -> lampgroups/ for web/assets/lightmaps/v2/
 #     python scripts/lamp_groups_pack.py pack <groups.json> <bakes> <coverage.npy> <out> [--probes scene/probes.json]
-#       [--gains kitchen=2,hall=0.5]   (a group's fixture wattage relative to the bake; the site multiplies its level)
+#       [--gains kitchen=2,hall=0.5]   (a runtime factor on a group's level; the bake's lamps are physical, so every
+#                                       group ships at 1: the fixtures' declared lumens set their light)
 #       [--units lightmap_uv2.bin.gz]  (chart-aware half / quarter tiers, downscale_atlas.py chart_downscale)
 #     Three groups per lossless RGB WebP (one per channel), each through the bake's tone curve y = sqrt(x / (x + K))
 #     with its own K; full size split in two row halves (15 MB publishing cap), half and quarter tiers averaged over the
@@ -73,17 +74,19 @@ def tone_K(lum):
 def pack(groups_json, bakes, coverage, out, probes='scene/probes.json', gains={}, units=None):
     from PIL import Image
     from downscale_atlas import dilate, PAD, tier as atlas_tier, unit_rasters
-    groups = json.load(open(groups_json))['groups']; G = len(groups); T = math.ceil(G / 3)
+    doc = json.load(open(groups_json)); groups = doc['groups']; G = len(groups); T = math.ceil(G / 3)
     cov = np.load(coverage).astype(bool); H, W = cov.shape
     rasters = unit_rasters(units, W, H) if units else None   # chart-aware tiers, as downscale_atlas.py --units
     os.makedirs(out, exist_ok=True)
+    # lmPerW (fixture_lights.py): lumens per Blender watt, so the baked values read as lux / lmPerW (test_lamp_levels.mjs)
     meta = {'version': 1, 'curve': 'sqrt(x/(x+K))', 'lampK': 3000, 'textures': T, 'size': [W, H], 'groups': []}
+    if doc.get('lmPerW'): meta['lmPerW'] = doc['lmPerW']
     lums = []
     for g in groups:
         d = os.path.join(bakes, f'g{g["index"]:02d}'); lum = np.load(os.path.join(d, 'lum.npy'), mmap_mode='r')
         if lum.shape != (H, W): raise SystemExit(f'{d}: {lum.shape} != coverage {(H, W)}')
         info = json.load(open(os.path.join(d, 'color.json'))); K = tone_K(np.asarray(lum[::4, ::4]))
-        meta['groups'].append({k: g[k] for k in ('name', 'index', 'always', 'exterior', 'members', 'defaultOn') if k in g} | {'tex': g['index'] // 3, 'ch': g['index'] % 3, 'K': round(K, 5), 'color': info['color'], 'gain': float(gains.get(g['name'], 1.0))})
+        meta['groups'].append({k: g[k] for k in ('name', 'index', 'always', 'exterior', 'members', 'defaultOn', 'spaces', 'lm') if k in g} | {'tex': g['index'] // 3, 'ch': g['index'] % 3, 'K': round(K, 5), 'color': info['color'], 'gain': float(gains.get(g['name'], 1.0))})
         lums.append(lum); print(f'{g["name"]:15s} K {K:.4f} max {info["max"]:.2f} colour {info["color"]}', flush=True)
     rows = [H // 2, H - H // 2]; meta['rows'] = rows; sizes = {}
     # every texel of a chart or its padding stores at least 1/255 (decoded ~K * 1.5e-5), 0 marks empty atlas: the site's

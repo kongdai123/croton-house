@@ -376,7 +376,19 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
 
     # -- 3. mean irradiance per slot, per plan space, robust outliers
     big = [max(u['max'][0] - u['min'][0], u['max'][2] - u['min'][2]) > T['groups']['bigUnit'] for u in units]
-    space_of = [None if big[i] else (plan.space_at(*centres[i], 0.3) or {}).get('id') for i in range(U)]
+    # a unit through the outline (a door frame spanning wall and stucco skin: part of it outdoors) or in an exterior
+    # opening (a glazed door's leaves, facing the garden on one side and the room on the other) holds the garden's light
+    # beside the room's; it belongs to neither population (the garage side door's frame read 67x the garage's median at
+    # golden hour, the french doors' leaves 7x the office's at dusk: QA of the 2026-10-18 bake)
+    outdoor = {s['id'] for s in plan.spaces if s.get('zone') == 'exterior'}
+    ext_open = [o for o in plan.openings if outdoor & set(o.get('connects') or [])]
+    def straddles(u):
+        ins = {plan.is_inside(x, y, 0) for x in (u['min'][0], u['max'][0]) for y in (-u['max'][2], -u['min'][2])}
+        x, y = plan_xy(u['centre'])
+        return len(ins) == 2 or any(o['x0'] - 0.05 <= x <= o['x1'] + 0.05 and o['y0'] - 0.05 <= y <= o['y1'] + 0.05 for o in ext_open)
+    through = [straddles(u) for u in units]
+    space_of = [None if big[i] or through[i] else (plan.space_at(*centres[i], 0.3) or {}).get('id') for i in range(U)]
+    rep.metric('units.throughOutline', sum(through))
     outliers = []; unit_means = {}
     for s in slotkeys:
         st = stats[(s, 'slot', 'full')]; m = mean(st['lum'], st['covered']); unit_means[s] = m
@@ -394,7 +406,7 @@ def check_units(rep, A, T, units, objs, plan, slots, tiers):
                 z = (lg[j] - med) / mad
                 if abs(z) > uT['outlierZ'] and abs(lg[j] - med) > math.log(uT['outlierRatio']):
                     outliers.append(f'{names[i]}@{s}{SEP}{objs.name(units[i].get("id"), units[i]["centre"])}: {sp} z {z:+.1f}, {math.exp(lg[j] - med):.2g}x the median')
-    rep.check('units-outlier', f'units whose mean irradiance is a robust log outlier (|z| > {uT["outlierZ"]}, > {uT["outlierRatio"]}x) among the units of their plan space', 'warn', outliers)
+    rep.check('units-outlier', f'units whose mean irradiance is a robust log outlier (|z| > {uT["outlierZ"]}, > {uT["outlierRatio"]}x) among the units of their plan space (units through the outline or in an exterior opening left out: {sum(through)})', 'warn', outliers)
 
     # -- 4. tier consistency
     if tiers:

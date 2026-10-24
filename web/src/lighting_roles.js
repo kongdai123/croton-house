@@ -14,10 +14,10 @@
 //               castsSun, bake, contact, zone }
 //   mesh:     { role, motion, bake, why, probeSide, sun: { cast, track }, weather, zone, space, puddleMirror, fakeShadow }
 //             (plus roleFrom: declared / structural / default, for the validator)
-//   fixture:  fixtureOf(node): { kind, circuit, heads, label, defaultOn, plate, lights, spec, live, bake, id }; a switch's
-//             record (light_switch.js entry.lighting): { id, kind, circuit, defaultOn, group, space, exterior }
+//   fixture:  fixtureOf(node): { kind, circuit, heads, label, defaultOn, plate, lights, spec, live, bake, id, output }; a
+//             switch's record (light_switch.js entry.lighting): { id, kind, circuit, defaultOn, group, space, exterior, output }
 // See SCHEMA below for every field's values and meaning.
-import { isInside, spaceAt, spaces, levels } from './plan.js';
+import { isInside, spaceAt, spaces, space as spaceById, openings, levels } from './plan.js';
 
 // ---- vocabulary -----------------------------------------------------------------------------------------------------
 export const SCHEMA = {
@@ -320,14 +320,45 @@ export function validateLighting(root) {
 //   circuit:   which switch of the room: main (the room's lights), lamps (table and bedside lamps), or a named one
 //   heads:     one switch per child group (track heads); owner: 'bulb' (the switch is the child holding userData.bulbY)
 //   label:     { en, zh } the switch's name (else the placement's name)
-//   defaultOn: the time slots the switch starts on (lighting_slots.js names; dusk: every lamp)
+//   defaultOn: the time slots the switch starts on (lighting_slots.js names); undeclared, the rule of defaultSlots
 //   plate:     [x, y, ry] the wall plate (plan metres, facing), on the switch nearest the placement's origin
 //   lights:    'spec' (the live light layout.js made from the fixture's light spec) or 'children' (lights inside it)
+//   output:    the fixture's light as the bake makes it (FIXTURE_OUTPUT: lm, beam, emitter), over its kind's
 export const SLOTS = ['sunrise', 'noon', 'golden', 'dusk'];
 export const CIRCUITS = { main: '', lamps: 'Lamps', pendant: 'Pendant', cabinet: 'Cabinet', niche: 'Niche', center: 'Center' };
 export const FIXTURE_KINDS = { ceiling: 'main', track: 'main', pendant: 'main', wall: 'main', lantern: 'main', opener: 'main', strip: 'main', lamp: 'lamps', cabinet: 'cabinet', niche: 'niche' };
 export const EXTERIOR_GROUP = 'porch', ALWAYS_GROUP = 'always';
-const DEFAULT_ON = ['dusk'];
+// Photometric output: what one switch's fixture emits in the bake (bake/scripts/fixture_lights.py makes one physical light
+// of it; one constant there, LM_PER_W, turns lumens into Blender watts). Per kind, refined by the fixture's declaration
+// (fixture.output) and its placement row (lamp.output).
+//   lm:      luminous flux of the fixture (one can, one track head, one lamp's bulb), typical LED products
+//   beam:    full width at half maximum, degrees (downlight, spot)
+//   emitter: downlight (a recessed can: a soft-edged cone below it, the ceiling stays dim), spot (a track head), omni (a
+//            bulb in a shade, a glass bubble, a sconce), linear (an LED bar or linear pendant: a rectangle facing down)
+// Every lamp is warm white at LAMP_CCT (the bake's lampK).
+export const LAMP_CCT = 3000;
+export const EMITTERS = ['downlight', 'spot', 'omni', 'linear'];
+export const FIXTURE_OUTPUT = {
+  ceiling: { lm: 700, beam: 105, emitter: 'downlight' },   // a 4-6" recessed LED can
+  niche: { lm: 650, beam: 90, emitter: 'downlight' },      // the alcove's can (aimed by its own light)
+  track: { lm: 450, beam: 40, emitter: 'spot' },           // one track head
+  pendant: { lm: 1100, emitter: 'omni' },                  // a glass or bubble pendant
+  wall: { lm: 500, emitter: 'omni' },                      // a wall sconce
+  lantern: { lm: 300, emitter: 'omni' },                   // a garden lantern
+  opener: { lm: 800, emitter: 'omni' },                    // a garage door opener's lamp
+  strip: { lm: 4000, emitter: 'linear' },                  // a 1.2 m LED shop light
+  lamp: { lm: 450, emitter: 'omni' },                      // a table or bedside lamp
+  cabinet: { lm: 200, beam: 100, emitter: 'downlight' },   // a range-hood lamp
+};
+// Is daylight let into a plan space: a window or door of it opens to an exterior space.
+export const daylit = id => openings.some(o => o.connects?.includes(id) && o.connects.some(c => c !== id && spaceById(c)?.zone === 'exterior'));
+// The slots a switch starts on unless its fixture declares them (a staged showing): every interior switch at sunrise,
+// golden hour and dusk, and at noon too where no daylight reaches (closets, the hall, the laundry: daylit); an exterior
+// switch (the porch's) at dusk only.
+export function defaultSlots({ space, exterior }) {
+  if (exterior) return ['dusk'];
+  return SLOTS.filter(s => s !== 'noon' || !daylit(space));
+}
 
 export function fixtureOf(o) {
   const d = declared(o).fixture; if (!d) return null;
@@ -338,11 +369,12 @@ export function fixtureOf(o) {
     node: o, placed, kind, id: placed?.userData.id || o.userData.id || o.name,
     circuit: row.circuit ?? d.circuit ?? FIXTURE_KINDS[kind] ?? 'main',
     heads: !!d.heads, owner: d.owner ?? null, label: d.label ?? null,
-    defaultOn: row.defaultOn ?? d.defaultOn ?? DEFAULT_ON,
+    defaultOn: row.defaultOn ?? d.defaultOn ?? null,
     plate: row.plate ?? d.plate ?? null,
     lights: d.lights ?? 'spec',
     spec: holder?.userData.light ?? null, holder,
     live: holder ? holder.userData.placement?.light !== false : false, bake: !!holder?.userData.placement?.bake,
+    output: { ...FIXTURE_OUTPUT[kind], ...d.output, ...row.output, cct: LAMP_CCT },
   };
 }
 // Every declared fixture below root, in scene order (the order of the light switches).
@@ -372,6 +404,9 @@ export function validateSwitches(entries, plates = []) {
     if (!byGroup.has(r.group)) byGroup.set(r.group, []);
     byGroup.get(r.group).push(e);
     for (const s of r.defaultOn) if (!SLOTS.includes(s)) errors.push(`switch ${r.id} (${r.group}): unknown default slot ${s}`);
+    const o = r.output;
+    if (!(o?.lm > 0) || !EMITTERS.includes(o.emitter) || (['downlight', 'spot'].includes(o.emitter) && !(o.beam > 0 && o.beam < 180)))
+      errors.push(`switch ${r.id} (${r.group}): invalid output ${JSON.stringify(o)}`);
   }
   for (const [g, list] of byGroup) {
     const d = JSON.stringify([...list[0].lighting.defaultOn].sort());
@@ -384,6 +419,38 @@ export function validateSwitches(entries, plates = []) {
 }
 // A light spec's point in its fixture's frame (layout.js addLight, the bake export): x, y (default 2.3 m), z.
 export const lightLocal = spec => [spec.x ?? 0, spec.y ?? 2.3, spec.z ?? 0];
+// The record of one light switch as the bake reads it (bake/export/switch_groups.mjs writes switches.json from the live
+// site; web/tools/harness/objects.mjs keeps the headless scene's in golden/objects.json): plan coordinates (x east, y north,
+// z up); its lamp group, plan space, exterior flag, default slots and photometric output (the lighting manifest); its live
+// lights (a spot with its aim point); its fixture's light spec (also where the layout's 16-light budget or placement
+// light: false left it without a live light; a rectangle with its long axis); and its glowing lamp surfaces.
+// bake/scripts/fixture_lights.py makes the physical light from it. THREE is passed in (this module does not import it).
+export function bakeSwitchRecord({ root, toggle, meshes }, i, T) {
+  const r4 = v => { const x = Math.round(v * 10000) / 10000; return x === 0 ? 0 : x; };
+  const plan = v => [+v.x.toFixed(3), +(-v.z).toFixed(3), +v.y.toFixed(3)];
+  const dir = v => [r4(v.x), r4(-v.z), r4(v.y)];
+  let fixture = root; while (fixture && !fixture.userData.placement) fixture = fixture.parent;
+  const holder = fixture ?? root, spec = holder.userData.light, pl = fixture?.userData.placement;
+  const id = fixture?.userData.id || root.userData.id || root.name, at = root.getWorldPosition(new T.Vector3());
+  const glows = meshes.map(m => {
+    const b = new T.Box3().setFromObject(m), c = b.getCenter(new T.Vector3()), s = b.getSize(new T.Vector3());
+    return { c: plan(c), size: [+s.x.toFixed(3), +s.z.toFixed(3), +s.y.toFixed(3)], mat: m.material.name || '', emissive: !!m.material.emissive };
+  });
+  const L = toggle.lighting;
+  return {
+    i, key: `${id}@${plan(at).map(v => v.toFixed(2)).join(',')}`, id, name: toggle.label.en.replace(/^Turn on · /, ''),
+    root: plan(at), group: L.group, space: L.space, exterior: L.exterior, kind: L.kind, circuit: L.circuit, defaultOn: L.defaultOn,
+    output: L.output, on: toggle.on,
+    lights: toggle.lights.map(l => {
+      const base = l.userData.base ?? l.userData.switchBase;
+      return { type: l.type, p: plan(l.getWorldPosition(new T.Vector3())), intensity: base !== undefined ? r4(base) : undefined, ...(l.target ? { t: plan(l.target.getWorldPosition(new T.Vector3())) } : {}) };
+    }),
+    spec: spec ? { ...Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, typeof v === 'number' ? r4(v) : v])),
+      p: plan(new T.Vector3(...lightLocal(spec)).applyMatrix4(holder.matrixWorld)),
+      axis: dir(new T.Vector3(1, 0, 0).transformDirection(holder.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
+    glows,
+  };
+}
 // Is a light at plan (x, y) an exterior one (on at dusk only): the plan space it is in (a light in a wall takes the space it
 // faces), as the switches' lamp groups.
 export const exteriorAt = (x, y) => spaceAt(x, y, 0.3)?.zone === 'exterior';
@@ -396,11 +463,13 @@ export const ownedLights = holder => LIGHTS.get(holder) ?? [];
 // How bright an emitter or a live light is, one rule per path (the raster walkthrough, the baked lighting), read by every
 // consumer that drives them: light_switch.js, lamp_groups.js, lighting.js and lightmap.js.
 // A lamp surface of a switch (glow: { base, wash }: wash, an additive glow card driven through its opacity). Raster: x1.8
-// at dusk, its own base by day for fixtures meant to be on by day (spec.day), else the faint 0.12 off-level; baked: x1.8
-// at the lamp level (its lamp group's, or the slot's); a wash card at its base times the level.
-export function glowLevel(glow, { baked = false, dusk = false, day = false, level = 1 } = {}) {
+// at dusk, its own base by day for fixtures meant to be on by day (spec.day), else the faint 0.12 off-level; baked: the
+// physical luminance the bake gave it (luminance: its fixture's lumens through its glowing area, bake/scripts/
+// fixture_lights.py, the lamp group member's in encoding.json) at the lamp level, else x1.8 its base (a bake before the
+// lumen model); a wash card at its base times the level.
+export function glowLevel(glow, { baked = false, dusk = false, day = false, level = 1, luminance = null } = {}) {
   if (glow.wash) return glow.base * (baked ? level : 1);
-  if (baked) return glow.base * 1.8 * level;
+  if (baked) return (luminance ?? glow.base * 1.8) * level;
   return dusk ? glow.base * 1.8 : day ? glow.base : 0.12;
 }
 // A live light's factor on its base in the raster look: an exterior light is on at dusk (or when switched on by hand);

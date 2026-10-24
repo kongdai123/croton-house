@@ -76,7 +76,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   const target = n => { const t = new THREE.WebGLRenderTarget(n, n, { depthBuffer: true, format: THREE.RedFormat, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }); t.depthTexture = new THREE.DepthTexture(n, n, THREE.FloatType); return t; };
   const rt = target(size), base = target(size);
   const uniforms = { uSunDepth: { value: rt.depthTexture }, uSunTexel: { value: 1 / size }, uSunDepthRange: { value: 1 }, uSunWidth: { value: 1 }, uSunTan: { value: Math.tan(SUN_RADIUS) }, uSunFrame: { value: 0 }, uSunTaps: { value: 0 } };
-  const cache = new Map(), entries = new Map(), swaps = [], roots = new Set(), always = new Set(), promoted = new Set();
+  const cache = new Map(), entries = new Map(), swaps = [], roots = new Set(), always = new Set(), promoted = new Set(), rigid = new Map();
   let dynamic = [], statics = [], cursor = 0;
   let version = 0, clock = 1, now = 0, wasMoving = false, dirty = true, staticDirty = true, classifyDirty = true, staticDue = 0;
   // region: world box of base texels to redraw (null: none); fullDue: the pending staticDue needs a full redraw (a
@@ -122,7 +122,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
       if (!o.castShadow) { o.layers.disable(DYN_LAYER); return; }
       let e = entries.get(o); if (!e) { e = {}; entries.set(o, e); changed(o, e); e.plant = meshLighting(o).sun.track === 'plant'; }
       const root = rootOf(o);
-      e.always = o.isSkinnedMesh || always.has(root);
+      e.always = o.isSkinnedMesh || always.has(root); e.rigid = rigid.get(root) ?? null;
       if (root || e.always || promoted.has(o)) { dynamic.push(o); heat(o, e, e.always || (!!e.hot && !e.ambient)); } else { statics.push(o); heat(o, e, false); }
     });
     const live = new Set([...dynamic, ...statics]); for (const o of entries.keys()) if (!live.has(o)) entries.delete(o);
@@ -285,10 +285,20 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   const update = (dt = 0) => {
     if (classifyDirty) classify();
     let moving = false, settled = false; now += dt;
-    for (const r of roots) if (r.parent) r.updateWorldMatrix(true, true);
+    for (const r of roots) {
+      if (!r.parent) continue;
+      const k = rigid.get(r);
+      if (!k) { r.updateWorldMatrix(true, true); continue; }
+      // a rigid root: its own world matrix and the visibility up to the scene stand for every caster below it
+      r.updateWorldMatrix(true, false);
+      let shown = true; for (let p = r; p; p = p.parent) if (!p.visible) { shown = false; break; }
+      const quiet = k.shown === shown && changedArray(k, 'matrix', r.matrixWorld.elements) === false;
+      if (!quiet) r.updateWorldMatrix(false, true);
+      k.shown = shown; k.quiet = quiet;
+    }
     for (const o of promoted) o.updateWorldMatrix(true, false);
     for (const o of dynamic) {
-      const e = entries.get(o), c = changed(o, e);
+      const e = entries.get(o), c = e.rigid?.quiet && !e.always ? false : changed(o, e);
       if (e.ambient) continue;
       // a motion streak: changes no more than 0.5 s apart (some animations skip frames)
       if (c) { if (!(now - e.last <= 0.5)) e.first = now; e.last = now; }
@@ -316,14 +326,18 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
 
   const invalidate = () => { classifyDirty = staticDirty = dirty = true; clock = 1; };
   // subtrees whose casters move (doors, toggles, movables, pets, the visitor): checked every frame
-  const track = (objects, hot = false) => { for (const o of [].concat(objects)) if (o) { roots.add(o); if (hot) always.add(o); } invalidate(); };
+  // rigid: roots whose parts never move, show or hide against them (a carried chair, a room's fit-out; nothing animated,
+  // toggled or skinned below): while the root's world matrix and visibility hold, its casters are not scanned one by one
+  // (the per-frame scan of ~1700 casters cost ~1.5 ms on a 2.1 GHz Xeon)
+  const rigidOk = r => { let ok = true; r.traverse(o => { if (o.userData.animate || o.userData.toggle || o.userData.door || o.isSkinnedMesh) ok = false; }); return ok; };
+  const track = (objects, hot = false, still = false) => { for (const o of [].concat(objects)) if (o) { roots.add(o); if (hot) always.add(o); if (still && !hot && rigidOk(o)) rigid.set(o, {}); } invalidate(); };
   const setSize = n => { if (rt.width === n) return; rt.setSize(n, n); base.setSize(n, n); uniforms.uSunTexel.value = 1 / n; invalidate(); };
   const setTier = name => { uniforms.uSunTaps.value = PCSS_TIER[name] ?? 0; };
   const depthEntries = () => {
     const jobs = []; scene.traverse(o => { if (o.isMesh && o.castShadow) for (const m of [].concat(o.material)) jobs.push({ object: o, material: o.customDepthMaterial ?? depthOf(m) }); }); return jobs;
   };
   return { uniforms, depthEntries, warm: () => warmPrograms(renderer, scene, sync(), base, depthEntries(), false), render: () => refresh(true), update, invalidate, track, setSize, setTier, stats, matrix: sun.shadow.matrix, get version() { return version; },
-    dispose() { rt.dispose(); base.dispose(); for (const d of cache.values()) d.dispose(); cache.clear(); entries.clear(); swaps.length = 0; for (const o of dynamic) o.layers.disable(DYN_LAYER); roots.clear(); always.clear(); promoted.clear(); } };
+    dispose() { rt.dispose(); base.dispose(); for (const d of cache.values()) d.dispose(); cache.clear(); entries.clear(); swaps.length = 0; for (const o of dynamic) o.layers.disable(DYN_LAYER); roots.clear(); always.clear(); promoted.clear(); rigid.clear(); } };
 }
 
 async function loadUnits(url) {
@@ -598,7 +612,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const syncEmissionCopies = level => { for (const [m, e] of emissionCopies) m.emissiveIntensity = bakedEmission(e.record, e.source, e.base, level); };
   const box = new THREE.Box3(), tmp = new THREE.Vector3(), mats = new Map(); let matched = 0, byBox = 0, triangles = 0;
   const pcss = createSunPCSS(renderer, scene, lighting.sun, shadowSize), legacyShadow = lighting.sun.userData.bakedShadow;
-  pcss.track([...movables, ...dynamic]);   // doors, toggles and movable furniture: their sun shadows follow them
+  pcss.track(movables, false, true); pcss.track(dynamic);   // movable furniture (rigid), doors and toggles: their sun shadows follow them
   pcss.setTier(tier);
   lighting.sun.userData.bakedShadow = true;
   const restoreEmission = lighting.physicalEmission?.();   // as in the bake: only real light sources glow (the manifest's emits)

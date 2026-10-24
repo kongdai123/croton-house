@@ -5,7 +5,7 @@
 - Static server at http://127.0.0.1:8780 (start it from `web/` with `python3 tools/serve.py` if it is down; it disables caching).
 - After changing walls, windows or fixed furniture, regenerate the daylight bake: `node tools/bake_daylight.mjs`.
   `node tools/build.mjs --watch` rebuilds `dist/app.js` on every save to `src/`; `node tools/build.mjs` shows compile errors.
-  The app caps at 30 fps; add `&fps=0` to any URL used for frame timing. **Several agents share this bundle**: a syntax or runtime error breaks everyone's
+  The app paces itself to the display (an even fraction of its refresh rate when frames do not fit); add `&fps=0` to any URL used for frame timing. **Several agents share this bundle**: a syntax or runtime error breaks everyone's
   screenshots, so keep it compiling and loading, and fix any break immediately.
 - Screenshot: `node tools/shot.mjs "index.html?x=<plan x>&y=<plan y>&h=<heading deg>&p=<pitch rad>&fast=1" out.png 1280 800`
   (headless Chrome, about 10 s; drop `&fast=1` for HQ; add `&dusk=1` for dusk). Heading 0 = north (+y), 90 = east, clockwise.

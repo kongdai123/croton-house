@@ -30,6 +30,7 @@ import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
 import { createGuard } from './startup_guard.js';
 import { createRoomCulling } from './visibility.js';
 import { createFrameRate } from './frame_rate.js';
+import { createStartQuality } from './start_quality.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -260,7 +261,9 @@ async function fallbackLegacy(err) {
   if (mirrorsReady) layout.prepareMirrors();
 }
 // The detected tier is the starting point; J switches to its pair (hq/laptop <-> mobile, mobile <-> laptop) and back.
-function toggleQuality() { const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
+// (J also ends the adaptive start: the visitor's choice stands)
+let startQuality = null;
+function toggleQuality() { startQuality?.cancel(); const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
 ui.renderHelp(); ui.syncLegends();
 
 if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
@@ -432,14 +435,29 @@ state.fpsCap = fpsCap; state.pacing = pacing;
 let readyFrames = 0;
 // ?capture: the app stops drawing on its own so a recorder can step it frame by frame with renderAt (tools/promo.mjs).
 const CAPTURE = Q.has('capture');
+// Adaptive start (start_quality.js): a desktop's tier, guessed from its GPU's name, is timed once after the first frames
+// and stepped up or down once (a step up is timed again and may be handed back). J, ?tier=, ?capture, ?adapt=0 and ?fast
+// end it.
+startQuality = createStartQuality({ tier: state.quality, enabled: detected.adaptive && !CAPTURE && Q.get('adapt') !== '0' && !Q.has('fast'),
+  setTier: async name => {
+    state.tier = name; state.tierSource = 'measured'; state.qualityHigh = qualityPair(name).find(q => q !== 'mobile') ?? 'mobile';
+    await setQuality(name);
+    await soft('puddle shaders', () => baked?.puddleRefl?.warm?.());   // hq's ground reflection, made just now
+  } });
+state.startQuality = startQuality.state;
 const loop = (now) => {
   requestAnimationFrame(loop);
   if (CAPTURE && readyFrames >= 12) return;
   // The pacing is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo judders.
   if (!pacing.tick(now) && !viewpoints.panoOpaque) return;
+  startQuality.begin(now);
+  if (document.hidden || viewpoints.panoActive || photo.active) startQuality.pause(now);
+  const timed = startQuality.wants(now);
   const dt = Math.min(0.1, clock.getDelta()), t0 = performance.now();
   if (!document.hidden) soft('frame', () => frame(dt));
-  pacing.drawn(now, performance.now() - t0);
+  const work = performance.now() - t0;
+  if (timed) { gl0.finish(); startQuality.sample(work, performance.now() - t0, now); }   // the frame's whole cost, GPU included
+  pacing.drawn(now, work);
   if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

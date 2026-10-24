@@ -6,6 +6,8 @@ const BUILD = globalThis.CROTON_BUILD ?? 'dev';
 
 const ms = (v) => (v == null || Number.isNaN(v) ? '–' : `${Math.round(v)} ms`);
 const num = (v) => (v == null ? '–' : Math.round(v).toLocaleString('en-US'));
+// the adaptive start (start_quality.js): its phase, the median frame it timed, the steps it took
+const startTier = q => !q ? '–' : q.phase === 'off' ? 'fixed' : `${q.phase}${q.medianMs != null ? ` · ${q.medianMs} ms a frame` : ''}${q.steps.length ? ' · ' + q.steps.map(x => `${x.from} → ${x.to}`).join(', ') : ''}`;
 // room visibility (visibility.js): meshes the walls hide from here, of those it watches
 const culling = (c) => !c ? 'off' : !c.enabled ? 'paused' : c.stats.off ? `none here (${num(c.stats.meshes)} meshes)`
   : `${num(c.stats.culled)} of ${num(c.stats.meshes)} meshes hidden · ${c.stats.reached} spaces seen · ${c.stats.ms.toFixed(2)} ms`;
@@ -54,6 +56,7 @@ export class Stats {
       ['Render', `${c.width} × ${c.height} · ratio ${r.getPixelRatio().toFixed(3)}`],
       ['Quality', `${s.quality} (detected ${s.tier}, ${s.tierSource ?? '?'}) · tex ${s.texSet ?? '?'}`],
       ['GPU', String(s.gpu ?? '?')],
+      ['Start tier', startTier(s.startQuality)],
       ['', ''],
       ['Enter ready', ms(s.loadMs)],
       ['Warm-up', Object.entries(steps).map(([k, v]) => `${k} ${v}`).join(' · ') || '–'],

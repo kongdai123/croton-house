@@ -226,9 +226,9 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     candidates.length = 0; refresh(sources);
     for (const e of sources) {
       e.proxy.visible = false;
-      // layers.culled: room culling (visibility.js) hides it from the walkthrough camera behind the plan's walls; a ray
-      // reflected in the ground runs along the same line in plan, so the walls hide it from the puddle too
-      if (e.source.layers.culled === true || !reflectionVisible(e.source) || e.box.max.y <= plane + P.clip || !frustum.intersectsSphere(e.sphere)) continue;
+      // (not room culling's verdict, layers.culled: the reflection is looked up off its plane on raised terraces and under
+      // the wind ripples, so it shows a little of what the walls hide from the camera; cull_check saw it at the doors)
+      if (!reflectionVisible(e.source) || e.box.max.y <= plane + P.clip || !frustum.intersectsSphere(e.sphere)) continue;
       const d = Math.max(0.1, camera.position.distanceTo(e.sphere.center)), pixels = e.sphere.radius * h * Math.abs(camera.projectionMatrix.elements[5]) / d;
       if (d - e.sphere.radius > P.range || pixels < P.minPixels) continue;
       e.score = pixels; candidates.push(e);

@@ -11,6 +11,8 @@ import { buildRealScene, WEB } from './scene.mjs';
 
 const EXTRA = `
   export { applyLightmaps, loadProbes, buildProbeVolume } from './src/lightmap.js';
+  export * as whiteBalance from './src/white_balance.js';
+  export * as whiteBalancePolicy from './src/white_balance_policy.js';
   export { PROBE_FETCH, PROBE_SIDE_POINT, PROBE_SIDE } from './src/shaders/probe.glsl.js';
   export { createContact } from './src/contact.js';
   export { createPet as createCat } from './src/pets/cat.js';

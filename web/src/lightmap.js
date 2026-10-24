@@ -18,6 +18,7 @@ import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
 import { CONTACT, CONTACT_SHADER } from './contact.js';
 import { blenderAgX, loadAgXLuts } from './agx.js';
 import { createBakedAutoExposure } from './auto_exposure.js';
+import { createWhiteBalance } from './white_balance.js';
 import { createPuddles, scanPuddles, markPuddleGround, PUDDLE_UNIFORMS } from './puddles.js';
 import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderPatchCount, assertShaderPatches } from './foliage_bake.js';
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
@@ -686,7 +687,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const checkPatches = () => assertShaderPatches(patchStart);
   // After startup a late failure (a pet, the visitor, a mirror compiled on first sight) leaves that one material stock:
   // shaderPatch already warned once, and dropping the whole walk to legacy mid-visit is the worse outcome.
-  const updateMovables = dt => { if (!disposed) { slots?.update(dt); autoExposure?.update(dt); pcss.update(dt); if (slots) setFixtureGlow(slots.params.lamps); updateGroups(dt); if ((auditClock += dt) >= 1 && renderer.info?.programs && renderer.getContext) { auditClock = 0; audit(); } } };
+  const updateMovables = dt => { if (!disposed) { slots?.update(dt); autoExposure?.update(dt); pcss.update(dt); if (slots) setFixtureGlow(slots.params.lamps); updateGroups(dt); whiteBalance?.update(dt); if ((auditClock += dt) >= 1 && renderer.info?.programs && renderer.getContext) { auditClock = 0; audit(); } } };
   stats = { units: header.units.length, matched, byId: matched - byBox, byBox, unusedUnits: header.units.length - matched, unlit, triangles, materials: mats.size, movables: movables.length, probes: probes ? probes.N : 0, probeLit: probeLitCount, foliage, ms: Math.round(performance.now() - t0) };
   const atlasStats = () => { if (v2) Object.assign(stats, { resolution, atlas: [target.texture.image.width, target.texture.image.height], atlasMiB: atlasMiB(target.texture.image.width, target.texture.image.height) * (enc ? 4 / 3 : 1), mips: target.texture.userData.mips ?? null }); stats.shadowSize = shadowSize; };
   atlasStats();
@@ -762,6 +763,9 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
   const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
+  // the camera's white balance, from the probe volume's light on the surfaces in view (white_balance.js); with the auto
+  // exposure only (a fixed exposure, ?capture, stays comparable with Cycles)
+  const whiteBalance = autoExposure && createWhiteBalance({ lighting, renderer, volume: volume.uniforms, walls });
   const restore = () => { try { restoreBaked(); } catch (err) { console.warn('baked restore incomplete', err?.message ?? err); } };
   const restoreBaked = () => {
     if (disposed) return;
@@ -777,7 +781,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   const dispose = () => {
     if (disposed) return; disposed = true;
     renderer.domElement?.removeEventListener('webglcontextrestored', restore);
-    autoExposure?.dispose();
+    autoExposure?.dispose(); whiteBalance?.dispose();
     scene.userData.contact?.dispose(); restoreEmission?.();
     Object.assign(lighting.tune ?? {}, legacyTune);
     for (const [k, v] of Object.entries(legacyGrade)) lighting.grade[k].value = v;

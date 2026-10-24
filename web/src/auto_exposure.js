@@ -6,6 +6,7 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { METER, ADAPTATION, autoExposureEnabled } from './auto_exposure_policy.js';
 import { createLocalAdaptation } from './local_adapt.js';
 
+const IDENTITY = new THREE.Matrix3();
 const vertexShader = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const material = (fragmentShader, uniforms) => new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms, depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.NoBlending });
 const target = (w, h, type = THREE.HalfFloatType) => new THREE.WebGLRenderTarget(w, h, {
@@ -97,12 +98,13 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
   const quad = new FullScreenQuad(null), position = new THREE.Vector3(), rotation = new THREE.Quaternion();
   let valid = false, meterValid = false, meterIndex = 0, index = 0, frame = 0, elapsed = 0, meterElapsed = 0, fast = 0, disposed = false;
   // three's fallback (?agx=three) samples the same absolute exposure as Blender AgX. Its own exposure cancels here.
+  // The camera's white balance (white_balance.js, outputPass.whiteBalance) follows in scene-linear, as in agx.js.
   const originalShader = outputPass.material.fragmentShader, originalRender = outputPass.render;
-  const exposureUniform = { value: null };
-  outputPass.uniforms.tAutoExposure = exposureUniform;
+  const exposureUniform = { value: null }, whiteBalanceUniform = { value: IDENTITY };
+  outputPass.uniforms.tAutoExposure = exposureUniform; outputPass.uniforms.uWhiteBalance = whiteBalanceUniform;
   outputPass.material.fragmentShader = (originalShader.includes('precision highp sampler2D;') ? originalShader : originalShader.replace('precision highp float;', 'precision highp float;\n\t\tprecision highp sampler2D;'))   // RawShaderMaterial: samplers default to lowp on mobile GPUs, which would quantise HDR and depth
-    .replace('void main() {', 'uniform sampler2D tAutoExposure;\nvoid main() {')
-    .replace('// tone mapping', 'gl_FragColor.rgb *= texture2D(tAutoExposure, vec2(0.5)).r / max(toneMappingExposure, 0.00001);\n// tone mapping');
+    .replace('void main() {', 'uniform sampler2D tAutoExposure;\nuniform mat3 uWhiteBalance;\nvoid main() {')
+    .replace('// tone mapping', 'gl_FragColor.rgb *= texture2D(tAutoExposure, vec2(0.5)).r / max(toneMappingExposure, 0.00001);\ngl_FragColor.rgb = uWhiteBalance * gl_FragColor.rgb;\n// tone mapping');
   outputPass.material.needsUpdate = true;
   const local = createLocalAdaptation({ renderer, lighting, query, getTier });
   const draw = (into, mat) => { quad.material = mat; renderer.setRenderTarget(into); quad.render(renderer); };
@@ -135,6 +137,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
       u.tPrevious.value = valid ? history[index].texture : reduced.texture;
       index = 1 - index; draw(history[index], adaptation);
       outputPass.autoExposureTexture = exposureUniform.value = history[index].texture;
+      whiteBalanceUniform.value = outputPass.whiteBalance ?? IDENTITY;
       local?.render(readBuffer, history[index].texture, dt, u.uIndoor.value, moved, outputPass.renderToScreen ? null : writeBuffer);
       valid = true; frame++; fast = Math.max(0, fast - dt);
     } finally { renderer.setRenderTarget(saved); }
@@ -154,7 +157,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
       renderer.domElement.removeEventListener('webglcontextrestored', reset);
       local?.dispose();
       outputPass.render = originalRender; outputPass.material.fragmentShader = originalShader; outputPass.material.needsUpdate = true;
-      delete outputPass.autoExposureTexture; delete outputPass.uniforms.tAutoExposure;
+      delete outputPass.autoExposureTexture; delete outputPass.uniforms.tAutoExposure; delete outputPass.uniforms.uWhiteBalance;
       for (const t of [meter, reduced, ...history, ...meterHistory]) t.dispose();
       for (const m of [metering, reduction, filtering, adaptation]) m.dispose();
       quad.dispose(); if (lighting.autoExposure === api) delete lighting.autoExposure;

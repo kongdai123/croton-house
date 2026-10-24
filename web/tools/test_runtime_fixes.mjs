@@ -26,9 +26,10 @@ try {
   globalThis.window = { __app: { state: { baked: true }, baked: { slotName: 'sunrise' } } };
   const { THREE: T, Tour, STOPS, Viewpoints, Interact, getColliders, addAABB, buildGrid, createLampGroups, lampGroupRes, glowLevel, collectLightSwitches, setLang, probeLit, reflGLSL } = await import(pathToFileURL(file));
   // lamp groups at the atlas tier's resolution (full on hq), ?lmgroups=half caps them
-  // baked lamp surfaces at the bake's physical luminance (encoding.json member), else 1.8x their base; wash cards by opacity
+  // baked lamp surfaces at the bake's physical luminance (encoding.json member), else 1.8x their base; wash cards (raster
+  // stand-ins for the light on the wall) off over the bake, which carries that light
   assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5, luminance: 3 }), 1.5); assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5 }), 0.9);
-  assert.equal(glowLevel({ base: 0.4, wash: true }, { baked: true, level: 0.5, luminance: 3 }), 0.2);
+  assert.equal(glowLevel({ base: 0.4, wash: true }, { baked: true, level: 0.5, luminance: 3 }), 0); assert.equal(glowLevel({ base: 0.4, wash: true }, { dusk: true }), 0.4);
   assert.equal(lampGroupRes('full', ''), 'full'); assert.equal(lampGroupRes('half', ''), 'half'); assert.equal(lampGroupRes('full', '?lmgroups=half'), 'half'); assert.equal(lampGroupRes('quarter', '?lmgroups=half'), 'quarter');
   let caption = '';
   const ui = { setCaption(s) { caption = s; }, setLabel() {}, toast() {}, toggleLegends() {} };

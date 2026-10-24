@@ -297,7 +297,10 @@ export class Interact {
           // clone() drops the shader hooks (daylight, HQ shadow, lighting chunk), which would give the highlight its own
           // program: a fresh compile on first hover, several seconds on Windows, and a look without the daylight tint.
           hl.onBeforeCompile = base.onBeforeCompile; hl.customProgramCacheKey = base.customProgramCacheKey; hl.onBeforeRender = base.onBeforeRender; if (base.ownShader) hl.ownShader = base.ownShader;
-          hl.emissive.set(0xffffff); hl.emissiveIntensity = 0.06;
+          // a lit-relative highlight: the surface reflects 50% more of the light it gets. A fixed white glow (emissive
+          // 0.06) blew hovered pieces out in rooms lit by physical lamps (bake v4: rooms 10-60x dimmer, exposure up to
+          // +6 EV at dusk), as it was already strong in daylight-led rooms
+          hl.color.multiplyScalar(1.5);
           o.userData.hl = base; o.material = hl;
         }
       } else if (o.userData.hl) { o.material.dispose(); o.material = o.userData.hl; o.userData.hl = null; }

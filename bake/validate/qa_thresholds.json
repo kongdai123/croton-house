@@ -5,6 +5,6 @@
  "tiers": {"minFullTexels": 64, "minTierTexels": {"half": 16, "quarter": 8}, "relTol": {"half": 0.5, "quarter": 0.75}, "absTol": 0.01, "chromaTol": 0.15, "lumFloor": 0.003, "maxZeroForLuminance": 0.1, "chromaMinSum": 0.01},
  "groups": {"minEnergy": 0.001, "leakFraction": 0.35, "bigUnit": 6},
  "probes": {"maxInvalidFraction": 0.5, "c0Epsilon": 0.001, "ratioMinL0": 0.001, "maxL1Ratio": 1.8},
- "refl": {"pointTol": 0.01, "boxTol": 0.05, "wallClearance": 0.3, "boxOverTol": 0.25, "blackLevel": 0.0001, "maxBlackFraction": 0.5, "minStd": 0.0001},
+ "refl": {"pointTol": 0.01, "boxTol": 0.05, "maxFallback": 0.25, "wallClearance": 0.3, "boxOverTol": 0.25, "blackLevel": 0.0001, "maxBlackFraction": 0.5, "minStd": 0.0001},
  "baseline": {"relTol": 0.05, "absTol": 0.0001, "relTolByPrefix": {"tiers.": 0.5, "refl.": 0.1, "probes.": 0.1, "group.": 0.1}}
 }

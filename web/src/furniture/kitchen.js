@@ -430,7 +430,7 @@ export const items = {
   island: () => done(buildIsland(), { id: 'kitchen-island', name: 'Waterfall island', zh: '瀑布岛台' }),
   stool: () => { const g = buildStool(); bake(g); describe(g, { id: 'kitchen-stool', name: 'Rush counter stool', zh: '藤编吧凳' }); setMovable(g, { mass: 6, radius: 0.26 }); addSeat(g, { y: 0.66, facing: 0, kind: 'stool', back: 0.9 }); return autoCollider(g); },
   pendant: () => { const g = done(buildPendant(), { id: 'kitchen-pendant', name: 'Oak LED linear pendant', zh: '橡木线形吊灯' }, false); g.userData.light = { type: 'rect', w: 1.4, h: 0.06, y: 1.94, intensity: 6, color: 0xfff1dc };
-    // the island's own switch; on when someone is up at sunrise and through the evening
-    declare(g, { fixture: { kind: 'pendant', circuit: 'pendant', defaultOn: ['sunrise', 'golden', 'dusk'] } }); return g; },
+    // the island's own switch: a 1.4 m linear LED pendant, ~2800 lm down onto the island
+    declare(g, { fixture: { kind: 'pendant', circuit: 'pendant', output: { lm: 2800, emitter: 'linear' } } }); return g; },
   counterDecor: () => { const g = done(buildDecor(), { id: 'kitchen-counter-decor', name: 'Island decor', zh: '岛台摆件', note: 'stands on y=0; place on the island top (y=0.92)' }, false); g.userData.placeOn = { surface: 'island', y: TOP }; return g; },
 };

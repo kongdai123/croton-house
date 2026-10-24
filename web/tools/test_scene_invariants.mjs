@@ -226,6 +226,21 @@ const invariant = (id, title, offenders) => results.push({ id, title, offenders:
 // always), members agreeing on their default slots (lighting_roles.js validateSwitches) ----------------------------------------
 invariant('switches-map-to-groups', 'every switch in one lamp group, every group with members and one wall plate, members agree on default slots', w.roles.validateSwitches(switches, plates));
 
+// ---- 7c. default switches per slot (a staged showing): every interior switch on at sunrise, golden hour and dusk; at noon
+// only where no window or door opens to the outside (closets, the hall, the laundry), or where the fixture declares it (the
+// garage); the exterior switch at dusk only. From the plan's openings, not from names.
+{
+  const off = [], outdoors = new Set(w.plan.spaces.filter(s => s.zone === 'exterior').map(s => s.id));
+  const daylit = id => w.plan.openings.some(o => o.connects?.includes(id) && o.connects.some(c => outdoors.has(c)));
+  for (const s of switches) {
+    const r = s.lighting, declared = w.roles.fixtureOf(s.root)?.defaultOn ?? (() => { for (let p = s.root; p; p = p.parent) { const f = w.roles.fixtureOf(p); if (f) return f.defaultOn; } return null; })();
+    const want = r.exterior ? ['dusk'] : declared ?? ['sunrise', 'golden', 'dusk', ...(daylit(r.space) ? [] : ['noon'])];
+    if (JSON.stringify([...r.defaultOn].sort()) !== JSON.stringify([...want].sort())) off.push(`${r.id} (${r.space}): ${r.defaultOn.join(',')} not ${want.join(',')}`);
+    if (!r.exterior && !['sunrise', 'golden', 'dusk'].every(x => r.defaultOn.includes(x))) off.push(`${r.id} (${r.space}): an interior switch off at ${['sunrise', 'golden', 'dusk'].filter(x => !r.defaultOn.includes(x))}`);
+  }
+  invariant('default-switches', 'interior switches on at sunrise, golden hour and dusk, at noon only without daylight (or declared); the exterior one at dusk only', off);
+}
+
 // ---- 8. committed reflection probe meta == reflprobe_layout.py ------------------------------------------------------------------------
 {
   const layout = JSON.parse(execFileSync('python3', ['-I', join(REPO, 'bake/scripts/capture_spatial.py'), '--reflection-layout'], { encoding: 'utf8' }));

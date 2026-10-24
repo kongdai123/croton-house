@@ -1,6 +1,6 @@
 {
  "version": 1,
- "probes": 27,
+ "probes": 30,
  "layers": [
   {
    "probe": 0,
@@ -13,8 +13,7 @@
    "probe": 0,
    "file": "lamp_001.hdr",
    "groups": {
-    "laundry": 0.66464,
-    "porch": 0.33536
+    "laundry": 1.0
    }
   },
   {
@@ -49,28 +48,26 @@
    "probe": 3,
    "file": "lamp_006.hdr",
    "groups": {
-    "kitchenCabinet": 1.0
+    "kitchen": 1.0
    }
   },
   {
    "probe": 3,
    "file": "lamp_007.hdr",
    "groups": {
-    "dining": 1.0
+    "kitchenCabinet": 1.0
    }
   },
   {
    "probe": 3,
    "file": "lamp_008.hdr",
    "groups": {
-    "kitchen": 0.54085,
-    "hall": 0.2693,
-    "livingNiche": 0.05618,
-    "living": 0.0405,
-    "primary": 0.02752,
-    "porch": 0.02655,
-    "livingCenter": 0.02439,
-    "primaryLamps": 0.01469
+    "living": 0.31313,
+    "livingCenter": 0.28468,
+    "livingNiche": 0.12933,
+    "dining": 0.11034,
+    "hall": 0.10157,
+    "family": 0.06094
    }
   },
   {
@@ -84,572 +81,709 @@
    "probe": 4,
    "file": "lamp_010.hdr",
    "groups": {
-    "dining": 1.0
+    "livingCenter": 1.0
    }
   },
   {
    "probe": 4,
    "file": "lamp_011.hdr",
    "groups": {
-    "primary": 0.24078,
-    "hall": 0.22505,
-    "primaryLamps": 0.14209,
-    "kitchen": 0.11377,
-    "livingNiche": 0.09923,
-    "livingCenter": 0.04326,
-    "kitchenCabinet": 0.04245,
-    "linen": 0.02866,
-    "living": 0.02569,
-    "family": 0.02011,
-    "closet": 0.01891
+    "kitchen": 1.0
    }
   },
   {
-   "probe": 5,
+   "probe": 4,
    "file": "lamp_012.hdr",
    "groups": {
-    "primary": 1.0
+    "kitchenCabinet": 0.16822,
+    "livingNiche": 0.15701,
+    "family": 0.13811,
+    "living": 0.13501,
+    "dining": 0.12829,
+    "primary": 0.12653,
+    "hall": 0.07547,
+    "always": 0.03747,
+    "primaryLamps": 0.02012,
+    "linen": 0.01377
    }
   },
   {
    "probe": 5,
    "file": "lamp_013.hdr",
    "groups": {
-    "primaryLamps": 1.0
+    "primary": 1.0
    }
   },
   {
    "probe": 5,
    "file": "lamp_014.hdr",
    "groups": {
-    "linen": 0.77714,
-    "closet": 0.22286
+    "primaryLamps": 1.0
    }
   },
   {
-   "probe": 6,
+   "probe": 5,
    "file": "lamp_015.hdr",
    "groups": {
-    "kitchenPendant": 1.0
+    "linen": 0.78895,
+    "closet": 0.21105
    }
   },
   {
    "probe": 6,
    "file": "lamp_016.hdr",
    "groups": {
-    "dining": 1.0
+    "kitchenPendant": 1.0
    }
   },
   {
    "probe": 6,
    "file": "lamp_017.hdr",
    "groups": {
-    "hall": 1.0
+    "kitchen": 1.0
    }
   },
   {
    "probe": 6,
    "file": "lamp_018.hdr",
    "groups": {
-    "kitchen": 0.37441,
-    "living": 0.20109,
-    "livingCenter": 0.09879,
-    "livingNiche": 0.09076,
-    "porch": 0.07831,
-    "kitchenCabinet": 0.05712,
-    "primary": 0.05014,
-    "primaryLamps": 0.02519,
-    "family": 0.01256,
-    "bedroomBCloset": 0.01163
+    "living": 1.0
    }
   },
   {
-   "probe": 7,
+   "probe": 6,
    "file": "lamp_019.hdr",
    "groups": {
-    "kitchenPendant": 1.0
+    "livingCenter": 0.4075,
+    "kitchenCabinet": 0.14019,
+    "dining": 0.12427,
+    "hall": 0.12094,
+    "livingNiche": 0.11788,
+    "family": 0.07086,
+    "primary": 0.01837
    }
   },
   {
    "probe": 7,
    "file": "lamp_020.hdr",
    "groups": {
-    "dining": 1.0
+    "kitchenPendant": 1.0
    }
   },
   {
    "probe": 7,
    "file": "lamp_021.hdr",
    "groups": {
-    "hall": 1.0
+    "livingCenter": 1.0
    }
   },
   {
    "probe": 7,
    "file": "lamp_022.hdr",
    "groups": {
-    "livingCenter": 0.29056,
-    "livingNiche": 0.22722,
-    "primary": 0.16679,
-    "kitchen": 0.08439,
-    "primaryLamps": 0.07371,
-    "living": 0.06465,
-    "family": 0.02487,
-    "closet": 0.02272,
-    "kitchenCabinet": 0.01945,
-    "linen": 0.01379,
-    "bedroomBCloset": 0.01185
+    "livingNiche": 1.0
    }
   },
   {
-   "probe": 8,
+   "probe": 7,
    "file": "lamp_023.hdr",
    "groups": {
-    "dining": 1.0
+    "kitchen": 0.22715,
+    "living": 0.22047,
+    "dining": 0.15773,
+    "hall": 0.15142,
+    "family": 0.10248,
+    "primary": 0.05245,
+    "kitchenCabinet": 0.04631,
+    "always": 0.042
    }
   },
   {
    "probe": 8,
    "file": "lamp_024.hdr",
    "groups": {
-    "kitchenPendant": 0.45915,
-    "family": 0.21376,
-    "hall": 0.11377,
-    "livingNiche": 0.07854,
-    "primary": 0.04285,
-    "primaryLamps": 0.03663,
-    "livingCenter": 0.03366,
-    "kitchen": 0.02162
+    "dining": 1.0
    }
   },
   {
-   "probe": 9,
+   "probe": 8,
    "file": "lamp_025.hdr",
+   "groups": {
+    "family": 1.0
+   }
+  },
+  {
+   "probe": 8,
+   "file": "lamp_026.hdr",
    "groups": {
     "kitchenPendant": 1.0
    }
   },
   {
-   "probe": 9,
-   "file": "lamp_026.hdr",
-   "groups": {
-    "dining": 1.0
-   }
-  },
-  {
-   "probe": 9,
+   "probe": 8,
    "file": "lamp_027.hdr",
    "groups": {
-    "living": 1.0
+    "always": 0.34881,
+    "livingCenter": 0.21277,
+    "livingNiche": 0.16961,
+    "kitchen": 0.09804,
+    "living": 0.0796,
+    "hall": 0.04044,
+    "kitchenCabinet": 0.02708,
+    "primary": 0.02366
    }
   },
   {
    "probe": 9,
    "file": "lamp_028.hdr",
    "groups": {
-    "hall": 0.43034,
-    "kitchen": 0.11707,
-    "porch": 0.11456,
-    "primary": 0.08759,
-    "primaryLamps": 0.07334,
-    "livingCenter": 0.07007,
-    "livingNiche": 0.06123,
-    "kitchenCabinet": 0.02483,
-    "family": 0.01176,
-    "bedroomB": 0.00922
+    "living": 1.0
+   }
+  },
+  {
+   "probe": 9,
+   "file": "lamp_029.hdr",
+   "groups": {
+    "kitchenPendant": 1.0
+   }
+  },
+  {
+   "probe": 9,
+   "file": "lamp_030.hdr",
+   "groups": {
+    "kitchen": 1.0
+   }
+  },
+  {
+   "probe": 9,
+   "file": "lamp_031.hdr",
+   "groups": {
+    "livingCenter": 0.40618,
+    "dining": 0.14339,
+    "hall": 0.13376,
+    "livingNiche": 0.10578,
+    "kitchenCabinet": 0.0844,
+    "family": 0.07466,
+    "primary": 0.0275,
+    "always": 0.02434
    }
   },
   {
    "probe": 10,
-   "file": "lamp_029.hdr",
+   "file": "lamp_032.hdr",
    "groups": {
     "hall": 1.0
    }
   },
   {
    "probe": 10,
-   "file": "lamp_030.hdr",
+   "file": "lamp_033.hdr",
    "groups": {
-    "bedroomBLamps": 0.25176,
-    "bedroom3": 0.23555,
-    "bedroom3Lamps": 0.19465,
-    "bedroomBCloset": 0.1288,
-    "bedroomB": 0.10827,
-    "kitchenPendant": 0.04882,
-    "dining": 0.03216
+    "bedroom3": 0.24678,
+    "kitchenPendant": 0.13655,
+    "bedroomB": 0.13229,
+    "bedroomBLamps": 0.12253,
+    "bedroomBCloset": 0.12251,
+    "bedroom3Lamps": 0.1058,
+    "livingCenter": 0.05446,
+    "living": 0.03427,
+    "kitchen": 0.02511,
+    "livingNiche": 0.01971
    }
   },
   {
    "probe": 11,
-   "file": "lamp_031.hdr",
+   "file": "lamp_034.hdr",
    "groups": {
     "dining": 1.0
    }
   },
   {
    "probe": 11,
-   "file": "lamp_032.hdr",
+   "file": "lamp_035.hdr",
    "groups": {
-    "kitchenPendant": 0.57538,
-    "hall": 0.14807,
-    "livingNiche": 0.0982,
-    "family": 0.08302,
-    "primary": 0.04975,
-    "livingCenter": 0.04558
+    "kitchenPendant": 1.0
+   }
+  },
+  {
+   "probe": 11,
+   "file": "lamp_036.hdr",
+   "groups": {
+    "family": 1.0
+   }
+  },
+  {
+   "probe": 11,
+   "file": "lamp_037.hdr",
+   "groups": {
+    "livingCenter": 0.22057,
+    "livingNiche": 0.21823,
+    "always": 0.21222,
+    "living": 0.12526,
+    "kitchen": 0.11494,
+    "hall": 0.05263,
+    "primary": 0.03084,
+    "kitchenCabinet": 0.02531
    }
   },
   {
    "probe": 12,
-   "file": "lamp_033.hdr",
-   "groups": {
-    "bedroom3Lamps": 1.0
-   }
-  },
-  {
-   "probe": 12,
-   "file": "lamp_034.hdr",
+   "file": "lamp_038.hdr",
    "groups": {
     "bedroom3": 1.0
    }
   },
   {
    "probe": 12,
-   "file": "lamp_035.hdr",
+   "file": "lamp_039.hdr",
    "groups": {
-    "hall": 0.82357,
-    "hallCloset": 0.17643
+    "bedroom3Lamps": 1.0
+   }
+  },
+  {
+   "probe": 12,
+   "file": "lamp_040.hdr",
+   "groups": {
+    "hall": 0.7887,
+    "hallCloset": 0.2113
    }
   },
   {
    "probe": 13,
-   "file": "lamp_036.hdr",
+   "file": "lamp_041.hdr",
    "groups": {
     "hallBath": 1.0
    }
   },
   {
    "probe": 14,
-   "file": "lamp_037.hdr",
-   "groups": {
-    "bedroomBLamps": 1.0
-   }
-  },
-  {
-   "probe": 14,
-   "file": "lamp_038.hdr",
+   "file": "lamp_042.hdr",
    "groups": {
     "bedroomB": 1.0
    }
   },
   {
    "probe": 14,
-   "file": "lamp_039.hdr",
+   "file": "lamp_043.hdr",
+   "groups": {
+    "bedroomBLamps": 1.0
+   }
+  },
+  {
+   "probe": 14,
+   "file": "lamp_044.hdr",
    "groups": {
     "bedroomBCloset": 1.0
    }
   },
   {
    "probe": 14,
-   "file": "lamp_040.hdr",
+   "file": "lamp_045.hdr",
    "groups": {
     "hall": 1.0
    }
   },
   {
    "probe": 15,
-   "file": "lamp_041.hdr",
-   "groups": {
-    "primary": 1.0
-   }
-  },
-  {
-   "probe": 15,
-   "file": "lamp_042.hdr",
-   "groups": {
-    "primaryLamps": 1.0
-   }
-  },
-  {
-   "probe": 15,
-   "file": "lamp_043.hdr",
-   "groups": {
-    "linen": 0.59122,
-    "dining": 0.36704,
-    "bedroomBLamps": 0.04174
-   }
-  },
-  {
-   "probe": 16,
-   "file": "lamp_044.hdr",
-   "groups": {
-    "dining": 1.0
-   }
-  },
-  {
-   "probe": 16,
-   "file": "lamp_045.hdr",
-   "groups": {
-    "kitchenPendant": 1.0
-   }
-  },
-  {
-   "probe": 16,
    "file": "lamp_046.hdr",
    "groups": {
     "primary": 1.0
    }
   },
   {
-   "probe": 16,
+   "probe": 15,
    "file": "lamp_047.hdr",
    "groups": {
-    "bedroomBLamps": 0.43448,
-    "primaryLamps": 0.13861,
-    "family": 0.13165,
-    "hall": 0.13011,
-    "bedroomB": 0.11235,
-    "kitchen": 0.01885,
-    "livingCenter": 0.01816,
-    "living": 0.01579
+    "primaryLamps": 1.0
    }
   },
   {
-   "probe": 17,
+   "probe": 15,
    "file": "lamp_048.hdr",
    "groups": {
-    "bedroomBLamps": 1.0
+    "linen": 0.75373,
+    "dining": 0.16265,
+    "kitchenPendant": 0.08362
    }
   },
   {
-   "probe": 17,
+   "probe": 16,
    "file": "lamp_049.hdr",
    "groups": {
-    "bedroomB": 1.0
+    "family": 1.0
    }
   },
   {
-   "probe": 17,
+   "probe": 16,
    "file": "lamp_050.hdr",
    "groups": {
     "dining": 1.0
    }
   },
   {
-   "probe": 17,
+   "probe": 16,
    "file": "lamp_051.hdr",
    "groups": {
-    "bedroomBCloset": 0.61736,
-    "hall": 0.22288,
-    "kitchenPendant": 0.08825,
-    "primary": 0.07151
+    "always": 1.0
    }
   },
   {
-   "probe": 18,
+   "probe": 16,
    "file": "lamp_052.hdr",
    "groups": {
-    "primary": 1.0
+    "kitchenPendant": 0.37647,
+    "primary": 0.18266,
+    "livingCenter": 0.09,
+    "living": 0.08649,
+    "bedroomB": 0.07947,
+    "kitchenCabinet": 0.03866,
+    "bedroomBLamps": 0.0384,
+    "kitchen": 0.03682,
+    "hall": 0.03377,
+    "primaryLamps": 0.01904,
+    "livingNiche": 0.01077,
+    "bedroomBCloset": 0.00745
    }
   },
   {
-   "probe": 18,
+   "probe": 17,
    "file": "lamp_053.hdr",
    "groups": {
-    "dining": 1.0
+    "bedroomB": 1.0
    }
   },
   {
-   "probe": 18,
+   "probe": 17,
    "file": "lamp_054.hdr",
    "groups": {
     "bedroomBLamps": 1.0
    }
   },
   {
-   "probe": 18,
+   "probe": 17,
    "file": "lamp_055.hdr",
    "groups": {
-    "primaryLamps": 0.6218,
-    "bedroomB": 0.19232,
-    "linen": 0.12276,
-    "kitchenPendant": 0.06313
+    "bedroomBCloset": 0.26871,
+    "dining": 0.22046,
+    "always": 0.20076,
+    "family": 0.11491,
+    "hall": 0.08407,
+    "kitchenPendant": 0.0664,
+    "primary": 0.04468
+   }
+  },
+  {
+   "probe": 18,
+   "file": "lamp_056.hdr",
+   "groups": {
+    "primary": 1.0
+   }
+  },
+  {
+   "probe": 18,
+   "file": "lamp_057.hdr",
+   "groups": {
+    "bedroomBLamps": 1.0
+   }
+  },
+  {
+   "probe": 18,
+   "file": "lamp_058.hdr",
+   "groups": {
+    "dining": 1.0
+   }
+  },
+  {
+   "probe": 18,
+   "file": "lamp_059.hdr",
+   "groups": {
+    "kitchen": 0.2745,
+    "bedroomB": 0.16335,
+    "family": 0.15788,
+    "kitchenPendant": 0.12115,
+    "linen": 0.12019,
+    "primaryLamps": 0.10423,
+    "bedroomBCloset": 0.01942,
+    "hall": 0.01074,
+    "livingNiche": 0.00971,
+    "living": 0.00951,
+    "livingCenter": 0.00933
    }
   },
   {
    "probe": 19,
-   "file": "lamp_056.hdr",
+   "file": "lamp_060.hdr",
    "groups": {
     "dining": 1.0
    }
   },
   {
    "probe": 19,
-   "file": "lamp_057.hdr",
+   "file": "lamp_061.hdr",
    "groups": {
-    "primary": 1.0
+    "always": 1.0
    }
   },
   {
    "probe": 19,
-   "file": "lamp_058.hdr",
+   "file": "lamp_062.hdr",
    "groups": {
-    "primaryLamps": 1.0
+    "family": 1.0
    }
   },
   {
    "probe": 19,
-   "file": "lamp_059.hdr",
+   "file": "lamp_063.hdr",
    "groups": {
-    "bedroomBLamps": 0.45973,
-    "bedroomB": 0.24039,
-    "kitchenPendant": 0.17688,
-    "linen": 0.02748,
-    "family": 0.02519,
-    "livingNiche": 0.02425,
-    "hall": 0.0227,
-    "closet": 0.01209,
-    "kitchen": 0.01128
+    "primary": 0.28668,
+    "kitchenPendant": 0.16232,
+    "bedroomB": 0.1213,
+    "primaryLamps": 0.10043,
+    "bedroomBLamps": 0.08829,
+    "living": 0.06249,
+    "kitchen": 0.04927,
+    "livingCenter": 0.03861,
+    "linen": 0.03783,
+    "hall": 0.02191,
+    "livingNiche": 0.01631,
+    "kitchenCabinet": 0.0088,
+    "bedroomBCloset": 0.00576
    }
   },
   {
    "probe": 20,
-   "file": "lamp_060.hdr",
+   "file": "lamp_064.hdr",
    "groups": {
     "bedroomB": 1.0
    }
   },
   {
    "probe": 20,
-   "file": "lamp_061.hdr",
+   "file": "lamp_065.hdr",
    "groups": {
     "dining": 1.0
    }
   },
   {
    "probe": 20,
-   "file": "lamp_062.hdr",
+   "file": "lamp_066.hdr",
    "groups": {
-    "bedroomBLamps": 1.0
+    "kitchenPendant": 1.0
    }
   },
   {
    "probe": 20,
-   "file": "lamp_063.hdr",
+   "file": "lamp_067.hdr",
    "groups": {
-    "primary": 0.25476,
-    "primaryLamps": 0.23575,
-    "hall": 0.2126,
-    "bedroomBCloset": 0.12876,
-    "kitchenPendant": 0.12455,
-    "livingNiche": 0.02097,
-    "kitchen": 0.01235,
-    "family": 0.01026
+    "bedroomBLamps": 0.19983,
+    "primary": 0.15842,
+    "hall": 0.13695,
+    "kitchen": 0.13457,
+    "bedroomBCloset": 0.12516,
+    "family": 0.09436,
+    "livingNiche": 0.05487,
+    "primaryLamps": 0.04249,
+    "living": 0.02239,
+    "livingCenter": 0.02082,
+    "kitchenCabinet": 0.01014
    }
   },
   {
    "probe": 21,
-   "file": "lamp_064.hdr",
-   "groups": {
-    "porch": 1.0
-   }
-  },
-  {
-   "probe": 21,
-   "file": "lamp_065.hdr",
+   "file": "lamp_068.hdr",
    "groups": {
     "garage": 1.0
    }
   },
   {
    "probe": 21,
-   "file": "lamp_066.hdr",
-   "groups": {
-    "laundry": 0.72163,
-    "dining": 0.27837
-   }
-  },
-  {
-   "probe": 22,
-   "file": "lamp_067.hdr",
-   "groups": {
-    "porch": 1.0
-   }
-  },
-  {
-   "probe": 22,
-   "file": "lamp_068.hdr",
-   "groups": {
-    "kitchenPendant": 0.63662,
-    "dining": 0.23816,
-    "living": 0.06366,
-    "kitchen": 0.06157
-   }
-  },
-  {
-   "probe": 23,
    "file": "lamp_069.hdr",
    "groups": {
     "porch": 1.0
    }
   },
   {
-   "probe": 23,
+   "probe": 21,
    "file": "lamp_070.hdr",
    "groups": {
-    "bedroom3Lamps": 0.44004,
-    "bedroom3": 0.38629,
-    "kitchenPendant": 0.17368
+    "always": 0.35601,
+    "kitchenPendant": 0.25475,
+    "laundry": 0.17201,
+    "living": 0.07381,
+    "kitchen": 0.06966,
+    "livingCenter": 0.04359,
+    "dining": 0.03017
    }
   },
   {
-   "probe": 24,
+   "probe": 22,
    "file": "lamp_071.hdr",
    "groups": {
-    "hallBath": 1.0
+    "porch": 1.0
    }
   },
   {
-   "probe": 24,
+   "probe": 22,
    "file": "lamp_072.hdr",
    "groups": {
-    "bathB": 1.0
+    "kitchenPendant": 1.0
    }
   },
   {
-   "probe": 24,
+   "probe": 22,
    "file": "lamp_073.hdr",
    "groups": {
-    "bedroomB": 0.52302,
-    "bedroomBLamps": 0.39761,
-    "bedroomBCloset": 0.07937
+    "living": 1.0
    }
   },
   {
-   "probe": 25,
+   "probe": 22,
    "file": "lamp_074.hdr",
    "groups": {
-    "garage": 1.0
+    "kitchen": 0.46985,
+    "kitchenCabinet": 0.2316,
+    "livingCenter": 0.13241,
+    "livingNiche": 0.08815,
+    "dining": 0.03842,
+    "garage": 0.02411,
+    "primary": 0.01547
    }
   },
   {
-   "probe": 25,
+   "probe": 23,
    "file": "lamp_075.hdr",
    "groups": {
     "porch": 1.0
    }
   },
   {
-   "probe": 25,
+   "probe": 23,
    "file": "lamp_076.hdr",
+   "groups": {
+    "bedroom3": 0.48094,
+    "kitchenPendant": 0.20901,
+    "living": 0.1175,
+    "bedroom3Lamps": 0.09433,
+    "livingCenter": 0.07041,
+    "primary": 0.02781
+   }
+  },
+  {
+   "probe": 24,
+   "file": "lamp_077.hdr",
+   "groups": {
+    "hallBath": 1.0
+   }
+  },
+  {
+   "probe": 24,
+   "file": "lamp_078.hdr",
+   "groups": {
+    "bathB": 1.0
+   }
+  },
+  {
+   "probe": 24,
+   "file": "lamp_079.hdr",
+   "groups": {
+    "bedroomB": 0.59222,
+    "bedroomBLamps": 0.20455,
+    "bedroomBCloset": 0.20323
+   }
+  },
+  {
+   "probe": 25,
+   "file": "lamp_080.hdr",
+   "groups": {
+    "garage": 1.0
+   }
+  },
+  {
+   "probe": 25,
+   "file": "lamp_081.hdr",
    "groups": {
     "primaryBath": 1.0
    }
   },
   {
+   "probe": 25,
+   "file": "lamp_082.hdr",
+   "groups": {
+    "porch": 1.0
+   }
+  },
+  {
    "probe": 26,
-   "file": "lamp_077.hdr",
+   "file": "lamp_083.hdr",
    "groups": {
     "bathB": 1.0
+   }
+  },
+  {
+   "probe": 27,
+   "file": "lamp_084.hdr",
+   "groups": {
+    "laundry": 1.0
+   }
+  },
+  {
+   "probe": 27,
+   "file": "lamp_085.hdr",
+   "groups": {
+    "garage": 1.0
+   }
+  },
+  {
+   "probe": 27,
+   "file": "lamp_086.hdr",
+   "groups": {
+    "always": 1.0
+   }
+  },
+  {
+   "probe": 28,
+   "file": "lamp_087.hdr",
+   "groups": {
+    "closet": 1.0
+   }
+  },
+  {
+   "probe": 28,
+   "file": "lamp_088.hdr",
+   "groups": {
+    "primary": 1.0
+   }
+  },
+  {
+   "probe": 28,
+   "file": "lamp_089.hdr",
+   "groups": {
+    "primaryLamps": 0.62084,
+    "linen": 0.29734,
+    "kitchenPendant": 0.08182
+   }
+  },
+  {
+   "probe": 29,
+   "file": "lamp_090.hdr",
+   "groups": {
+    "linen": 1.0
+   }
+  },
+  {
+   "probe": 29,
+   "file": "lamp_091.hdr",
+   "groups": {
+    "primary": 1.0
+   }
+  },
+  {
+   "probe": 29,
+   "file": "lamp_092.hdr",
+   "groups": {
+    "primaryLamps": 0.70067,
+    "closet": 0.19529,
+    "kitchenPendant": 0.10403
    }
   }
  ],
@@ -658,17 +792,16 @@
    "probe": 0,
    "file": "lamp_m00.hdr",
    "groups": {
-    "garage": 0.99077,
-    "laundry": 0.00613,
-    "porch": 0.0031
+    "garage": 0.99771,
+    "laundry": 0.00229
    }
   },
   {
    "probe": 1,
    "file": "lamp_m01.hdr",
    "groups": {
-    "garage": 0.98567,
-    "laundry": 0.01433
+    "garage": 0.99593,
+    "laundry": 0.00407
    }
   },
   {
@@ -682,156 +815,155 @@
    "probe": 3,
    "file": "lamp_m03.hdr",
    "groups": {
-    "kitchenPendant": 0.53905,
-    "kitchenCabinet": 0.17245,
-    "dining": 0.10396,
-    "kitchen": 0.09981,
-    "hall": 0.0497,
-    "livingNiche": 0.01037,
-    "living": 0.00747,
-    "primary": 0.00508,
-    "porch": 0.0049,
-    "livingCenter": 0.0045,
-    "primaryLamps": 0.00271
+    "kitchenPendant": 0.31799,
+    "kitchen": 0.31528,
+    "kitchenCabinet": 0.2879,
+    "living": 0.02469,
+    "livingCenter": 0.02244,
+    "livingNiche": 0.0102,
+    "dining": 0.0087,
+    "hall": 0.00801,
+    "family": 0.0048
    }
   },
   {
    "probe": 4,
    "file": "lamp_m04.hdr",
    "groups": {
-    "kitchenPendant": 0.65217,
-    "dining": 0.16408,
-    "primary": 0.04424,
-    "hall": 0.04135,
-    "primaryLamps": 0.02611,
-    "kitchen": 0.02091,
-    "livingNiche": 0.01823,
-    "livingCenter": 0.00795,
-    "kitchenCabinet": 0.0078,
-    "linen": 0.00527,
-    "living": 0.00472,
-    "family": 0.00369,
-    "closet": 0.00348
+    "kitchenPendant": 0.66496,
+    "livingCenter": 0.08589,
+    "kitchen": 0.07742,
+    "kitchenCabinet": 0.02889,
+    "livingNiche": 0.02697,
+    "family": 0.02372,
+    "living": 0.02319,
+    "dining": 0.02203,
+    "primary": 0.02173,
+    "hall": 0.01296,
+    "always": 0.00643,
+    "primaryLamps": 0.00346,
+    "linen": 0.00237
    }
   },
   {
    "probe": 5,
    "file": "lamp_m05.hdr",
    "groups": {
-    "primary": 0.65884,
-    "primaryLamps": 0.32914,
-    "linen": 0.00934,
-    "closet": 0.00268
+    "primary": 0.84846,
+    "primaryLamps": 0.13984,
+    "linen": 0.00923,
+    "closet": 0.00247
    }
   },
   {
    "probe": 6,
    "file": "lamp_m06.hdr",
    "groups": {
-    "kitchenPendant": 0.51161,
-    "dining": 0.19731,
-    "hall": 0.11184,
-    "kitchen": 0.06711,
-    "living": 0.03604,
-    "livingCenter": 0.01771,
-    "livingNiche": 0.01627,
-    "porch": 0.01404,
-    "kitchenCabinet": 0.01024,
-    "primary": 0.00899,
-    "primaryLamps": 0.00452,
-    "family": 0.00225,
-    "bedroomBCloset": 0.00208
+    "kitchenPendant": 0.39307,
+    "kitchen": 0.24322,
+    "living": 0.19393,
+    "livingCenter": 0.06919,
+    "kitchenCabinet": 0.0238,
+    "dining": 0.0211,
+    "hall": 0.02053,
+    "livingNiche": 0.02001,
+    "family": 0.01203,
+    "primary": 0.00312
    }
   },
   {
    "probe": 7,
    "file": "lamp_m07.hdr",
    "groups": {
-    "kitchenPendant": 0.36782,
-    "dining": 0.3019,
-    "hall": 0.13336,
-    "livingCenter": 0.05722,
-    "livingNiche": 0.04474,
-    "primary": 0.03284,
-    "kitchen": 0.01662,
-    "primaryLamps": 0.01451,
-    "living": 0.01273,
-    "family": 0.0049,
-    "closet": 0.00447,
-    "kitchenCabinet": 0.00383,
-    "linen": 0.00272,
-    "bedroomBCloset": 0.00233
+    "kitchenPendant": 0.36199,
+    "livingCenter": 0.33836,
+    "livingNiche": 0.06175,
+    "kitchen": 0.05404,
+    "living": 0.05245,
+    "dining": 0.03752,
+    "hall": 0.03602,
+    "family": 0.02438,
+    "primary": 0.01248,
+    "kitchenCabinet": 0.01102,
+    "always": 0.00999
    }
   },
   {
    "probe": 8,
    "file": "lamp_m08.hdr",
    "groups": {
-    "dining": 0.90151,
-    "kitchenPendant": 0.04522,
-    "family": 0.02105,
-    "hall": 0.0112,
-    "livingNiche": 0.00774,
-    "primary": 0.00422,
-    "primaryLamps": 0.00361,
-    "livingCenter": 0.00332,
-    "kitchen": 0.00213
+    "dining": 0.38899,
+    "family": 0.22993,
+    "kitchenPendant": 0.13324,
+    "always": 0.08645,
+    "livingCenter": 0.05273,
+    "livingNiche": 0.04203,
+    "kitchen": 0.0243,
+    "living": 0.01973,
+    "hall": 0.01002,
+    "kitchenCabinet": 0.00671,
+    "primary": 0.00586
    }
   },
   {
    "probe": 9,
    "file": "lamp_m09.hdr",
    "groups": {
-    "kitchenPendant": 0.37762,
-    "dining": 0.23405,
-    "living": 0.16195,
-    "hall": 0.09742,
-    "kitchen": 0.0265,
-    "porch": 0.02594,
-    "primary": 0.01983,
-    "primaryLamps": 0.0166,
-    "livingCenter": 0.01586,
-    "livingNiche": 0.01386,
-    "kitchenCabinet": 0.00562,
-    "family": 0.00266,
-    "bedroomB": 0.00209
+    "living": 0.55142,
+    "kitchenPendant": 0.2325,
+    "kitchen": 0.07199,
+    "livingCenter": 0.05852,
+    "dining": 0.02066,
+    "hall": 0.01927,
+    "livingNiche": 0.01524,
+    "kitchenCabinet": 0.01216,
+    "family": 0.01076,
+    "primary": 0.00396,
+    "always": 0.00351
    }
   },
   {
    "probe": 10,
    "file": "lamp_m10.hdr",
    "groups": {
-    "hall": 0.89113,
-    "bedroomBLamps": 0.02741,
-    "bedroom3": 0.02564,
-    "bedroom3Lamps": 0.02119,
-    "bedroomBCloset": 0.01402,
-    "bedroomB": 0.01179,
-    "kitchenPendant": 0.00532,
-    "dining": 0.0035
+    "hall": 0.89056,
+    "bedroom3": 0.02701,
+    "kitchenPendant": 0.01494,
+    "bedroomB": 0.01448,
+    "bedroomBLamps": 0.01341,
+    "bedroomBCloset": 0.01341,
+    "bedroom3Lamps": 0.01158,
+    "livingCenter": 0.00596,
+    "living": 0.00375,
+    "kitchen": 0.00275,
+    "livingNiche": 0.00216
    }
   },
   {
    "probe": 11,
    "file": "lamp_m11.hdr",
    "groups": {
-    "dining": 0.95555,
-    "kitchenPendant": 0.02558,
-    "hall": 0.00658,
-    "livingNiche": 0.00437,
-    "family": 0.00369,
-    "primary": 0.00221,
-    "livingCenter": 0.00203
+    "dining": 0.67438,
+    "kitchenPendant": 0.10486,
+    "family": 0.07152,
+    "livingCenter": 0.03292,
+    "livingNiche": 0.03257,
+    "always": 0.03167,
+    "living": 0.01869,
+    "kitchen": 0.01715,
+    "hall": 0.00785,
+    "primary": 0.0046,
+    "kitchenCabinet": 0.00378
    }
   },
   {
    "probe": 12,
    "file": "lamp_m12.hdr",
    "groups": {
-    "bedroom3Lamps": 0.54974,
-    "bedroom3": 0.41909,
-    "hall": 0.02567,
-    "hallCloset": 0.0055
+    "bedroom3": 0.60861,
+    "bedroom3Lamps": 0.35852,
+    "hall": 0.02592,
+    "hallCloset": 0.00694
    }
   },
   {
@@ -845,150 +977,183 @@
    "probe": 14,
    "file": "lamp_m14.hdr",
    "groups": {
-    "bedroomBLamps": 0.46694,
-    "bedroomB": 0.46568,
-    "bedroomBCloset": 0.0546,
-    "hall": 0.01278
+    "bedroomB": 0.68653,
+    "bedroomBLamps": 0.24111,
+    "bedroomBCloset": 0.05704,
+    "hall": 0.01533
    }
   },
   {
    "probe": 15,
    "file": "lamp_m15.hdr",
    "groups": {
-    "primary": 0.57998,
-    "primaryLamps": 0.35822,
-    "linen": 0.03654,
-    "dining": 0.02268,
-    "bedroomBLamps": 0.00258
+    "primary": 0.78596,
+    "primaryLamps": 0.18873,
+    "linen": 0.01908,
+    "dining": 0.00412,
+    "kitchenPendant": 0.00212
    }
   },
   {
    "probe": 16,
    "file": "lamp_m16.hdr",
    "groups": {
-    "dining": 0.67258,
-    "kitchenPendant": 0.08503,
-    "primary": 0.07658,
-    "bedroomBLamps": 0.07204,
-    "primaryLamps": 0.02298,
-    "family": 0.02183,
-    "hall": 0.02157,
-    "bedroomB": 0.01863,
-    "kitchen": 0.00313,
-    "livingCenter": 0.00301,
-    "living": 0.00262
+    "family": 0.29536,
+    "dining": 0.19834,
+    "always": 0.14152,
+    "kitchenPendant": 0.13733,
+    "primary": 0.06663,
+    "livingCenter": 0.03283,
+    "living": 0.03155,
+    "bedroomB": 0.02899,
+    "kitchenCabinet": 0.0141,
+    "bedroomBLamps": 0.01401,
+    "kitchen": 0.01343,
+    "hall": 0.01232,
+    "primaryLamps": 0.00695,
+    "livingNiche": 0.00393,
+    "bedroomBCloset": 0.00272
    }
   },
   {
    "probe": 17,
    "file": "lamp_m17.hdr",
    "groups": {
-    "bedroomBLamps": 0.48431,
-    "bedroomB": 0.37918,
-    "dining": 0.08194,
-    "bedroomBCloset": 0.03369,
-    "hall": 0.01216,
-    "kitchenPendant": 0.00482,
-    "primary": 0.0039
+    "bedroomB": 0.78973,
+    "bedroomBLamps": 0.14111,
+    "bedroomBCloset": 0.01858,
+    "dining": 0.01525,
+    "always": 0.01388,
+    "family": 0.00795,
+    "hall": 0.00581,
+    "kitchenPendant": 0.00459,
+    "primary": 0.00309
    }
   },
   {
    "probe": 18,
    "file": "lamp_m18.hdr",
    "groups": {
-    "primary": 0.56624,
-    "dining": 0.22563,
-    "bedroomBLamps": 0.1038,
-    "primaryLamps": 0.06488,
-    "bedroomB": 0.02007,
-    "linen": 0.01281,
-    "kitchenPendant": 0.00659
+    "primary": 0.31008,
+    "bedroomBLamps": 0.19263,
+    "dining": 0.14447,
+    "kitchen": 0.09685,
+    "bedroomB": 0.05763,
+    "family": 0.0557,
+    "kitchenPendant": 0.04274,
+    "linen": 0.0424,
+    "primaryLamps": 0.03677,
+    "bedroomBCloset": 0.00685,
+    "hall": 0.00379,
+    "livingNiche": 0.00343,
+    "living": 0.00335,
+    "livingCenter": 0.00329
    }
   },
   {
    "probe": 19,
    "file": "lamp_m19.hdr",
    "groups": {
-    "dining": 0.26422,
-    "primary": 0.23581,
-    "primaryLamps": 0.16841,
-    "bedroomBLamps": 0.15243,
-    "bedroomB": 0.0797,
-    "kitchenPendant": 0.05865,
-    "linen": 0.00911,
-    "family": 0.00835,
-    "livingNiche": 0.00804,
-    "hall": 0.00753,
-    "closet": 0.00401,
-    "kitchen": 0.00374
+    "dining": 0.1666,
+    "always": 0.16126,
+    "family": 0.15285,
+    "primary": 0.14887,
+    "kitchenPendant": 0.08429,
+    "bedroomB": 0.06299,
+    "primaryLamps": 0.05215,
+    "bedroomBLamps": 0.04585,
+    "living": 0.03245,
+    "kitchen": 0.02559,
+    "livingCenter": 0.02005,
+    "linen": 0.01964,
+    "hall": 0.01138,
+    "livingNiche": 0.00847,
+    "kitchenCabinet": 0.00457,
+    "bedroomBCloset": 0.00299
    }
   },
   {
    "probe": 20,
    "file": "lamp_m20.hdr",
    "groups": {
-    "bedroomB": 0.34305,
-    "dining": 0.28029,
-    "bedroomBLamps": 0.17511,
-    "primary": 0.05135,
-    "primaryLamps": 0.04752,
-    "hall": 0.04285,
-    "bedroomBCloset": 0.02595,
-    "kitchenPendant": 0.0251,
-    "livingNiche": 0.00423,
-    "kitchen": 0.00249,
-    "family": 0.00207
+    "bedroomB": 0.41237,
+    "dining": 0.17312,
+    "kitchenPendant": 0.06927,
+    "bedroomBLamps": 0.06899,
+    "primary": 0.05469,
+    "hall": 0.04728,
+    "kitchen": 0.04646,
+    "bedroomBCloset": 0.04321,
+    "family": 0.03258,
+    "livingNiche": 0.01894,
+    "primaryLamps": 0.01467,
+    "living": 0.00773,
+    "livingCenter": 0.00719,
+    "kitchenCabinet": 0.0035
    }
   },
   {
    "probe": 21,
    "file": "lamp_m21.hdr",
    "groups": {
-    "porch": 0.65989,
-    "garage": 0.33042,
-    "laundry": 0.00699,
-    "dining": 0.0027
+    "garage": 0.67897,
+    "porch": 0.25407,
+    "always": 0.02384,
+    "kitchenPendant": 0.01706,
+    "laundry": 0.01152,
+    "living": 0.00494,
+    "kitchen": 0.00466,
+    "livingCenter": 0.00292,
+    "dining": 0.00202
    }
   },
   {
    "probe": 22,
    "file": "lamp_m22.hdr",
    "groups": {
-    "porch": 0.96506,
-    "kitchenPendant": 0.02224,
-    "dining": 0.00832,
-    "living": 0.00222,
-    "kitchen": 0.00215
+    "porch": 0.71095,
+    "kitchenPendant": 0.08274,
+    "living": 0.06771,
+    "kitchen": 0.06513,
+    "kitchenCabinet": 0.0321,
+    "livingCenter": 0.01835,
+    "livingNiche": 0.01222,
+    "dining": 0.00532,
+    "garage": 0.00334,
+    "primary": 0.00214
    }
   },
   {
    "probe": 23,
    "file": "lamp_m23.hdr",
    "groups": {
-    "porch": 0.96573,
-    "bedroom3Lamps": 0.01508,
-    "bedroom3": 0.01324,
-    "kitchenPendant": 0.00595
+    "porch": 0.91043,
+    "bedroom3": 0.04308,
+    "kitchenPendant": 0.01872,
+    "living": 0.01052,
+    "bedroom3Lamps": 0.00845,
+    "livingCenter": 0.00631,
+    "primary": 0.00249
    }
   },
   {
    "probe": 24,
    "file": "lamp_m24.hdr",
    "groups": {
-    "hallBath": 0.72494,
-    "bathB": 0.18776,
-    "bedroomB": 0.04566,
-    "bedroomBLamps": 0.03471,
-    "bedroomBCloset": 0.00693
+    "hallBath": 0.67523,
+    "bathB": 0.2603,
+    "bedroomB": 0.03818,
+    "bedroomBLamps": 0.01319,
+    "bedroomBCloset": 0.0131
    }
   },
   {
    "probe": 25,
    "file": "lamp_m25.hdr",
    "groups": {
-    "garage": 0.63321,
-    "porch": 0.19227,
-    "primaryBath": 0.17452
+    "garage": 0.60976,
+    "primaryBath": 0.36885,
+    "porch": 0.02139
    }
   },
   {
@@ -996,6 +1161,37 @@
    "file": "lamp_m26.hdr",
    "groups": {
     "bathB": 1.0
+   }
+  },
+  {
+   "probe": 27,
+   "file": "lamp_m27.hdr",
+   "groups": {
+    "laundry": 0.55479,
+    "garage": 0.44228,
+    "always": 0.00293
+   }
+  },
+  {
+   "probe": 28,
+   "file": "lamp_m28.hdr",
+   "groups": {
+    "closet": 0.76138,
+    "primary": 0.20186,
+    "primaryLamps": 0.02283,
+    "linen": 0.01093,
+    "kitchenPendant": 0.00301
+   }
+  },
+  {
+   "probe": 29,
+   "file": "lamp_m29.hdr",
+   "groups": {
+    "linen": 0.57381,
+    "primary": 0.384,
+    "primaryLamps": 0.02956,
+    "closet": 0.00824,
+    "kitchenPendant": 0.00439
    }
   }
  ]

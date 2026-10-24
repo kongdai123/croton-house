@@ -130,7 +130,7 @@ try {
   assert.equal(draws[2].uniforms.uValid, 0); // a teleport restarts the meter history instead of easing the old view out
   mood = half; indoor = 0.5; draw();
   assert.equal(draws[0].uniforms.uValid, 1); assert.equal(draws[0].uniforms.uIndoor, 0.5);
-  assert.deepEqual(draws[0].uniforms.uSlot.toArray(), [(SLOTS.noon.ev + SLOTS.dusk.ev) / 2, -0.5, (SLOTS.noon.autoExposure.maxEV + SLOTS.dusk.autoExposure.maxEV) / 2]);
+  assert.deepEqual(draws[0].uniforms.uSlot.toArray().map(v => +v.toFixed(6)), [(SLOTS.noon.ev + SLOTS.dusk.ev) / 2, -0.5, (SLOTS.noon.autoExposure.maxEV + SLOTS.dusk.autoExposure.maxEV) / 2].map(v => +v.toFixed(6)));
   camera.rotation.y += Math.PI / 2; draw();
   assert.equal(draws.length, 5); assert.equal(draws[3].uniforms.uValid, 1); assert.equal(draws[3].uniforms.uFast, 1); assert.equal(draws[2].uniforms.uValid, 0);
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });

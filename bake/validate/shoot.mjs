@@ -5,7 +5,7 @@
 //   node shoot.mjs <outDir> <query>
 // Gate (c), per-room render regression (cameras.json; compare.py reads the result):
 //   node shoot.mjs --cameras cameras.json --out <runDir> --tier hq|mobile [--states sunrise,noon,golden,dusk,dusk_allon]
-//                  [--only id,id] [--size 960x540] [--frames 30]
+//                  [--only id,id] [--size 960x540] [--frames 30] [--query 'k=v&...' (extra site parameters)]
 //   One fresh page per slot (?lightmap=<slot>, the slot's default switches; hq adds &lmres=full, mobile takes its own
 //   quarter atlas); dusk_allon is the dusk page again after every switch is turned on. Writes
 //   <runDir>/<tier>/<state>/<camera>.png and <runDir>/<tier>/<state>/report.json (load and shot times, page errors,
@@ -80,7 +80,7 @@ if (!argv.includes('--cameras')) {
   const list = only ? cams.filter(c => only.includes(c.id)) : cams;
   const states = opt('--states', 'sunrise,noon,golden,dusk,dusk_allon').split(',');
   const slots = [...new Set(states.map(s => s.split('_')[0]))];
-  const tierQuery = tier === 'hq' ? 'tier=hq&lmres=full' : `tier=${tier}`;
+  const tierQuery = (tier === 'hq' ? 'tier=hq&lmres=full' : `tier=${tier}`) + (opt('--query') ? '&' + opt('--query') : '');   // --query: extra site parameters
   let failed = false;
   for (const slot of slots) {
     const log = { pageerrors: [], shaderErrors: [], console: [], http: [] }, t0 = Date.now();

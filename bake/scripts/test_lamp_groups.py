@@ -9,9 +9,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'bake/scripts'))
+import fixture_lights   # pure Python outside its build(): the group order and every switch's light
 tree = ast.parse((ROOT / 'bake/scripts/lamp_groups.py').read_text())
-keep = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ('group_of', 'order_of')]
-ns = {}
+keep = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ('group_of',)]
+ns = {'order_of': fixture_lights.order_of}
 exec(compile(ast.Module(body=keep, type_ignores=[]), '<group routing>', 'exec'), ns)
 GOLDEN = ROOT / 'web/tools/golden'
 

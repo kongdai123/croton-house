@@ -6,25 +6,34 @@ Use the current stable scene/layout version in place of `v2` if it differs; all 
 No re-export or re-unwrap is needed. `scripts/slots.py` is the source of truth; `{"slot":"noon"}`
 works in every light/probe/sky/foliage pass. The original sunrise config is unchanged.
 
-| Slot | Sun az / el (degrees) | Sun strength / linear RGB | Sky / dust | Lamps | EV | Wet |
+| Slot | Sun az / el (degrees) | Sun strength / linear RGB | Sky / dust | Lamps | EV (auto exposure indoors) | Wet |
 |---|---|---|---|---|---|---|
-| sunrise | 58 / 8 | 20 / 1,.68,.45 | .45 / .8 | .25 | -.7 | yes |
-| noon | 180 / 57 | 36 / 1,.95,.88 | .55 / 1 | 0 | -1 | no |
-| golden | 255 / 7 | 16 / 1,.56,.28 | .38 / 2 | .7 | -.55 | no |
-| dusk | 263 / -4 | 0 / 1,.42,.20 | .08 / .6 | 1 | 0 | no |
+| sunrise | 58 / 8 | 20 / 1,.68,.45 | .45 / .8 | 1 | -.7 (-.5 .. +5) | yes |
+| noon | 180 / 57 | 36 / 1,.95,.88 | .55 / 1 | 0 | -.7 (-.5 .. +4.5) | no |
+| golden | 255 / 7 | 16 / 1,.56,.28 | .38 / 2 | 1 | -.55 (-.5 .. +5) | no |
+| dusk | 263 / -4 | 0 / 1,.42,.20 | .35 / .6 | 1 | 3.1 (-.5 .. +3.5) | no |
 
 Mid-October Sarasota moods: high southern noon, warm low western golden hour, cool blue hour
 with full warm house lamps. Sunrise retains the calibrated east-northeast after-rain art direction.
-Dusk has no direct sun; its Nishita world is multiplied by RGB .36,.52,1, with cool cloud colours.
-EV is a display exposure, never baked into linear EXRs/HDRs. Unit lamps are always 3000 K.
+Dusk has no direct sun; its Nishita world is multiplied by RGB .36,.52,1, with cool cloud colours, at a strength (0.35,
+bake v4; 3.0 before) that puts its light at a few per mille of noon's, so the lamp-lit rooms read 2-4x the garden's ambient
+(the classic twilight: warm windows, deep blue exterior); the display EV (3.1; 0 before) keeps the exterior's look.
+EV is a display exposure, never baked into linear EXRs/HDRs. Lamps are always 3000 K at their fixtures' physical output
+(scripts/fixture_lights.py); the slot's lamp level is the share of them on by default (the shared lamps layer's level,
+the site's fallback without lamp groups). With physical lamps the rooms are daylight-led at sunrise and golden hour and up to
+~4.5 EV below the garden: the auto-exposure ranges leave that headroom.
+
+Default switches (lamp groups): sunrise, golden hour, dusk every interior switch (a staged showing); noon only the spaces no
+daylight reaches (closets, the hall, the laundry, the linen and walk-in closets) and the garage (declared); the porch at
+dusk only (web/src/lighting_roles.js defaultSlots).
 
 ## Prepare one dry scene (compute worker)
 
 ```sh
-"$BLENDER" -b --python-exit-code 1 -P export/setup.py -- scene/v2/croton_lm.glb scene/lights.json scene/v2/scene_lm_dry.blend --dry
+"$BLENDER" -b --python-exit-code 1 -P export/setup.py -- scene/v2/croton_lm.glb scene/v2/switches.json scene/v2/scene_lm_dry.blend --dry
 ```
 
-Use the existing matching `lights.json` path if versioned. This imports the SAME UV-bearing GLB,
+`switches.json`: export/switch_groups.mjs of the same site (the lamps, scripts/fixture_lights.py). This imports the SAME UV-bearing GLB,
 with only the after-rain material treatment skipped; it does not alter the shipped sunrise scene.
 For reflection probes use this dry scene too (movables are retained by setup, hidden only by layer bakes).
 

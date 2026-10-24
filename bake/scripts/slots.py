@@ -6,20 +6,27 @@ import copy
 import json
 import sys
 
+# lamps: the share of the house's lamps on by default (the level of the shared lamps layer, the site's fallback without lamp
+# groups; with them, every switch is on or off at its fixture's physical output: fixture_lights.py, lighting_roles.js
+# defaultSlots). ev: the display exposure (never baked); autoExposure: the visitor's range around it, indoors: with
+# physical lamps the rooms are daylight-led and up to ~4.5 EV darker than the garden at sunrise and golden hour (the lamp
+# preview of 2026-10-24 settled interiors at slot ev + 3.7..4.5), and the lamp-lit rooms ~2.5 EV above the dusk garden's ev.
 SLOTS = {
     'sunrise': dict(sun=dict(az=58, el=8, strength=20.0, color=[1.0, 0.68, 0.45]),
                     sky=0.45, dust=0.8, clouds=[0.5, 0.68], lampK=3000,
-                    lamps=0.25, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=1),
+                    lamps=1.0, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=5.0), wet=1),
     'noon': dict(sun=dict(az=180, el=57, strength=36.0, color=[1.0, 0.95, 0.88]),
                  sky=0.55, dust=1.0, clouds=[0.62, 0.82], lampK=3000,
-                 lamps=0.0, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),
+                 lamps=0.0, ev=-0.7, autoExposure=dict(minEV=-0.5, maxEV=4.5), wet=0),
     'golden': dict(sun=dict(az=255, el=7, strength=16.0, color=[1.0, 0.56, 0.28]),
                    sky=0.38, dust=2.0, clouds=[0.56, 0.76], lampK=3000,
-                   lamps=0.7, ev=-0.55, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),
+                   lamps=1.0, ev=-0.55, autoExposure=dict(minEV=-0.5, maxEV=5.0), wet=0),
+    # blue hour, the sun 4 degrees down: the sky's light a few per mille of noon's, so the lamp-lit rooms (fixture_lights.py,
+    # physical) are 2-4x the garden's ambient; the display exposure lifts the exterior back to its readable blue
     'dusk': dict(sun=dict(az=263, el=-4, strength=0.0, color=[1.0, 0.42, 0.20]),
-                 sky=3.0, dust=0.6, clouds=[0.6, 0.8], lampK=3000,   # below the horizon the Nishita sky is very dim; 3.0 gives a readable blue hour (Cycles test)
+                 sky=0.35, dust=0.6, clouds=[0.6, 0.8], lampK=3000,
                  sky_tint=[0.36, 0.52, 1.0], cloud_shade=[0.32, 0.46, 0.8],
-                 cloud_lit=[0.55, 0.62, 1.0], lamps=1.0, ev=0.0, autoExposure=dict(minEV=-0.5, maxEV=3.0), wet=0),
+                 cloud_lit=[0.55, 0.62, 1.0], lamps=1.0, ev=3.1, autoExposure=dict(minEV=-0.5, maxEV=3.5), wet=0),
 }
 
 

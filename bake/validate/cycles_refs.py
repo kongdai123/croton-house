@@ -1,14 +1,14 @@
 # Gate (c): Cycles references through the gate's cameras, one Blender session per slot (the scene loads once).
 # usage: blender -b <scene.blend> --python-exit-code 1 -P validate/cycles_refs.py -- '<json>'
-# json: {"cameras": "cameras.json", "state": "sunrise" | "noon" | "golden" | "dusk_allon", "out": "<cycles dir>",
+# json: {"cameras": "cameras.json", "state": "sunrise" | "noon" | "golden" | "dusk" | "dusk_allon", "out": "<cycles dir>",
 #        "render_py": "<the scene's export/render.py>", "res": [960, 540], "samples": 256, "only": [ids], "limit": n}
 # Writes <out>/<state>/<camera>.png and <camera>.json (its cache key). The key hashes the .blend (size and mtime),
 # render.py, REF_VERSION below, the slot config, the camera and the render settings: a frame whose key matches is skipped,
 # so a rerun after a scene change renders only what changed (all of it, after a rebake's new scene).
-# Lamps: render.py sets every lamp at the slot's level (sunrise 0.25, noon 0, golden 0.7, dusk 1), which is the site's
-# all-switches-on state at that level, not its per-slot default switches: compare dusk_allon with "dusk_allon"; the
-# daytime slots differ from the site where a default-off lamp group lights a room (compare.py treats Cycles as advisory).
-# Scenes (bake/REBAKE.md step 3): sunrise scene.blend (wet), noon and golden scene_dry.blend, dusk_allon
+# Lamps: the scene's lamps are the bake's (setup.py: scripts/fixture_lights.py, one physical light per switch, by lamp
+# group); render.py turns on the groups whose switches start on in the slot (the site's default switches, "lampsOn":
+# "default") or, for <slot>_allon, every group, each at its full physical output, as the site does.
+# Scenes (bake/REBAKE.md step 3): sunrise scene.blend (wet), noon and golden scene_dry.blend, dusk and dusk_allon
 # scene_dusk.blend (sheers drawn) where it exists, else scene_dry.blend.
 import bpy, sys, json, os, hashlib, time
 
@@ -25,9 +25,9 @@ out = os.path.join(cfg['out'], state); os.makedirs(out, exist_ok=True)
 render_py = cfg['render_py']
 blend = bpy.data.filepath; st = os.stat(blend)
 base = hashlib.sha1()
-REF_VERSION = 1   # bump when this script changes what a reference looks like
+REF_VERSION = 2   # bump when this script changes what a reference looks like (2: lamp groups on by the default switches)
 for part in (f'{os.path.basename(blend)}:{st.st_size}:{int(st.st_mtime)}', open(render_py).read(), f'cycles_refs v{REF_VERSION}',
-             json.dumps({'slot': slot, 'res': res, 'samples': samples}, sort_keys=True)):
+             json.dumps({'slot': slot, 'state': state, 'res': res, 'samples': samples}, sort_keys=True)):
     base.update(part.encode())
 key = lambda c: hashlib.sha1(base.hexdigest().encode() + json.dumps(c, sort_keys=True).encode()).hexdigest()[:16]
 todo = []
@@ -46,7 +46,7 @@ cam_cfg = lambda c: {k: c[k] for k in ('x', 'y', 'z', 'h', 'p', 'lens')}
 # the first camera through render.py itself: world, sun, sky, lamps at the slot's level, fixed exposure (slot ev)
 first = todo[0]
 job = {'slot': slot, 'cam': cam_cfg(first), 'res': res, 'samples': samples, 'out': os.path.join(out, first['id'] + '.png')}
-if state.endswith('_allon'): job['lamps'] = 1.0
+job['lampsOn'] = 'all' if state.endswith('_allon') else 'default'
 ns = {'__file__': render_py, '__name__': '__render__'}
 argv = sys.argv; sys.argv = [argv[0], '--', json.dumps(job)]
 t0 = time.time()

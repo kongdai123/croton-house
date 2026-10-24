@@ -70,7 +70,8 @@ def main():
             b = rl.plan_box(plan, p)
             out.append(dict(i=i, p=[p[0], p[2], -p[1]], min=b['min'] if b else None, max=b['max'] if b else None))
         json.dump(out, sys.stdout); return
-    lg = lift(ROOT / 'bake/scripts/lamp_groups.py', {'group_of', 'order_of'})
+    import fixture_lights   # the bake's lamps: the group order (pure Python; Blender only inside its build())
+    lg = {'order_of': fixture_lights.order_of, 'group_of': lambda s: s['group']}
     import plan as planlib
     P = planlib.load(str(ROOT / 'web/data/plan.json'))
     C = [
@@ -81,7 +82,7 @@ def main():
     out = {}
     for name, source, fn in C:
         out[name] = dict(source=source, **encode(fn, grid))
-    # lamp_groups.py reading the site's switch records (switch_groups.mjs): the group it bakes each switch into, and its order
+    # the bake (fixture_lights.py, lamp_groups.py) reading the site's switch records (switch_groups.mjs): the group it bakes each switch into, and its order
     groups, order = {}, None
     if doc is not None:
         order = lg['order_of'](doc)

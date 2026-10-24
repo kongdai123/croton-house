@@ -3,11 +3,12 @@ const { chromium } = await import('playwright').catch(() => createRequire(new UR
 import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { extname, join } from 'path';
-// The house's light switches (web/src/furniture/light_switch.js) and what each one controls, for the per-switch lamp
-// bakes (scripts/lamp_groups.py): its lamp group, plan space, exterior flag and default slots (the lighting manifest,
-// web/src/lighting_roles.js), its live lights, its fixture's light spec (also where the layout's 16-light budget or
-// placement light: false left it without a live light), and its glowing lamp surfaces, all in plan coordinates
-// (x east, y north, z up). The runtime matches switches to groups by `key` (lamp_groups.js switchKey).
+// The house's light switches (web/src/furniture/light_switch.js) and what each one controls, for the bake's lamps
+// (scripts/fixture_lights.py, every Blender scene; scripts/lamp_groups.py, the per-switch lamp bakes): its lamp group,
+// plan space, exterior flag, default slots and photometric output (the lighting manifest, web/src/lighting_roles.js
+// bakeSwitchRecord), its live lights, its fixture's light spec (also where the layout's 16-light budget or placement
+// light: false left it without a live light), and its glowing lamp surfaces, all in plan coordinates (x east, y north,
+// z up). The runtime matches switches to groups by fixture id and position (lamp_groups.js).
 // usage: node switch_groups.mjs [site dir] > switches.json   (as lights.mjs: on a GPU node, or the dev server on :8780)
 const site = process.argv[2];
 let origin = 'http://127.0.0.1:8780', server = null;
@@ -25,26 +26,10 @@ const page = await browser.newPage({ viewport: { width: 320, height: 180 } });
 await page.goto(`${origin}/index.html?capture&legacy&pins=0&pets=0&dusk`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 240000 });
 const out = await page.evaluate(() => {
-  const A = window.__app, V = A.THREE.Vector3;
+  const A = window.__app;
   A.scene.updateMatrixWorld(true);
-  const plan = v => [+v.x.toFixed(3), +(-v.z).toFixed(3), +v.y.toFixed(3)];
-  const switches = A.lighting.lightSwitches.map(({ root, toggle, meshes }, i) => {
-    let fixture = root; while (fixture && !fixture.userData.placement) fixture = fixture.parent;
-    const spec = (fixture ?? root).userData.light, pl = fixture?.userData.placement;
-    const id = fixture?.userData.id || root.userData.id || root.name;
-    const glows = meshes.map(m => {
-      const b = new A.THREE.Box3().setFromObject(m), c = b.getCenter(new V()), s = b.getSize(new V());
-      return { c: plan(c), size: [+s.x.toFixed(3), +s.z.toFixed(3), +s.y.toFixed(3)], mat: m.material.name || '', emissive: !!m.material.emissive };
-    });
-    return {
-      i, key: `${id}@${plan(root.getWorldPosition(new V())).map(v => v.toFixed(2)).join(',')}`, id, name: toggle.label.en.replace(/^Turn on · /, ''),
-      root: plan(root.getWorldPosition(new V())), group: toggle.lighting.group, space: toggle.lighting.space, exterior: toggle.lighting.exterior,
-      kind: toggle.lighting.kind, circuit: toggle.lighting.circuit, defaultOn: toggle.lighting.defaultOn, on: toggle.on,
-      lights: toggle.lights.map(l => ({ type: l.type, p: plan(l.getWorldPosition(new V())), intensity: l.userData.base ?? l.userData.switchBase })),
-      spec: spec ? { ...spec, p: plan(new V(...A.roles.lightLocal(spec)).applyMatrix4(fixture.matrixWorld)), liveLight: pl?.light !== false, bake: !!pl?.bake } : null,
-      glows,
-    };
-  });
+  // one record per switch (lighting_roles.js bakeSwitchRecord: the headless golden scene writes the same)
+  const switches = A.lighting.lightSwitches.map((entry, i) => A.roles.bakeSwitchRecord(entry, i, A.THREE));
   // the lamp groups in their canonical order (lighting_roles.js lampGroupOrder): the bake's texture channels
   return { switches, groups: A.roles.lampGroupOrder(switches) };
 });

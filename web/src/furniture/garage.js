@@ -330,7 +330,8 @@ function garageDoorOpen() {
     box(mw - 0.07, 0.09, 0.02, G.openerLens(), { r: 0.008, y: my0 + 0.06, z: mz - ml / 2 - 0.004 }),
     box(mw - 0.09, 0.008, 0.15, G.openerLens(), { r: 0.003, y: my0 - 0.002, z: mz - ml / 2 + 0.1 }),
   );
-  // the garage has almost no daylight (dark walls, one small window): its lights start on at every time of day
+  // the garage's dark walls take little of the daylight its open door lets in: its lights start on at every time of day
+  // (declared: the manifest's rule would leave a daylit space dark at noon)
   declare(lamp, { fixture: { kind: 'opener', label: { en: 'Garage opener lamp', zh: '车库开门机灯' }, defaultOn: ['sunrise', 'noon', 'golden', 'dusk'] } }); root.add(lamp);
   root.add(box(0.12, 0.07, 0.06, G.openerGrey(), { r: 0.012, y: yr - 0.012, z: mz + ml / 2 + 0.015 }));
   for (const s of [-1, 1]) for (let i = 0; i < 6; i++) root.add(box(0.003, 0.01, 0.13, G.rubber(), { x: s * (mw / 2 + 0.0005), y: my0 + 0.04 + i * 0.016, z: mz + 0.06 }));

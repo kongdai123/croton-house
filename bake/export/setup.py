@@ -1,14 +1,15 @@
 # Build the Blender scene for the "after the rain, sun just rising" stills.
-# usage: blender -b -P setup.py -- croton.glb lights.json out.blend
+# usage: blender -b -P setup.py -- croton.glb switches.json out.blend [--dry]
 # Plan coordinates map straight onto Blender's: x east, y north, z up (the glTF importer turns three's -z into +y).
 import bpy, sys, json, math, os
 from mathutils import Vector
 # lighting.py: in the repo next door (bake/scripts), on the cluster the shared scripts/ copy (run from the bake root)
 sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scripts'), 'scripts']
 import lighting   # the lighting manifest: every object's and material's record (glTF extras, kept as custom properties)
+import fixture_lights   # the lamps: one physical light per switch
 
 DRY = '--dry' in sys.argv
-GLB, LIGHTS, OUT = sys.argv[sys.argv.index('--') + 1:][:3]
+GLB, SWITCHES, OUT = sys.argv[sys.argv.index('--') + 1:][:3]
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=GLB, merge_vertices=False)
 scene = bpy.context.scene
@@ -146,36 +147,11 @@ for m in bpy.data.materials:
     nt.links.new(gaps.outputs[0], outp.inputs['Surface'])
     print('translucent cloth:', m.name, 'transmit', transmit)
 
-# ---- soft warm lamps inside, from the walkthrough's own fixtures (dusk state: everything that can be on)
-data = json.load(open(LIGHTS))
-for i, L in enumerate(data['lights']):
-    if L.get('bake') is False:   # a light the bake leaves out (lights.mjs, the lighting manifest: the fire pit's live fire)
-        continue
-    x, y, z = L['p']
-    if L['type'] == 'RectAreaLight':
-        ld = bpy.data.lights.new(f'lamp{i}', 'AREA'); ld.shape = 'RECTANGLE'; ld.size = L['w'] or 0.5; ld.size_y = L['h'] or 0.5
-        ld.energy = 35 if L['intensity'] < 100 else 60
-    elif L['type'] == 'SpotLight':
-        ld = bpy.data.lights.new(f'lamp{i}', 'SPOT'); ld.spot_size = min(math.pi, 2 * (L['angle'] or 0.6)); ld.spot_blend = 0.85
-        ld.energy = 70; ld.shadow_soft_size = 0.08
-    else:
-        ld = bpy.data.lights.new(f'lamp{i}', 'POINT'); ld.energy = 30 if L['intensity'] < 10 else 55; ld.shadow_soft_size = 0.12
-    # fixtures with no live light that are lamps in the bake only (lights.mjs bakeOnly: the primary bath's and the hall's
-    # cans) burn low: at full power two cans in a 1.1 m hall lit it ~10x brighter than the living room (Cycles, 2026-10-15)
-    if L.get('bakeOnly'): ld.energy *= 0.17
-    ld.use_nodes = True
-    bb = ld.node_tree.nodes.new('ShaderNodeBlackbody'); bb.inputs[0].default_value = 2700
-    em = next(n for n in ld.node_tree.nodes if n.type == 'EMISSION'); ld.node_tree.links.new(bb.outputs[0], em.inputs['Color'])
-    ob = bpy.data.objects.new(f'lamp{i}', ld); ob.location = (x, y, z); scene.collection.objects.link(ob)
-    if L.get('t') and L['type'] != 'PointLight':
-        d = Vector(L['t']) - Vector((x, y, z)); ob.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
-    elif L['type'] == 'RectAreaLight':
-        ob.rotation_euler = (0, 0, 0)  # ceiling panels face down
 # ---- emission: only real light sources (the lighting manifest's emits: a lamp surface of a switched fixture, a lamp,
 # screen, indicator or fire marked where it is made). The walkthrough's daytime glow on everything else (cellular
 # shades, sheers: lighting.js lifts them to 0.12, a raster stand-in for light through the cloth) would light the rooms
-# (about half the light on the living-room walls came from the curtains), so it is dropped. The lamp surfaces glow
-# gently (x2.5).
+# (about half the light on the living-room walls came from the curtains), so it is dropped. Lamp surfaces no switch
+# drives glow gently (x2.5); the switched ones take their fixture's physical luminance below (fixture_lights.py).
 dropped, lamps = [], []
 for m in bpy.data.materials:
     b = bsdf_of(m)
@@ -188,6 +164,18 @@ for m in bpy.data.materials:
     if any(c > 0.3 for c in b.inputs['Emission Color'].default_value[:3]) and lighting.lamp_surface(rec):
         b.inputs['Emission Strength'].default_value = min(4.0, b.inputs['Emission Strength'].default_value * 2.5); lamps.append(m.name)
 print('emission: lamp surfaces', len(lamps), 'dropped (not a light source)', len(dropped), dropped[:12])
+
+# ---- the house's lamps: one physical light per light switch, from the site's switch records (switches.json,
+# export/switch_groups.mjs), the same in every scene (scripts/fixture_lights.py: lumens -> watts by one constant, emitter
+# shapes, lamp surfaces at their physical luminance; lamp_groups.py bakes the same lights group by group). The fire pit's
+# live fire light is no switch's: the bake leaves it out.
+doc = json.load(open(SWITCHES))
+if 'switches' not in doc:
+    raise SystemExit(f'{SWITCHES}: not a switches.json (export/switch_groups.mjs); setup.py no longer reads lights.json')
+order, made = fixture_lights.build(scene, doc)
+for i, g in enumerate(order):
+    ls = [m for m in made if m['g'] == i]
+    print(f'lamps {i:2d} {g:18s} {len(ls)} lights {sum(m["lm"] for m in ls):7.0f} lm {sum(m["energy"] for m in ls):8.4f} W')
 
 # ---- sun and sky (placed by render.py), clouds clearing after rain
 sun_data = bpy.data.lights.new('sun', 'SUN'); sun_data.angle = math.radians(1.2)

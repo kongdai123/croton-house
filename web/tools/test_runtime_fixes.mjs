@@ -14,7 +14,7 @@ try {
   const built = await build({ stdin: { contents: `export * as THREE from 'three'; export * from './src/tour.js';
     export { Viewpoints } from './src/viewpoints.js'; export { Interact } from './src/interact.js';
     export { getColliders, addAABB } from './src/house.js'; export { buildGrid } from './src/nav.js';
-    export { createLampGroups } from './src/lamp_groups.js'; export { collectLightSwitches } from './src/furniture/light_switch.js';
+    export { createLampGroups, lampGroupRes } from './src/lamp_groups.js'; export { glowLevel } from './src/lighting_roles.js'; export { collectLightSwitches } from './src/furniture/light_switch.js';
     export { setLang } from './src/ui.js'; export { probeLit, reflGLSL } from './src/lightmap.js';`, resolveDir: fileURLToPath(new URL('../', import.meta.url)) },
     bundle: true, format: 'esm', platform: 'node', write: false, logLevel: 'silent', plugins: [internals] });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
@@ -24,7 +24,12 @@ try {
   globalThis.addEventListener = globalThis.dispatchEvent = () => {};
   globalThis.location = { search: '?agx=three' };
   globalThis.window = { __app: { state: { baked: true }, baked: { slotName: 'sunrise' } } };
-  const { THREE: T, Tour, STOPS, Viewpoints, Interact, getColliders, addAABB, buildGrid, createLampGroups, collectLightSwitches, setLang, probeLit, reflGLSL } = await import(pathToFileURL(file));
+  const { THREE: T, Tour, STOPS, Viewpoints, Interact, getColliders, addAABB, buildGrid, createLampGroups, lampGroupRes, glowLevel, collectLightSwitches, setLang, probeLit, reflGLSL } = await import(pathToFileURL(file));
+  // lamp groups at the atlas tier's resolution (full on hq), ?lmgroups=half caps them
+  // baked lamp surfaces at the bake's physical luminance (encoding.json member), else 1.8x their base; wash cards by opacity
+  assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5, luminance: 3 }), 1.5); assert.equal(glowLevel({ base: 1 }, { baked: true, level: 0.5 }), 0.9);
+  assert.equal(glowLevel({ base: 0.4, wash: true }, { baked: true, level: 0.5, luminance: 3 }), 0.2);
+  assert.equal(lampGroupRes('full', ''), 'full'); assert.equal(lampGroupRes('half', ''), 'half'); assert.equal(lampGroupRes('full', '?lmgroups=half'), 'half'); assert.equal(lampGroupRes('quarter', '?lmgroups=half'), 'quarter');
   let caption = '';
   const ui = { setCaption(s) { caption = s; }, setLabel() {}, toast() {}, toggleLegends() {} };
   const player = { pos: new T.Vector3(), camera: new T.PerspectiveCamera(), yaw: 0, pitch: 0, eye: 1.58, keys: new Set(), resetJump() {}, forward() { return new T.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); } };
@@ -65,19 +70,21 @@ try {
   // Five real fixture toggles share one pool, even with uneven energy weights; another group is independent.
   const scene = new T.Scene(), fixtures = new T.Group(), members = [];
   for (let i = 0; i < 6; i++) {
-    // the sixth lamp is a garage light: on in every slot (lighting manifest defaultOn)
-    const root = new T.Group(); root.userData = { id: 'lamp' + i, placement: {}, lighting: { fixture: { kind: 'lamp', label: { en: 'Lamp', zh: '灯' }, ...(i === 5 ? { defaultOn: ['sunrise', 'noon', 'golden', 'dusk'] } : {}) } } };
+    // declared default slots (lighting manifest defaultOn): the five lamps at dusk only, the sixth (a garage light) in every slot
+    const root = new T.Group(); root.userData = { id: 'lamp' + i, placement: {}, lighting: { fixture: { kind: 'lamp', label: { en: 'Lamp', zh: '灯' }, defaultOn: i === 5 ? ['sunrise', 'noon', 'golden', 'dusk'] : ['dusk'] } } };
     root.position.x = i; root.add(new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial({ emissive: 0xffffff, emissiveIntensity: 1 })));
     scene.add(root); members.push({ id: root.userData.id, root: [i, 0, 0], w: (i + 1) / 15 });
   }
   const switches = collectLightSwitches(scene, fixtures), groups = [
-    { index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1, 1, 1], members: members.slice(0, 5) },
+    { index: 0, tex: 0, ch: 0, name: 'bedB', K: 1, color: [1.25, 0.95, 0.62], members: members.slice(0, 5) },
     { index: 1, tex: 0, ch: 1, name: 'garage', K: 1, color: [1, 1, 1], members: members.slice(5) },
     { index: 2, tex: 0, ch: 2, name: 'always', always: true, K: 1, color: [1, 1, 1], members: [] },
   ];
   const lamps = createLampGroups({ meta: { groups, textures: 1 }, switches });
   const tick = dt => { for (const s of switches) s.toggle.tick(dt); lamps.update(dt, 'dusk'); lamps.applyGlow(); };
   lamps.reset('dusk'); tick(0); assert.equal(lamps.matched, 6);
+  // lamp surfaces glow in their group's baked light colour (not the authored, cooler emissive tint)
+  assert.deepEqual(switches[0].toggle.glows[0].material.emissive.toArray(), [1.25, 0.95, 0.62]); assert.deepEqual(switches[5].toggle.glows[0].material.emissive.toArray(), [1, 1, 1]);
   switches[2].toggle.set(false); tick(0.125);
   assert.ok(switches.slice(0, 5).every(s => s.toggle.manual && !s.toggle.on)); assert.equal(lamps.levels[0], 0.5);
   assert.ok(switches.slice(0, 5).every(s => s.toggle.value === 0.5 && s.toggle.moving));

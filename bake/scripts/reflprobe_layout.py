@@ -159,12 +159,40 @@ def box(p, ext):
     return {'p': [x, z, -y], 'min': [x - ext[1], z - ext[5], -y - ext[2]], 'max': [x + ext[0], z + ext[4], -y + ext[3]]}
 
 
+def foreign_in(plan, sid, r, step=0.05):
+    """The other spaces with floor inside rect r (x0, x1, y0, y1), sampled every `step`: {id: [count, x0, x1, y0, y1]}."""
+    x0, x1, y0, y1 = r; out = {}
+    for i in range(max(1, int((x1 - x0) / step))):
+        for j in range(max(1, int((y1 - y0) / step))):
+            x, y = x0 + (i + 0.5) * step, y0 + (j + 0.5) * step; s = plan.space_at(x, y)
+            if not s or s['id'] == sid: continue
+            c = out.setdefault(s['id'], [0, x, x, y, y]); c[0] += 1
+            c[1], c[2], c[3], c[4] = min(c[1], x), max(c[2], x), min(c[3], y), max(c[4], y)
+    return out
+
+
+def bbox_box(plan, sid, step=0.05):
+    """A reflBox 'bbox' space's box: its bbox, pulled back from every other space it would hold, each time on the side
+    that keeps the most of the box. The shader takes the probe whose box holds a point, so the L-shaped garage's bbox
+    gave its probes the linen closet's south half: that floor reflected the garage and its strip lights (the pale
+    speckled patch by the walk-in, 2026-10-24)."""
+    b = plan.rect_of(sid); r = [b['x0'], b['x1'], b['y0'], b['y1']]
+    for _ in range(8):
+        f = foreign_in(plan, sid, r, step)
+        if not f: break
+        q = plan.rect_of(max(f, key=lambda k: f[k][0]))   # the largest intruder first, by its exact bounds
+        cand = [c for c in ([q['x1'], r[1], r[2], r[3]], [r[0], q['x0'], r[2], r[3]], [r[0], r[1], q['y1'], r[3]], [r[0], r[1], r[2], q['y0']])
+                if c[1] > c[0] and c[3] > c[2]]
+        r = max(cand, key=lambda c: (c[1] - c[0]) * (c[3] - c[2]))
+    return [round(v, 3) for v in r]
+
+
 def plan_box(plan, p):
-    """The box for a probe under the roof: its space's bbox (reflBox 'bbox') or the room from the walls, floor to
-    ceiling. None outside (reflprobe.py raycasts the scene)."""
+    """The box for a probe under the roof: its space's bbox (reflBox 'bbox', clipped off the other spaces) or the room
+    from the walls, floor to ceiling. None outside (reflprobe.py raycasts the scene)."""
     x, y, z = p; ceil = float(plan.levels['ceiling']); a = annex_of(plan, x, y)
     if a:
-        b = plan.rect_of(a); x0, x1, y0, y1 = b['x0'], b['x1'], b['y0'], b['y1']
+        x0, x1, y0, y1 = bbox_box(plan, a)
         return box(p, [round(v, 3) for v in (x1 - x, x - x0, y1 - y, y - y0, ceil - z, z)])
     if not in_plan(plan, x, y): return None
     e = plan_extents(plan, x, y)

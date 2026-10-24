@@ -112,6 +112,34 @@
     100
    ]
   },
+  "outdoor": {
+   "kinds": [
+    "outdoor"
+   ],
+   "photos": "the listing's twilight photos from the patio: medians 69-121; its daylight exteriors 109-167",
+   "set": {
+    "sunrise": [
+     45,
+     120
+    ],
+    "noon": [
+     100,
+     175
+    ],
+    "golden": [
+     40,
+     110
+    ],
+    "dusk": [
+     40,
+     110
+    ],
+    "dusk_allon": [
+     40,
+     110
+    ]
+   }
+  },
   "enforce": true
  },
  "cameras": {}

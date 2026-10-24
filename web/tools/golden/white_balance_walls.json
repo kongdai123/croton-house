@@ -5,44 +5,44 @@
  "walls": {
   "shipped": {
    "sunrise": {
-    "living_1": 4320,
-    "kitchen_1": 4010,
-    "dining_1": 4070,
-    "office_1": 3895,
-    "primaryBedroom_1": 4240,
-    "primaryBath_1": 3770,
-    "bedroom3_1": 5525,
-    "bathB_1": 4660
+    "living_1": 4305,
+    "kitchen_1": 4035,
+    "dining_1": 4080,
+    "office_1": 3935,
+    "primaryBedroom_1": 4270,
+    "primaryBath_1": 3775,
+    "bedroom3_1": 5685,
+    "bathB_1": 4665
    },
    "noon": {
-    "living_1": 4970,
-    "kitchen_1": 4765,
-    "dining_1": 4985,
-    "office_1": 4885,
-    "primaryBedroom_1": 6600,
-    "primaryBath_1": 6785,
-    "bedroom3_1": 6245,
-    "bathB_1": 7325
+    "living_1": 4950,
+    "kitchen_1": 4730,
+    "dining_1": 5000,
+    "office_1": 4925,
+    "primaryBedroom_1": 6590,
+    "primaryBath_1": 6730,
+    "bedroom3_1": 6250,
+    "bathB_1": 7240
    },
    "golden": {
-    "living_1": 4105,
-    "kitchen_1": 4020,
-    "dining_1": 4640,
-    "office_1": 4370,
-    "primaryBedroom_1": 4140,
-    "primaryBath_1": 3735,
+    "living_1": 4120,
+    "kitchen_1": 4050,
+    "dining_1": 4615,
+    "office_1": 4360,
+    "primaryBedroom_1": 4120,
+    "primaryBath_1": 3720,
     "bedroom3_1": 4115,
-    "bathB_1": 4525
+    "bathB_1": 4515
    },
    "dusk": {
-    "living_1": 4180,
-    "kitchen_1": 3935,
-    "dining_1": 4025,
-    "office_1": 3340,
-    "primaryBedroom_1": 3415,
-    "primaryBath_1": 3595,
-    "bedroom3_1": 3235,
-    "bathB_1": 3830
+    "living_1": 4160,
+    "kitchen_1": 3885,
+    "dining_1": 3970,
+    "office_1": 3365,
+    "primaryBedroom_1": 3385,
+    "primaryBath_1": 3605,
+    "bedroom3_1": 3215,
+    "bathB_1": 3845
    }
   }
  },
@@ -52,7 +52,7 @@
   "assets/lightmaps/golden/probes.bin": "e62d76ef2358bf33",
   "assets/lightmaps/dusk/probes.bin": "94f740b9028bfb12",
   "assets/lightmaps/v2/lampgroups/probes.bin": "44558215234b43cc",
-  "assets/lightmaps/v2/lampgroups/encoding.json": "754f86d64ef0f15c"
+  "assets/lightmaps/v2/lampgroups/encoding.json": "24fc3e8dcd391612"
  },
  "boxes": {
   "living_1": [

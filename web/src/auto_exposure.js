@@ -55,15 +55,16 @@ const adaptShader = `
 uniform sampler2D tMeter, tPrevious;
 uniform vec3 uSlot; // base EV, minimum/maximum EV offsets
 uniform vec4 uTimes; // brighten, darken, ease, teleport (seconds)
-uniform float uDt, uValid, uFast, uIndoor, uKey;
+uniform float uDt, uValid, uFast, uIndoor, uKey, uOutdoor; // uOutdoor: the visitor's offset outdoors (slot autoExposure.outdoor)
 void main() {
   float sceneLog = texture2D(tMeter, vec2(0.5)).a;
   float target = clamp(log2(uKey) - sceneLog, uSlot.x + uSlot.y, uSlot.x + uSlot.z);
-  target = mix(uSlot.x, target, uIndoor);
+  target = mix(uSlot.x + uOutdoor, target, uIndoor);
   vec4 old = texture2D(tPrevious, vec2(0.5));
   // Start at the art-directed slot exposure; a first meter reading must also glide into view.
-  float ev = uValid > 0.5 ? log2(max(old.r, 0.00001)) : uSlot.x;
-  float drive = uValid > 0.5 ? old.g : uSlot.x;
+  float start = uSlot.x + uOutdoor * (1.0 - uIndoor);
+  float ev = uValid > 0.5 ? log2(max(old.r, 0.00001)) : start;
+  float drive = uValid > 0.5 ? old.g : start;
   float tau = uFast > 0.5 ? uTimes.w : (target > drive ? uTimes.x : uTimes.y);
   float a = exp(-uDt / tau), b = exp(-uDt / uTimes.z);
   float coupling = abs(tau - uTimes.z) < 0.000001 ? a * uDt / tau : tau * (a - b) / (tau - uTimes.z);
@@ -93,7 +94,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
   const adaptation = material(adaptShader, {
     tMeter: { value: null }, tPrevious: { value: null }, uSlot: { value: new THREE.Vector3() },
     uDt: { value: 0 }, uValid: { value: 0 }, uFast: { value: 0 }, uIndoor: { value: 0 },
-    uTimes: { value: new THREE.Vector4() }, uKey: { value: 1 },
+    uTimes: { value: new THREE.Vector4() }, uKey: { value: 1 }, uOutdoor: { value: 0 },
   });
   const quad = new FullScreenQuad(null), position = new THREE.Vector3(), rotation = new THREE.Quaternion();
   let valid = false, meterValid = false, meterIndex = 0, index = 0, frame = 0, elapsed = 0, meterElapsed = 0, fast = 0, disposed = false;
@@ -133,6 +134,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
       u.uIndoor.value = indoorWeight(camera.position);
       u.uDt.value = dt; u.uValid.value = +valid; u.uFast.value = +(fast > 0);
       u.uTimes.value.set(params.brighten, params.darken, params.ease, params.teleport); u.uKey.value = params.key ?? mood.autoExposure.key;   // settings.key: a test's override
+      u.uOutdoor.value = mood.autoExposure.outdoor ?? 0;
       u.tMeter.value = meterHistory[meterIndex].texture;
       u.tPrevious.value = valid ? history[index].texture : reduced.texture;
       index = 1 - index; draw(history[index], adaptation);

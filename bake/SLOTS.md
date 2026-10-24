@@ -11,7 +11,7 @@ works in every light/probe/sky/foliage pass. The original sunrise config is unch
 | sunrise | 58 / 8 | 20 / 1,.68,.45 | .45 / .8 | 1 | -.7 (.66; -.5 .. +7.1) | yes |
 | noon | 180 / 57 | 36 / 1,.95,.88 | .55 / 1 | 0 | -.7 (.66; -.5 .. +6.6) | no |
 | golden | 255 / 7 | 16 / 1,.56,.28 | .38 / 2 | 1 | -.55 (.66; -.5 .. +7.1) | no |
-| dusk | 263 / -4 | 0 / 1,.42,.20 | .35 / .6 | 1 | 3.1 (.35; -.5 .. +4.7) | no |
+| dusk | 263 / -4 | 0 / 1,.42,.20 | .35 / .6 | 1 | 3.1 (.35; -.5 .. +4.7; garden +3.5) | no |
 
 Mid-October Sarasota moods: high southern noon, warm low western golden hour, cool blue hour
 with full warm house lamps. Sunrise retains the calibrated east-northeast after-rain art direction.
@@ -27,7 +27,10 @@ Indoors the visitor's exposure meters the frame (a centre-weighted log mean, so 
 the slot's key: 0.66 by day, which the site's AgX shows at 191/255, the median of the listing photos' interiors
 (web/tools/golden/listing_brightness.json: bright, airy, white walls near 220-240), and 0.35 at dusk (~160: lamp-lit rooms
 that glow against the blue outside). The first key, 0.15, was a mid-grey meter and showed every room at ~100/255. Gate (c)
-holds the visitor's rooms to the photos (bake/validate/thresholds.json brightness).
+holds the visitor's rooms to the photos (bake/validate/thresholds.json brightness). Outdoors the visitor's exposure is the slot's EV
+plus its garden offset (0 by day; +3.5 at dusk: with physical lamps the blue-hour garden at EV 3.1 read 4/255 against the
+listing's twilight photos of the patio, 69-121); the EV alone stays the fixed exposure of the gate's fixed set and the
+Cycles references.
 
 Default switches (lamp groups): sunrise, golden hour, dusk every interior switch (a staged showing); noon only the spaces no
 daylight reaches (closets, the hall, the laundry, the linen and walk-in closets) and the garage (declared); the porch at

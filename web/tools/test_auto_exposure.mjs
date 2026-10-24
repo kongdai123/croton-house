@@ -27,7 +27,7 @@ try {
     near(targetExposureEV(1e-9, slot), slot.ev + slot.autoExposure.maxEV);
     near(targetExposureEV(1e9, slot), slot.ev + slot.autoExposure.minEV);
     near(targetExposureEV(slot.autoExposure.key / 2 ** slot.ev, slot), slot.ev);
-    for (const lum of [0, 0.001, 0.1, 1, 10000]) near(targetExposureEV(lum, slot, 0), slot.ev);
+    for (const lum of [0, 0.001, 0.1, 1, 10000]) near(targetExposureEV(lum, slot, 0), slot.ev + slot.autoExposure.outdoor);   // the garden's, fixed
   }
   assert.equal(targetExposureEV(0.001, SLOTS.dusk), SLOTS.dusk.ev + SLOTS.dusk.autoExposure.maxEV);
   // A noon room can reach 2 stops above base; a small strip of bright sky should not erase that lift.
@@ -134,6 +134,7 @@ try {
   assert.equal(draws[0].uniforms.uValid, 1); assert.equal(draws[0].uniforms.uIndoor, 0.5);
   assert.deepEqual(draws[0].uniforms.uSlot.toArray().map(v => +v.toFixed(6)), [(SLOTS.noon.ev + SLOTS.dusk.ev) / 2, -0.5, (SLOTS.noon.autoExposure.maxEV + SLOTS.dusk.autoExposure.maxEV) / 2].map(v => +v.toFixed(6)));
   near(draws[0].uniforms.uKey, Math.sqrt(SLOTS.noon.autoExposure.key * SLOTS.dusk.autoExposure.key), 1e-12);   // the key fades in stops
+  near(draws[0].uniforms.uOutdoor, SLOTS.dusk.autoExposure.outdoor / 2, 1e-12);
   camera.rotation.y += Math.PI / 2; draw();
   assert.equal(draws.length, 5); assert.equal(draws[3].uniforms.uValid, 1); assert.equal(draws[3].uniforms.uFast, 1); assert.equal(draws[2].uniforms.uValid, 0);
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });
@@ -197,6 +198,11 @@ try {
   const dusk = agxLuma(SLOTS.dusk.autoExposure.key);
   assert.ok(dusk > 145 && dusk < photos.p10 - 10, `dusk: the lamp-lit rooms below the daylight photos, still bright (${dusk.toFixed(1)})`);
   assert.ok(agxLuma(0.15) < 110, 'the first key read as a mid-grey room');
+  // the garden: the fixed exposure (ev: the gate's fixed set, the Cycles references) by day; at dusk the visitor sees the
+  // patio as the listing's twilight photos do (+3.5 EV: ~58/255, they 69-121; the garden at ev alone read 4)
+  for (const name of ['sunrise', 'noon', 'golden']) assert.equal(SLOTS[name].autoExposure.outdoor, 0);
+  assert.ok(SLOTS.dusk.autoExposure.outdoor >= 3 && SLOTS.dusk.autoExposure.outdoor <= 4.5);
+  near(targetExposureEV(1, SLOTS.dusk, 0), SLOTS.dusk.ev + SLOTS.dusk.autoExposure.outdoor);
   // the maximum lift moved with the key: the same dark spaces meet it (laundry, hall closet), not the lit rooms
   for (const name of SLOT_NAMES) near(SLOTS[name].autoExposure.maxEV - Math.log2(SLOTS[name].autoExposure.key / 0.15), FIRST_MAX[name], 0.06);
   // gate (c)'s brightness band (bake/validate/thresholds.json) brackets the photos: the set band holds their median, the

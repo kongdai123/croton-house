@@ -8,11 +8,15 @@
 // the median gate frame, 0.8 at most: the open garage door). Dusk 0.35 (~160/255): the lamp-lit rooms glow against the
 // blue outside without turning into day. maxEV moved with the key (+2.14 EV daylight, +1.22 dusk), so the same dark
 // spaces (the laundry, the hall closet) still meet it. test_auto_exposure.mjs holds the key against AgX and the photos.
+// outdoor: the visitor's exposure outdoors above ev (ev itself stays the fixed exposure the gate and the Cycles references
+// share). Dusk +3.5: the bake v4 dimmed the blue hour's sky 3.1 EV for physical lamps and raised ev 3.1, but the old
+// garden's brightness had come from the old lamps' spill (10-70x physical), so the patio at dusk read 4/255 against the
+// listing's twilight photos of it (69-121; the old site 20); +3.5 EV reads ~58 with the rooms glowing through the glass.
 export const SLOTS = {
-  sunrise: { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1 }, wet: 1, lamps: 1 },
-  noon: { az: 180, el: 57, strength: 36, color: [1, 0.95, 0.88], skyColor: [0.48, 0.65, 1], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 6.6 }, wet: 0, lamps: 0 },
-  golden: { az: 255, el: 7, strength: 16, color: [1, 0.56, 0.28], skyColor: [0.55, 0.47, 0.65], ev: -0.55, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1 }, wet: 0, lamps: 1 },
-  dusk: { az: 263, el: -4, strength: 0, color: [1, 0.42, 0.2], skyColor: [0.18, 0.3, 0.6], ev: 3.1, autoExposure: { key: 0.35, minEV: -0.5, maxEV: 4.7 }, wet: 0, lamps: 1 },
+  sunrise: { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1, outdoor: 0 }, wet: 1, lamps: 1 },
+  noon: { az: 180, el: 57, strength: 36, color: [1, 0.95, 0.88], skyColor: [0.48, 0.65, 1], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 6.6, outdoor: 0 }, wet: 0, lamps: 0 },
+  golden: { az: 255, el: 7, strength: 16, color: [1, 0.56, 0.28], skyColor: [0.55, 0.47, 0.65], ev: -0.55, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1, outdoor: 0 }, wet: 0, lamps: 1 },
+  dusk: { az: 263, el: -4, strength: 0, color: [1, 0.42, 0.2], skyColor: [0.18, 0.3, 0.6], ev: 3.1, autoExposure: { key: 0.35, minEV: -0.5, maxEV: 4.7, outdoor: 3.5 }, wet: 0, lamps: 1 },
 };
 export const SLOT_ORDER = Object.keys(SLOTS);
 export const validEncoding = e => ['slot', 'lamps'].every(k => Number.isFinite(e?.K?.[k]) && e.K[k] > 0);
@@ -36,7 +40,8 @@ export function blendSlot(a, b, t) {
   return { az: a.az + azDelta * t, el: mix(a.el, b.el), strength: mix(a.strength, b.strength),
     color: a.color.map((x, i) => mix(x, b.color[i])), ev: mix(a.ev, b.ev),
     autoExposure: { key: 2 ** mix(Math.log2(a.autoExposure.key), Math.log2(b.autoExposure.key)),   // in stops, as the EVs
-      minEV: mix(a.autoExposure.minEV, b.autoExposure.minEV), maxEV: mix(a.autoExposure.maxEV, b.autoExposure.maxEV) },
+      minEV: mix(a.autoExposure.minEV, b.autoExposure.minEV), maxEV: mix(a.autoExposure.maxEV, b.autoExposure.maxEV),
+      outdoor: mix(a.autoExposure.outdoor ?? 0, b.autoExposure.outdoor ?? 0) },
     wet: mix(a.wet, b.wet), lamps: mix(a.lamps, b.lamps) };
 }
 // Latest request wins during loading. Once a fade starts it finishes before the next one starts.

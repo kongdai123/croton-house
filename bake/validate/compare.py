@@ -172,6 +172,7 @@ def check(a):
     grid = tuple(T.get('grid', [8, 6]))
     camlist = json.load(open(a.cameras))['cameras']; cams = [c['id'] for c in camlist]
     B = T.get('brightness'); bright_cams = {c['id'] for c in camlist if B and c.get('kind') in B['kinds'] and c.get('space') not in B.get('excludeSpaces', [])}
+    outdoor_cams = {c['id'] for c in camlist if B and B.get('outdoor') and c.get('kind') in B['outdoor']['kinds']}
     tiers = a.tiers.split(',') if a.tiers else sorted(d for d in os.listdir(a.run) if os.path.isdir(os.path.join(a.run, d)) and not d.startswith('compare'))
     states = a.states.split(',') if a.states else STATES
     os.makedirs(a.out, exist_ok=True)
@@ -243,6 +244,12 @@ def check(a):
             if state in B.get('shadows', {}):
                 slo, shi = B['shadows'][state]
                 if not slo <= shadow <= shi and B.get('enforce', True): page_fails.append(f'{tier}/{state}: contrast: the rooms\' median 10th-percentile luma {shadow:.0f} outside {slo}..{shi} (listing photos 104: the room flattened or crushed)')
+            # the garden's exposure (the slot's ev plus the visitor's outdoor offset): the outdoor cameras' median luma
+            O = B.get('outdoor')
+            vo = [f['abs']['luma50'] for f in frames if O and f['tier'] == tier and f['state'] == state and f['cam'] in outdoor_cams]
+            if vo and state in O['set']:
+                mo = float(np.median(vo)); olo, ohi = O['set'][state]; brightness[f'{tier}/{state}']['outdoor'] = mo
+                if not olo <= mo <= ohi and B.get('enforce', True): page_fails.append(f'{tier}/{state}: brightness: the garden\'s median luma {mo:.0f} outside {olo}..{ohi} ({O["photos"]})')
     failed = [f for f in frames if f['fails']]
     # report
     rep = {'run': os.path.basename(os.path.abspath(a.run)), 'checked': len(frames), 'failed': len(failed), 'missing': missing,
@@ -253,7 +260,7 @@ def check(a):
     for k, r in runinfo.items():
         lines.append(f'  {k:18s} load {r["loadSeconds"] or 0:6.0f} s  shots {r["seconds"] or 0:6.0f} s  programs {r["programs"]}  '
                      f'link failures {len(r["linkFailed"] or [])}  samplers {json.dumps(r["samplers"])[:80]}')
-    for k, b in brightness.items(): lines.append(f'  brightness {k:22s} rooms median luma {b["median"]:.0f} (p10 {b["p10"]:.0f}, p90 {b["p90"]:.0f}, {b["frames"]} frames), band {b["band"][0]}..{b["band"][1]}; shadows (their median p10 luma) {b["shadows"]:.0f}')
+    for k, b in brightness.items(): lines.append(f'  brightness {k:22s} rooms median luma {b["median"]:.0f} (p10 {b["p10"]:.0f}, p90 {b["p90"]:.0f}, {b["frames"]} frames), band {b["band"][0]}..{b["band"][1]}; shadows (their median p10 luma) {b["shadows"]:.0f}' + (f'; garden {b["outdoor"]:.0f}' if 'outdoor' in b else ''))
     lines += ['  ' + x for x in page_fails + missing[:20]]
     for f in sorted(frames, key=lambda f: -f['score']):
         if f['fails'] or f['warn']:

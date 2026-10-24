@@ -11,10 +11,12 @@ export function meterWeight(x, y) {
   return (0.15 + 0.85 * Math.exp(-2 * (dx * dx + dy * dy))) * (1 - 0.85 * smooth((y - 0.7) / 0.25));
 }
 export function targetExposureEV(luminance, slot, indoor = 1) {
-  const { key, minEV, maxEV } = slot.autoExposure;
+  const { key, minEV, maxEV, outdoor = 0 } = slot.autoExposure;
   const ev = clamp(Math.log2(key / clamp(luminance, METER.floor, METER.ceiling)), slot.ev + minEV, slot.ev + maxEV);
-  // Keep the garden's art-directed exposure, with a spatially smooth doorway boundary.
-  return slot.ev + (ev - slot.ev) * clamp(indoor, 0, 1);
+  // Keep the garden's art-directed exposure (the slot's ev plus its visitor offset outdoors), with a spatially smooth
+  // doorway boundary.
+  const garden = slot.ev + outdoor;
+  return garden + (ev - garden) * clamp(indoor, 0, 1);
 }
 export function adaptExposureEV(current, target, dt, fast = false, settings = ADAPTATION) {
   const tau = fast ? settings.teleport : target > current ? settings.brighten : settings.darken;

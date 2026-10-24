@@ -1,5 +1,8 @@
 # Handoff: Croton House walkthrough (Oct 12, 2026, evening)
 
+> Parts of this handoff predate the baked lighting. For the current architecture, and a list of what here is stale, see
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#7-what-is-stale-in-handoffmd).
+
 Three.js (r183) walkthrough of 2513 Croton Ave in `web/`.
 
 ## Status and workflow

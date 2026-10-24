@@ -2,9 +2,9 @@ Moved the window centre **39.9 cm west** and widened it from **81 cm to 110 cm**
 
 Changed:
 
-- [house.js:33](../../web/src/house.js:33): shared dimensions, opening and adjoining wall pieces.
-- [kitchen.js:102](../../web/src/furniture/kitchen.js:102): backsplash follows those dimensions.
-- [layout.js:27](../../web/src/layout.js:27): removed shade placement.
+- [house.js:33](../../web/src/house.js#L33): shared dimensions, opening and adjoining wall pieces.
+- [kitchen.js:102](../../web/src/furniture/kitchen.js#L102): backsplash follows those dimensions.
+- [layout.js:27](../../web/src/layout.js#L27): removed shade placement.
 
 Build and geometry checks passed; inspected g18, g12 and outside views. Wall joins close, colliders follow, and exterior trim shows no clipping.
 

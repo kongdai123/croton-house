@@ -8,6 +8,6 @@ Made:
 
 Comparison sheets: [before/after](../evidence/decor_garden_before_after.jpg), [porch](../evidence/decor_garden_front.jpg), [patio](../evidence/decor_garden_patio.jpg), [fire pit](../evidence/decor_garden_fire.jpg), [courtyard](../evidence/decor_garden_side.jpg), [dusk](../evidence/decor_garden_dusk.jpg).
 
-Recommended change in [layout.js:128](../../web/src/layout.js:128): move `{ m: 'plants', i: 'banana', x: 7.5, y: 7.9, seed: 5 }` into a planted bed. It obscures the courtyard and hose in the g47 view. Broader scene differences remain outside this pass.
+Recommended change in [layout.js:128](../../web/src/layout.js#L128): move `{ m: 'plants', i: 'banana', x: 7.5, y: 7.9, seed: 5 }` into a planted bed. It obscures the courtyard and hose in the g47 view. Broader scene differences remain outside this pass.
 
 No commits or pushes.

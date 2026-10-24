@@ -36,6 +36,8 @@ import { featureWanted } from './volumetric_slots.js';
 import { createRoomCulling } from './visibility.js';
 import { createFrameRate } from './frame_rate.js';
 import { createStartQuality } from './start_quality.js';
+import { advanceFrameClock } from './frame_clock.js';
+import { slotSwitch } from './slot_dependents.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -111,10 +113,13 @@ post = composer; fitView();
 // TAA (taa.js): ?taa[=internal scale] / ?taa=0, else the tier's flag (a number: the scale). It takes over the linear chain
 // before any other pass joins it (contact, volumetric light, local adaptation find it as lighting.taa).
 if (lighting.renderConfig.hdr && featureWanted(location.search, 'taa', preset)) soft('taa', () => { lighting.taa = createTAA(renderer, camera, lighting, Q.get('taa') || preset.taa); });
+// The objects that follow the time of day (onTime: the fire pit, the sheer curtains); a slot switch starts them with its
+// crossfade (slot_dependents.js)
+const timeDependents = (dusk, instant) => { for (const o of layout.placed) soft('onTime', () => o.userData.onTime?.(dusk, instant)); };
 async function applyTime() {
   if (baked) state.dusk = baked.slotName === 'dusk';
   await soft('lighting.applyTime', () => lighting.applyTime(baked ? false : state.dusk));   // baked slots own their sky, sun and physical lamp level
-  for (const o of layout.placed) soft('onTime', () => o.userData.onTime?.(state.dusk, !state.ready));
+  timeDependents(state.dusk, !state.ready);
   soft('pets relight', () => pets?.relight());
   if (baked) { try { await baked.warmDepth(); baked.afterTime(); } catch (err) { if (gl0.isContextLost()) soft('baked.afterTime', async () => { await baked?.warmDepth(); baked?.afterTime(); }); else await fallbackLegacy(err); } }
   ui.syncLegends();
@@ -232,16 +237,17 @@ ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, to
 // Toggling dusk needs the other sky now, so it opens the background preparation's quiet-moment gate (see below).
 let skyUrgent = false;
 let slotRequestId = 0;
+// the bake's slot switch, its dependents started with the crossfade and settled on the slot shown (slot_dependents.js)
+const switchSlot = slotSwitch({ setSlot: (name, progress) => baked.setSlot(name, progress), apply: slot => timeDependents(slot === 'dusk', false), shown: () => baked?.slotName ?? null });
 async function setBakedSlot(name, { quiet = false } = {}) {   // quiet: the tour names the time in its own caption
   if (!state.ready || !firstFrameDrawn || state.bakedSlotPending || !baked || !baked.availableSlots.includes(name)) return false;
   const requestId = ++slotRequestId;
   state.bakedSlotPending = name; ui.syncLegends();
   const loading = quiet ? { progress() {}, hide() {} } : ui.slotLoading(name);   // the tour switches without the loading screen
   try {
-    const switched = await baked.setSlot(name, loading.progress);
+    const switched = await switchSlot(name, loading.progress);
     if (!switched || requestId !== slotRequestId || !baked) return false;
     state.bakedSlot = baked.slotName; state.dusk = baked.slotName === 'dusk';
-    for (const o of layout.placed) o.userData.onTime?.(state.dusk, false);
     ui.syncLegends(); if (!quiet) ui.toast(t(`slot_${baked.slotName}`));
     return true;
   } catch (err) { console.warn('baked slot kept previous scene', err); loading.hide(); if (requestId === slotRequestId) ui.toast(t('slotFailed')); return false; }
@@ -412,9 +418,12 @@ const clock = new THREE.Clock(); let simT = 0;
 const toggled = layout.animated.filter(o => o.userData.toggle).map(o => ({ toggle: o.userData.toggle, value: o.userData.toggle.value }));
 const togglesMoving = () => toggled.reduce((any, t) => { const v = t.toggle.value, changed = t.toggle.moving || v !== t.value; t.value = v; return any || changed; }, false);
 repaint = () => { if (!document.hidden) frame(0); };
-function frame(dt) {
+// dt: the frame's step of the simulation clock (at most 0.1 s); gap: the time since the previous frame before that clamp
+// (frame_clock.js)
+function frame(dt, gap = dt) {
   if (photo.active) return;   // photo mode owns the canvas while it shows a still
   stats.begin();
+  advanceFrameClock(dt, gap);
   simT += dt;
   tourCtl.update(dt);
   demo.update(dt);
@@ -439,7 +448,7 @@ function frame(dt) {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
     // second, screen-target variant of every material on the spot (a 0.1-0.4 s freeze on entering a panorama).
-    if (!viewpoints.panoOpaque) { if (state.composerFailed) renderer.render(scene, camera); else composer.render(); }
+    if (!viewpoints.panoOpaque) { if (state.composerFailed) renderer.render(scene, camera); else composer.render(dt); }   // dt: the composer's own clock is the wall clock
     // Overlay pass: the panorama sphere and the floating photo cards, on top of the finished frame.
     if (viewpoints.panoActive || markers.overlayActive) {
       // The scene's sky background would otherwise be drawn again over the finished frame, so it is lifted for this pass.
@@ -467,7 +476,7 @@ addEventListener('crotonstats', () => stats.toggle());
 addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && e.target?.tagName !== 'INPUT') stats.toggle(); });
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
-window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
+window.renderAt = (t) => { const step = Math.max(0, t - simT), dt = Math.min(0.1, step); frame(dt || 1 / 60, step); };
 window.__app = { baked, batch2, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
 // Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
 // 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
@@ -499,8 +508,8 @@ const loop = (now) => {
   startQuality.begin(now);
   if (document.hidden || viewpoints.panoActive || photo.active) startQuality.pause(now);
   const timed = startQuality.wants(now);
-  const dt = SIM_DT ?? Math.min(0.1, clock.getDelta()), t0 = performance.now();
-  if (!document.hidden) soft('frame', () => frame(dt));
+  const elapsed = clock.getDelta(), dt = SIM_DT ?? Math.min(0.1, elapsed), gap = SIM_DT ?? elapsed, t0 = performance.now();
+  if (!document.hidden) soft('frame', () => frame(dt, gap));
   const work = performance.now() - t0;
   if (timed) { gl0.finish(); startQuality.sample(work, performance.now() - t0, now); }   // the frame's whole cost, GPU included
   if (!viewpoints.panoOpaque) pacing.drawn(now, work);   // a panorama's cheap frames say nothing about the house's

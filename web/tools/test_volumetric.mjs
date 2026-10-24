@@ -129,7 +129,8 @@ try {
   assert.ok(vol.tap instanceof V.SceneDepthTap && vol.tap.needsSwap === false);
   vol.tap.render(null, null, { depthTexture: 'scene depth' }); assert.equal(vol.tap.depth, 'scene depth');
   vol.dispose();
-  assert.ok(V.VOLUME.steps >= 16 && V.VOLUME.steps <= 64 && V.VOLUME.history < 1 && V.VOLUME.historyStill < 1);
+  // history time constants in seconds (moving < held still, both well under a second): tools/test_frame_clock.mjs
+  assert.ok(V.VOLUME.steps >= 16 && V.VOLUME.steps <= 64 && V.VOLUME.historyTime > 0 && V.VOLUME.historyTime < V.VOLUME.historyStillTime && V.VOLUME.historyStillTime < 1);
 } finally { await rm(dir, { recursive: true, force: true }); }
 
 // Glass and the sun depth on the real house: test_scene_invariants.mjs, invariant glass-casts-no-sun.

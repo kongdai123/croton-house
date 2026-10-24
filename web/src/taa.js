@@ -6,6 +6,7 @@ import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { taaBias, TAA_MAPS } from './shaders/compose.js';
 import { isBaked, setBakedTaa } from './shaders/baked_material.js';
+import { frameClock, staleSince } from './frame_clock.js';
 
 const vertex = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const color = `
@@ -133,7 +134,7 @@ export const taaQuality = (preset, query) => query.has('taa') ? { ...preset, msa
 
 class TAAPass extends Pass {
   constructor(renderer, camera, passes, value, options) {
-    super(); this.camera = camera; this.scale = scaleOf(value); this.frame = 0; this.valid = false; this.lastTime = 0;
+    super(); this.camera = camera; this.scale = scaleOf(value); this.frame = 0; this.valid = false; this.lastT = null;
     this.noise = { value: 0 };   // frame index (0-15) for screen-space noise that should integrate under TAA (main.js hands in the PCSS uniform)
     // mipBias: added to the internal scale's bias (log2 scale) on every surface map: the accumulated jittered frames
     // resolve finer texture detail than one frame's mip selection assumes. With sharpen 0.55, TAA at full scale keeps
@@ -207,10 +208,12 @@ class TAAPass extends Pass {
     this.sharpen.uniforms.uTexel.value.set(1 / this.width, 1 / this.height); if (changed) this.reset();
   }
   render(renderer, writeBuffer) {
-    const cam = this.camera, u = this.resolve.uniforms, savedTarget = renderer.getRenderTarget(), autoClear = renderer.autoClear, now = performance.now();
+    const cam = this.camera, u = this.resolve.uniforms, savedTarget = renderer.getRenderTarget(), autoClear = renderer.autoClear;
     cam.updateWorldMatrix(true, false); cam.getWorldPosition(this.position); cam.getWorldQuaternion(this.rotation);
     this.projection.copy(cam.projectionMatrix); this.inverseProjection.copy(cam.projectionMatrixInverse);
-    if (now - this.lastTime > 200 || this.position.distanceToSquared(this.previousPosition) > 1 || Math.abs(this.rotation.dot(this.previousRotation)) < 0.9763
+    // stale history: a long frame or frames this pass did not draw, on the frame clock (frame_clock.js; the wall clock made
+    // a renderAt-stepped recording drop it on every frame), or a jump of the camera or its projection
+    if (staleSince(this.lastT) || this.position.distanceToSquared(this.previousPosition) > 1 || Math.abs(this.rotation.dot(this.previousRotation)) < 0.9763
       || this.projection.elements.some((v, i) => Math.abs(v - this.previousProjection.elements[i]) > 0.000001)) this.reset();
     const iw = this.internal.renderTarget1.width, ih = this.internal.renderTarget1.height, j = this.frame % 16 + 1;
     u.uJitter.value.set((halton(j, 2) - 0.5) / iw, (halton(j, 3) - 0.5) / ih);
@@ -224,7 +227,7 @@ class TAAPass extends Pass {
       this.updateTextures();   // baked clones, quality swaps and late pets join (updateTextures and drawn say when)
       // GTAO swaps colour; the scene's depth remains on the buffer that RenderPass started with.
       u.tDepth.value = this.internal.readBuffer.depthTexture;
-      this.drawing = true; try { this.internal.render(); } finally { this.drawing = false; }
+      this.drawing = true; try { this.internal.render(frameClock.dt); } finally { this.drawing = false; }
       u.tCurrent.value = this.internal.readBuffer.texture;
       const next = this.history[this.index], previous = this.history[1 - this.index]; u.tHistory.value = previous.texture; u.uValid.value = +this.valid;
       if (!this.valid) renderer.initRenderTarget(previous);
@@ -234,7 +237,7 @@ class TAAPass extends Pass {
       this.quad.material = this.sharpen; renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); this.quad.render(renderer);
       u.uPrevVP.value.multiplyMatrices(this.projection, cam.matrixWorldInverse); u.uPrevView.value.copy(cam.matrixWorldInverse);
       this.previousProjection.copy(this.projection); this.previousPosition.copy(this.position); this.previousRotation.copy(this.rotation);
-      this.valid = true; this.index = 1 - this.index; this.frame++; this.lastTime = now;
+      this.valid = true; this.index = 1 - this.index; this.frame++; this.lastT = frameClock.t;
     } catch (err) { this.reset(); throw err; }
     finally { cam.projectionMatrix.copy(this.projection); cam.projectionMatrixInverse.copy(this.inverseProjection); renderer.autoClear = autoClear; renderer.setRenderTarget(savedTarget); }
   }

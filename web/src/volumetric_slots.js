@@ -43,6 +43,19 @@ export function blendMedia(a, b, t) {
 // as the lightmaps, sky and sun).
 export const mediumFor = (current, next = null, t = 0) => next ? blendMedia(mediumOf(current), mediumOf(next), t) : { ...mediumOf(current) };
 
+// The weight of the reprojected history this frame (volumetric.js), from the frame's time step: time constants in
+// seconds, so the light follows a change as fast at 30, 60 or 144 frames a second. A fixed weight per frame (0.9 moving,
+// 0.96 held still) made a slot change's mist linger 0.8 s at 30 fps and 0.17 s at 144 (postmortem row 28).
+// Moving, or while the medium changes (a slot crossfade): historyTime. Held still: the frames since it stopped are
+// averaged evenly (n / (n + 1), stillTime = the seconds held before this frame), up to historyStillTime. Invalid: 0.
+export function historyWeight({ valid = true, dt, still = false, stillTime = 0, changing = false }, { historyTime, historyStillTime, historyMax = 0.995 }) {
+  if (!valid) return 0;
+  const step = Math.max(1e-4, dt), moving = Math.exp(-step / Math.max(1e-4, historyTime));
+  if (!still || changing) return Math.min(historyMax, moving);
+  const held = Math.exp(-step / Math.max(1e-4, historyStillTime));
+  return Math.min(historyMax, held, Math.max(moving, stillTime / (stillTime + step)));
+}
+
 // Henyey-Greenstein, normalised over the sphere (1/sr); mu = cosine between the view ray and the direction to the sun.
 export function hg(mu, g) { const gg = g * g; return (1 - gg) / (4 * Math.PI * Math.pow(Math.max(1 + gg - 2 * g * mu, 1e-4), 1.5)); }
 export const phase = (mu, [gf, gb, w]) => w * hg(mu, gf) + (1 - w) * hg(mu, gb);

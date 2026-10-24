@@ -5,6 +5,7 @@ import { isInside } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
 import { isBaked, materialOptions, setPlanarPuddle } from './shaders/baked_material.js';
 import { warmPrograms } from './shader_warmup.js';
+import { frameClock } from './frame_clock.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -207,7 +208,7 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   // Indoors nothing is rendered: puddles seen through the windows keep the probes. (Segment tests against the house
   // were tried here: plain Mesh raycasts through a merged batch cost 10-20 ms per ray, 20-100 ms per scan.)
   function visiblePlane(cam, now) {
-    if (now - lastVisibility < 1000 / P.visibilityHz) return plane;
+    if (now - lastVisibility < 1 / P.visibilityHz) return plane;
     lastVisibility = now; const t0 = performance.now();
     if (isInside(eye.x, -eye.z)) { stats.visibilityMs = performance.now() - t0; return null; }
     projection.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); frustum.setFromProjectionMatrix(projection);
@@ -224,11 +225,11 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     if (busy || cam.userData.hqReflection || cam.userData.puddleReflection || !cam.isPerspectiveCamera || !cam.layers.isEnabled(0) || scene.overrideMaterial) return;
     uniforms.uPuddleValid.value = 0;
     if (!P.enabled || !(wet > 0)) return;
-    const now = performance.now(); eye.setFromMatrixPosition(cam.matrixWorld);
+    const now = frameClock.t; eye.setFromMatrixPosition(cam.matrixWorld);   // seconds on the frame clock (frame_clock.js)
     plane = visiblePlane(cam, now); stats.visible = plane !== null;
     if (plane === null || eye.y <= plane + 0.015) return;
-    uniforms.uPuddleTime.value = now / 1000;   // the wind ripples move every frame, the mirror image at P.hz
-    if (now - lastRender < 1000 / P.hz && uniforms.uPuddleY.value === plane) { uniforms.uPuddleValid.value = 1; return; }
+    uniforms.uPuddleTime.value = now;   // the wind ripples move every frame, the mirror image at P.hz
+    if (now - lastRender < 1 / P.hz && uniforms.uPuddleY.value === plane) { uniforms.uPuddleValid.value = 1; return; }
     renderer.getDrawingBufferSize(size);
     const scale = Math.min(P.scale, P.maxWidth / size.x, P.maxHeight / size.y), w = Math.max(1, Math.floor(size.x * scale)), h = Math.max(1, Math.floor(size.y * scale));
     if (rt.width !== w || rt.height !== h) rt.setSize(w, h);

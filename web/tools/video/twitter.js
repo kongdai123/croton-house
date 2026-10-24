@@ -75,11 +75,16 @@
   function free(name) { const a = pets?.get(name); if (a) { a.hold = null; a.state = 'pause'; a.st = 0; } }
   // the pets wait out of sight (below the ground, under the garage) unless a shot stages them
   const stash = () => { for (const n of ['dog', 'cat']) if (pets?.get(n)) stage(n, -5.5, -2.5, 'lie', -5.5, 0, -3); };
+  // request a time of day; true when a crossfade was started
   function slot(name) {
-    if (A.state.bakedSlot === name && !A.state.bakedSlotPending) return;
-    if (A.state.bakedSlotPending) { V.warn.push(`slot ${name} requested while ${A.state.bakedSlotPending} is pending`); return; }
-    V.slotBegun = false; A.setBakedSlot(name, { quiet: true });
+    if (A.state.bakedSlot === name && !A.state.bakedSlotPending) return false;
+    if (A.state.bakedSlotPending) { V.warn.push(`slot ${name} requested while ${A.state.bakedSlotPending} is pending`); return false; }
+    V.slotBegun = false; A.setBakedSlot(name, { quiet: true }); return true;
   }
+  // seconds of pre-roll kept after a slot crossfade at a cut: the volumetric light's history holds the old slot's mist
+  // (it follows a change of its media at its history rate, 4% a frame while the camera holds still), and auto exposure
+  // is still gliding to the new light: into dusk outdoors the target rises ~7 EV and the glide (0.8 s) takes ~2.5 s
+  const SETTLE = 3.0;
   const cardPin = (slug) => A.markers.pins.find(q => q.kind === 'rn' && q.post.slug === slug);
 
   // ---- title cards (film-only DOM, over the canvas) ----
@@ -205,13 +210,15 @@
             const s = only[V.i];
             V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set(); aimState.yaw = aimState.pitch = null;
             addr.style.opacity = 0; end.style.opacity = 0;
-            s.setup?.(); if (s.slot) slot(s.slot);
+            s.setup?.(); V.fading = !!s.slot && slot(s.slot);
             s.path = path(s.keys); V.phase = V.pre > 0 ? 'pre' : 'roll';
           }
           const s = only[V.i];
           if (V.phase === 'pre') {
-            // hold the first pose; the pre-roll lasts until its time is up and any slot crossfade has finished
+            // hold the first pose; the pre-roll lasts until its time is up and any slot crossfade has finished, then SETTLE
+            // more seconds with the volumetric light started afresh on the new slot's media
             V.pose(s, 0, dt);
+            if (V.fading && !A.state.bakedSlotPending) { V.fading = false; A.baked?.shafts?.reset(); V.pre = Math.max(V.pre, SETTLE); }
             if (V.pre > 0 || A.state.bakedSlotPending) { V.pre -= dt; return { save: false, shot: s.name, t: 0, pre: true }; }
             V.phase = 'roll';
           }

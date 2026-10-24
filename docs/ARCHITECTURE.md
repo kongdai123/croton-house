@@ -352,7 +352,9 @@ CI runs both on every push and pull request.
   the root as interactive and animated, `Interact` flips it on click, and `main.js` passes it to the sun-shadow cache as
   a dynamic caster. A toggle without `userData.animate` is neither animated nor tracked by the sun-shadow cache.
   `apply(value, t)` poses the parts. A state that follows the time of day goes in
-  `root.userData.onTime = (dusk, instant) => ...`.
+  `root.userData.onTime = (dusk, instant) => ...`; a slot switch calls it when its crossfade begins, so it animates with
+  the light (`slot_dependents.js`). Anything that animates per frame takes its time from the frame clock
+  (`frame_clock.js`: `apply`'s `t` is the simulation time), never `performance.now()`.
 - **Carried object**: `setMovable(root, { mass, radius })`. It becomes role `movable`: no lightmap (`lmSkip`), probe-lit,
   contact shadows, a rigid sun-shadow caster. `Interact` moves it by `root.position` and `root.rotation.y`; with seats as
   well, a click sits and a drag carries.

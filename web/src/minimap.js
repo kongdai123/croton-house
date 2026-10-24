@@ -5,6 +5,7 @@ import { getLang } from './ui.js';
 import { EXT_FP, pointInPoly, PATIO, COURT_A, COURT_B, WALK, DRIVE, PAD, PORCH, GARDEN, FRONT_BED } from './house.js';
 import { BEDS, SHELL, PAVED } from './layout.js';
 import { plan } from './plan.js';
+import { frameClock } from './frame_clock.js';
 
 const VB = plan.viewBox;   // floor_shape.svg viewBox (image y = -plan y)
 const LOT = plan.lot;
@@ -45,7 +46,7 @@ export class Minimap {
   // seams have no wall to cut), as on the landing plan; room names still from house.json's notes.
   setPlan(house) {
     this.plan = { walls: plan.walls, openings: plan.openings.filter(o => o.kind !== 'open'), notes: house.notes ?? [] };
-    this.site = null; this.zoomR = this.radiusM; this.zoomT = performance.now();
+    this.site = null; this.zoomR = this.radiusM; this.zoomT = frameClock.t;
   }
   // The garden as plan symbols, gathered once: every planting as a circle of its spread (trees larger, as canopies),
   // garden furniture as outlined boxes.
@@ -116,8 +117,8 @@ export class Minimap {
   // you; step into the garden and it eases out to 15 m, so the beds, trees, terrace and fences come into view.
   draw() {
     const c = this.ctx, S = this.canvas.width, ms = S / MAP_CSS;
-    const px = this.player.pos.x, py = -this.player.pos.z, now = performance.now();
-    const dt = Math.min(0.2, (now - (this.zoomT ?? now)) / 1000); this.zoomT = now;
+    const px = this.player.pos.x, py = -this.player.pos.z, now = frameClock.t;   // seconds on the frame clock (frame_clock.js)
+    const dt = Math.min(0.2, now - (this.zoomT ?? now)); this.zoomT = now;
     const want = pointInPoly([px, py], EXT_FP) ? this.radiusM : 15;
     this.zoomR = (this.zoomR ?? want) + (want - (this.zoomR ?? want)) * (1 - Math.exp(-dt * 2.2));
     const k = (S / 2) / this.zoomR, X = (x) => S / 2 + (x - px) * k, Y = (y) => S / 2 - (y - py) * k;

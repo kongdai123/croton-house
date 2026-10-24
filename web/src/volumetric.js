@@ -10,14 +10,17 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { insideGLSL } from './plan.js';
-import { ALBEDO, MEDIA_KEYS, PHASE, mediumFor, skyAmbient } from './volumetric_slots.js';
+import { ALBEDO, MEDIA_KEYS, PHASE, mediumFor, skyAmbient, historyWeight } from './volumetric_slots.js';
+import { frameClock, staleSince } from './frame_clock.js';
 import { SLOTS } from './lighting_slots.js';
 
 // resolution: march size per frame axis (0.5 or 0.25); steps per ray (16-64); maxDistance in metres (the lot is ~45 m
-// across); roof: the height under which a point inside the outline is in the house (ceiling 2.44 m); history: weight of
-// the reprojected history while the view moves, historyStill once it holds still; depthSigma: relative depth tolerance of
-// the upsample and of the history (x2). sunStrength / skyStrength scale the two light sources (1 = physical).
-export const VOLUME = { resolution: 0.5, steps: 32, maxDistance: 48, roof: 2.6, history: 0.9, historyStill: 0.96,
+// across); roof: the height under which a point inside the outline is in the house (ceiling 2.44 m); historyTime: time
+// constant (s) of the reprojected history while the view moves or the medium changes, historyStillTime once it holds
+// still (volumetric_slots.js historyWeight; 0.16 s and 0.41 s are the 0.9 and 0.96 a frame they replace, at 60 Hz);
+// depthSigma: relative depth tolerance of the upsample and of the history (x2). sunStrength / skyStrength scale the two
+// light sources (1 = physical).
+export const VOLUME = { resolution: 0.5, steps: 32, maxDistance: 48, roof: 2.6, historyTime: 0.16, historyStillTime: 0.41,
   depthSigma: 0.025, sunStrength: 1, skyStrength: 1 };
 const vertex = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const march = `
@@ -163,7 +166,7 @@ export class VolumetricPass extends Pass {
     super(); this.camera = camera; this.sun = sun; this.shadow = shadow; this.state = state;
     this.params = { ...VOLUME, ...parameters };
     this.tap = new SceneDepthTap(); this.medium = mediumFor('sunrise');
-    this.frame = 0; this.still = 0; this.valid = false; this.paramKey = '';
+    this.frame = 0; this.stillTime = 0; this.fading = false; this.lastT = null; this.valid = false; this.paramKey = '';
     this.lastEye = new THREE.Vector3(); this.lastQuat = new THREE.Quaternion(); this.quat = new THREE.Quaternion();
     this.sunTarget = new THREE.Vector3(); this.sky = new THREE.Vector3();
     const uniforms = { tDepth: { value: null }, tSun: shadow.uniforms.uSunDepth, tHistory: { value: null }, tGuide: { value: null },
@@ -202,6 +205,7 @@ export class VolumetricPass extends Pass {
   update() {
     const p = this.params, s = this.state() ?? {}, t = s.next ? s.t ?? 0 : 0;
     const m = mediumFor(s.current, s.next, t);
+    this.fading = !!s.next;   // the medium changes every frame of a crossfade: the history follows at its moving rate
     for (const key of MEDIA_KEYS) if (Number.isFinite(p[key])) m[key] = p[key];
     this.medium = m;
     // per sky texture (its slot's sun lights the ground under the mist), computed once from the CPU copy
@@ -229,14 +233,16 @@ export class VolumetricPass extends Pass {
     u.uDust.value.set(Math.max(0, m.dust), ALBEDO.dust, ALBEDO.mist, 0);
     u.uNear.value = c.near; u.uFar.value = c.far; u.uMaxDistance.value = Math.max(c.near, p.maxDistance);
     u.uSteps.value = THREE.MathUtils.clamp(Math.round(p.steps), 8, 64); u.uDebug.value = p.debug | 0; u.uBias.value = sun.shadow.bias; u.uDepthSigma.value = Math.max(0.001, p.depthSigma);
-    // History: dropped on a resize, a re-enable, a context restore, a parameter change and a jump (teleport, fly-to cut:
-    // > 2 m or > 60 degrees in one frame); followed through ordinary walking and turning.
+    // History: dropped on a resize, a re-enable, a context restore, a parameter change, a jump (teleport, fly-to cut:
+    // > 2 m or > 60 degrees in one frame) and a stale history (a long frame, or frames this pass did not draw, on the
+    // frame clock); followed through ordinary walking and turning, and through a slot crossfade, at a weight from the
+    // frame's time step (historyWeight).
     c.getWorldQuaternion(this.quat);
     const key = JSON.stringify(p), jump = u.uEye.value.distanceToSquared(this.lastEye) > 4 || Math.abs(this.quat.dot(this.lastQuat)) < 0.866;
-    if (key !== this.paramKey || jump) this.valid = false;
-    const still = this.valid && u.uEye.value.distanceToSquared(this.lastEye) < 1e-8 && Math.abs(this.quat.dot(this.lastQuat)) > 1 - 1e-9;
-    this.still = still ? this.still + 1 : 0;
-    u.uHistory.value = !this.valid ? 0 : still ? Math.min(THREE.MathUtils.clamp(p.historyStill, 0, 0.98), Math.max(p.history, this.still / (this.still + 1))) : THREE.MathUtils.clamp(p.history, 0, 0.98);
+    if (key !== this.paramKey || jump || staleSince(this.lastT)) this.valid = false;
+    const still = this.valid && u.uEye.value.distanceToSquared(this.lastEye) < 1e-8 && Math.abs(this.quat.dot(this.lastQuat)) > 1 - 1e-9, dt = frameClock.dt;
+    u.uHistory.value = historyWeight({ valid: this.valid, dt, still, stillTime: this.stillTime, changing: this.fading }, p);
+    this.stillTime = still && !this.fading ? this.stillTime + dt : 0;
     u.uFrame.value = (this.frame = (this.frame + 1) % 64);
     const auto = renderer.autoClear; renderer.autoClear = false;
     try {
@@ -251,7 +257,7 @@ export class VolumetricPass extends Pass {
       this.quad.material = this.needsSwap ? this.composite : this.blend;
       renderer.setRenderTarget(this.renderToScreen ? null : this.needsSwap ? writeBuffer : readBuffer); this.quad.render(renderer);
     } finally { renderer.autoClear = auto; }
-    [this.current, this.history] = [this.history, this.current]; this.valid = true; this.paramKey = key;
+    [this.current, this.history] = [this.history, this.current]; this.valid = true; this.paramKey = key; this.lastT = frameClock.t;
     u.uPrevVP.value.multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse); u.uPrevView.value.copy(c.matrixWorldInverse);
     this.lastEye.copy(u.uEye.value); this.lastQuat.copy(this.quat);
   }

@@ -349,7 +349,7 @@ export class PhotoMode {
         out.add(l); stats.lights++;
         continue;
       }
-      if (!visible(o) || !o.isMesh || o.isReflector || o.isSprite) continue;
+      if (!visible(o) || !o.isMesh || o.isReflector || o.isSprite || o.userData.mainOnly) continue;   // mainOnly: the walkthrough camera's merged far plants (plant_clusters.js)
       if (o.layers.test(overlay) && !o.layers.isEnabled(0)) continue;
       const materials = [].concat(o.material).map(m => traceMaterial(m, cache, own));
       if (!materials.some(Boolean)) continue;

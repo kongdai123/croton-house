@@ -256,8 +256,9 @@ function behindHouse(reached, x, y, rect) {
 export function createRoomCulling({ THREE, camera, roots, moving = [], swinging = [], doors = [], lowWalls = {}, plan = PLAN, enabled = true }) {
   const model = buildModel(plan, { lowWalls }), main = camera.layers;
   const box = new THREE.Box3(), part = new THREE.Box3(), m4 = new THREE.Matrix4();
-  // the walkthrough camera alone is refused a culled mesh
-  function test(layers) { return (this.mask & layers.mask) !== 0 && !(this.culled === true && layers === main); }
+  // the walkthrough camera alone is refused a culled mesh (and, plant_clusters.js, a mesh it never draws: mainOff, or
+  // draws alone: mainOnly)
+  function test(layers) { return (this.mask & layers.mask) !== 0 && !(this.culled === true && layers === main) && (this.mainOnly === true ? layers === main : !(this.mainOff === true && layers === main)); }
   // plan rect of a subtree's world box; an instanced mesh over every instance slot (its count may grow later)
   // the world box of a subtree (into `into`), optionally in the frame of `space` (a matrix inverse)
   const boxOf = (root, into, space = null) => {

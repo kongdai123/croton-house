@@ -41,8 +41,12 @@ function outsideTriangle(a, b, c) {
   }
   return false;
 }
-function visible(o) { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; }
-function reflectionVisible(o) { for (let p = o; p; p = p.parent) if (!p.visible && !(p.name === 'frozen' && p.userData.batch)) return false; return true; }
+// The walkthrough's runtime merges (batch_baked.js) hide their sources and draw them merged; the reflection keeps the
+// sources (batch2Source: shown as their parent is), so it chooses and draws exactly what it did before them (its size
+// cut-off and draw budget go mesh by mesh).
+const own = o => o.userData.batch2Source ? o.parent : o;
+function visible(o) { for (let p = own(o); p; p = p.parent) if (!p.visible) return false; return true; }
+function reflectionVisible(o) { for (let p = own(o); p; p = p.parent) if (!p.visible && !(p.name === 'frozen' && p.userData.batch)) return false; return true; }
 
 // The puddle reflection's scene and ground, from the scene as it is (CPU only, no materials made): the meshes it mirrors
 // (with their world bounds), the materials that can show a puddle (on a flat, up-facing triangle at a puddle plane's
@@ -90,7 +94,7 @@ export function scanPuddles(scene, furniture = [], params = {}) {
   }
   scene.updateMatrixWorld(true);
   scene.traverse(o => {
-    if (!o.isMesh || o.isSkinnedMesh || o.isReflector || o.userData.batched || o.userData.lightHit || !meshLighting(o).puddleMirror || !o.layers.isEnabled(0)) return;
+    if (!o.isMesh || o.isSkinnedMesh || o.isReflector || (o.userData.batched && !o.userData.batch2Source) || o.userData.batch2 || o.userData.mainOnly || o.userData.lightHit || !meshLighting(o).puddleMirror || !o.layers.isEnabled(0)) return;
     // Use the existing merged plant LOD even up close: keep whole crowns without hundreds of tiny leaf draws.
     for (let p = o.parent; p && p !== scene; p = p.parent) {
       const frozen = p.children.find(c => c.name === 'frozen' && c.userData.batch);
@@ -175,10 +179,28 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   // (marked when the baked lighting loaded; else now)
   const patches = markPuddleGround(scene, ground ?? scan.ground);
   let lastRender = -Infinity, lastVisibility = -Infinity, plane = null, busy = false;
-  // World bounds follow doors and furniture; refreshed only for a reflection render.
+  // World bounds follow doors and furniture; refreshed only for a reflection render, and only where something can move
+  // them: a mesh whose every node up to the scene has a fixed matrix (batch.js: the static world) keeps the bounds it
+  // was found with (refreshing all of them cost ~1.7 ms per reflection render on a 2.1 GHz Xeon).
+  const fixedChain = o => { for (let p = o; p; p = p.parent) if (p.matrixAutoUpdate) return false; return true; };
+  for (const e of sources) e.fixed = fixedChain(e.source) && !e.source.isInstancedMesh;
+  // The others too keep theirs while their world matrix and bounds hold (the plants: their roots never move).
+  const same = (e, s, b) => {
+    const m = e.source.matrixWorld.elements, k = e.key ??= new Float64Array(26);
+    let equal = e.keyed === true && e.keyGeometry === e.source.geometry;
+    for (let i = 0; i < 16; i++) if (k[i] !== m[i]) { equal = false; k[i] = m[i]; }
+    const put = (i, x) => { if (k[i] !== x) { equal = false; k[i] = x; } };
+    put(16, s.center.x); put(17, s.center.y); put(18, s.center.z); put(19, s.radius);
+    if (b) { put(20, b.min.x); put(21, b.min.y); put(22, b.min.z); put(23, b.max.x); put(24, b.max.y); put(25, b.max.z); }
+    e.keyed = true; e.keyGeometry = e.source.geometry;
+    return equal;
+  };
   const refresh = list => { for (const e of list) {
-    e.sphere.copy(e.source.boundingSphere ?? e.source.geometry.boundingSphere).applyMatrix4(e.source.matrixWorld);
-    if (e.source.isInstancedMesh) e.sphere.getBoundingBox(e.box); else e.box.copy(e.source.geometry.boundingBox).applyMatrix4(e.source.matrixWorld);
+    if (e.fixed) continue;
+    const s = e.source.boundingSphere ?? e.source.geometry.boundingSphere, b = e.source.isInstancedMesh ? null : e.source.geometry.boundingBox;
+    if (same(e, s, b)) continue;
+    e.sphere.copy(s).applyMatrix4(e.source.matrixWorld);
+    if (e.source.isInstancedMesh) e.sphere.getBoundingBox(e.box); else e.box.copy(b).applyMatrix4(e.source.matrixWorld);
   } };
   // Which plane to render: the one whose puddle samples in view weigh most (1 / distance^2, roughly their screen area).
   // Indoors nothing is rendered: puddles seen through the windows keep the probes. (Segment tests against the house
@@ -228,7 +250,7 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
       e.proxy.visible = false;
       // (not room culling's verdict, layers.culled: the reflection is looked up off its plane on raised terraces and under
       // the wind ripples, so it shows a little of what the walls hide from the camera; cull_check saw it at the doors)
-      if (!reflectionVisible(e.source) || e.box.max.y <= plane + P.clip || !frustum.intersectsSphere(e.sphere)) continue;
+      if (e.box.max.y <= plane + P.clip || !frustum.intersectsSphere(e.sphere) || !reflectionVisible(e.source)) continue;   // cheapest test first
       const d = Math.max(0.1, camera.position.distanceTo(e.sphere.center)), pixels = e.sphere.radius * h * Math.abs(camera.projectionMatrix.elements[5]) / d;
       if (d - e.sphere.radius > P.range || pixels < P.minPixels) continue;
       e.score = pixels; candidates.push(e);

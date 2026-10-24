@@ -33,7 +33,7 @@ export async function loadFoliage(url, track = work => work()) {
 
 // plant parts whose material takes the per-vertex foliage bake (manifest foliage.bakedPerVertex: the modelled plants, not
 // the garden's instanced leaf cards)
-const isPlant = o => o.isMesh && !o.isInstancedMesh && !Array.isArray(o.material) && !!lightingOf(o.material)?.foliage?.bakedPerVertex && o.geometry?.attributes.position;
+const isPlant = o => o.isMesh && !o.isInstancedMesh && !o.userData.mainOnly && !Array.isArray(o.material) && !!lightingOf(o.material)?.foliage?.bakedPerVertex && o.geometry?.attributes.position;   // (mainOnly: plant_clusters.js, views of the frozen copies)
 const box = new THREE.Box3(), v = new THREE.Vector3();
 function bounds(o) {
   box.makeEmpty(); const p = o.geometry.attributes.position;

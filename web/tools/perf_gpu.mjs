@@ -187,7 +187,7 @@ function summarize(frames) {
   const jsCpu = frames.map(f => (f.seg.update?.cpu ?? 0) + wrappedUpdate.reduce((s, k) => s + (f.seg[k]?.cpu ?? 0), 0));
   const seconds = frames.length > 1 ? (frames[frames.length - 1].t0 - frames[0].t0) / 1000 : 0;
   return {
-    frames: frames.length, fps: r2(iv.length ? 1000 / mean(iv) : null), intervalMed: r2(median(iv)), intervalP90: r2(pct(iv, 0.9)), intervalP99: r2(pct(iv, 0.99)),
+    frames: frames.length, fps: r2(iv.length ? 1000 / mean(iv) : null), intervalMed: r2(median(iv)), intervalP90: r2(pct(iv, 0.9)), intervalP99: r2(pct(iv, 0.99)), even: r2(iv.length ? ((m) => iv.filter(x => Math.abs(x - m) <= 2).length / iv.length)(median(iv)) : null),
     cpuMed: r2(median(frames.map(f => f.cpu))), cpuP90: r2(pct(frames.map(f => f.cpu), 0.9)), jsMed: r2(median(jsCpu)), renderCpuMed: r2(median(frames.map((f, i) => f.cpu - jsCpu[i]))), updateOnlyMed: r2(median(updateCpu)),
     gpuMed: r2(median(frames.map(f => f.gpu))), gpuP90: r2(pct(frames.map(f => f.gpu), 0.9)),
     calls: r2(mean(frames.map(f => Object.values(f.seg).reduce((s, x) => s + x.calls, 0)))), tris: Math.round(mean(frames.map(f => Object.values(f.seg).reduce((s, x) => s + x.tris, 0)))),
@@ -274,16 +274,16 @@ for (const all of Object.values(result.variants)) {
   for (const c of cams) {
     const rs = all.rounds.map(r => r.cameras[c.id]).filter(Boolean); if (!rs.length) continue;
     const m = all.cameras[c.id] = {};
-    for (const k of ['fps', 'cpuMed', 'jsMed', 'renderCpuMed', 'gpuMed', 'calls', 'tris', 'intervalP90', 'intervalP99', 'shadowRefreshPerS', 'shadowStaticPerS']) m[k] = r2(medOf(rs, s => s[k]));
+    for (const k of ['fps', 'cpuMed', 'jsMed', 'renderCpuMed', 'gpuMed', 'calls', 'tris', 'intervalMed', 'intervalP90', 'intervalP99', 'even', 'shadowRefreshPerS', 'shadowStaticPerS']) m[k] = r2(medOf(rs, s => s[k]));
     m.seg = {}; for (const k of new Set(rs.flatMap(s => Object.keys(s.seg)))) m.seg[k] = { cpu: r2(medOf(rs, s => s.seg[k]?.cpu ?? 0)), gpu: r2(medOf(rs, s => s.seg[k]?.gpu ?? 0)), calls: r2(medOf(rs, s => s.seg[k]?.calls ?? 0)) };
   }
   const ws = all.rounds.map(r => r.walk).filter(Boolean);
-  if (ws.length) { all.walk = {}; for (const k of ['fps', 'intervalMed', 'intervalP90', 'intervalP99', 'cpuMed', 'gpuMed', 'calls', 'shadowRefreshPerS', 'shadowStaticPerS']) all.walk[k] = r2(medOf(ws, s => s[k])); }
+  if (ws.length) { all.walk = {}; for (const k of ['fps', 'intervalMed', 'intervalP90', 'intervalP99', 'even', 'cpuMed', 'gpuMed', 'calls', 'shadowRefreshPerS', 'shadowStaticPerS']) all.walk[k] = r2(medOf(ws, s => s[k])); }
 }
 for (const [name, all] of Object.entries(result.variants)) {
   console.log(`\n== ${name} (median of ${all.rounds.length})`);
-  for (const [id, s] of Object.entries(all.cameras)) console.log(`${id.padEnd(18)} fps ${s.fps} | cpu ${s.cpuMed} (js ${s.jsMed}) | gpu ${s.gpuMed} | calls ${s.calls} | p99 ${s.intervalP99}`);
-  if (all.walk) console.log(`walk               fps ${all.walk.fps} | interval median ${all.walk.intervalMed} p90 ${all.walk.intervalP90} p99 ${all.walk.intervalP99} | cpu ${all.walk.cpuMed} | calls ${all.walk.calls}`);
+  for (const [id, s] of Object.entries(all.cameras)) console.log(`${id.padEnd(18)} fps ${s.fps} | cpu ${s.cpuMed} (js ${s.jsMed}) | gpu ${s.gpuMed} | calls ${s.calls} | interval ${s.intervalMed} p99 ${s.intervalP99} even ${s.even}`);
+  if (all.walk) console.log(`walk               fps ${all.walk.fps} | interval median ${all.walk.intervalMed} p90 ${all.walk.intervalP90} p99 ${all.walk.intervalP99} even ${all.walk.even} | cpu ${all.walk.cpuMed} | calls ${all.walk.calls}`);
 }
 await writeFile(OUT, JSON.stringify(result, null, 1));
 await browser.close(); server.close();

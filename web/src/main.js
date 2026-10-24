@@ -457,7 +457,7 @@ const loop = (now) => {
   if (!document.hidden) soft('frame', () => frame(dt));
   const work = performance.now() - t0;
   if (timed) { gl0.finish(); startQuality.sample(work, performance.now() - t0, now); }   // the frame's whole cost, GPU included
-  pacing.drawn(now, work);
+  if (!viewpoints.panoOpaque) pacing.drawn(now, work);   // a panorama's cheap frames say nothing about the house's
   if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

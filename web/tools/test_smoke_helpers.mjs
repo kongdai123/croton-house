@@ -1,6 +1,6 @@
 // The browser-free parts of the UI smoke suite (tools/smoke): argument parsing, console classification, pixel statistics,
 // stance geometry for switches and sliders, the static server, and that every test is well formed. The browser run itself is
-// `node tools/smoke/run.mjs` (CI job "smoke").
+// `node tools/smoke/run.mjs`, on a GPU machine (gate d; not in CI).
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

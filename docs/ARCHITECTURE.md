@@ -611,8 +611,3 @@ conventions and the owner's constraints. Stale:
 - **Missing**: the plan model, the lighting manifest, the composed shader, the gates, `npm test` and CI, the bake and
   rebake, TAA, volumetric light, white balance. This document and the docs index in the [README](../README.md) cover them.
 - **"Still open"** and the unreviewed reports: not re-checked since; treat as unverified.
-
-Two other docs have stale lines: [web/tools/README.md](../web/tools/README.md) still says lint warnings do not fail
-and that a CI job `smoke` exists (since c692295 any warning fails, and the smoke job was dropped in a906ee4); the
-"Known issue" in [white-balance.md](white-balance.md#known-issue-lamp-surfaces-glow-cooler-than-their-light) was
-fixed in 9c4dfe2 (lamp surfaces glow in their group's light colour, `lamp_groups.js`).

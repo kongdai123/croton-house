@@ -1,4 +1,5 @@
-// ?lightmap=sunrise&puddlerefl: one clipped, half-resolution ground reflection, independent of the HQ SSR pass.
+// One clipped, half-resolution ground reflection, independent of the HQ SSR pass; on in the tiers with `puddles` (tier.js),
+// created by the baked mode (lightmap.js setFeatures).
 import * as THREE from 'three';
 import { isInside } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';

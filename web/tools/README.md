@@ -5,7 +5,7 @@
 - `npm test` (in `web/`) builds the site, runs every `tools/test_*.mjs` (one node process each, in parallel), `tools/test_package.py`
   and every `bake/scripts/test_*.py`, and exits non-zero on any failure. `node tools/run_tests.mjs [--serial] [--timeout=SECONDS] [name-filter]`
   for a subset.
-- `npm run lint` runs eslint (`eslint.config.mjs`) over `src` and `tools`. Errors fail; unused-variable findings are warnings.
+- `npm run lint` runs eslint (`eslint.config.mjs`) over `src` and `tools`. Errors and warnings fail (`--max-warnings 0`).
 - CI (`.github/workflows/pages.yml`) runs lint and tests on every push and pull request; the Pages deploy waits for them on master.
 - `tools/pre-push.sh` runs the same lint and tests locally. It is not installed automatically; to enable it from the repository root:
 
@@ -26,7 +26,7 @@ survive a quality change; each slot switch resets them to the slot's defaults), 
 resize handler), `keyboard` (T J N H ? Enter Escape), `legacy` (`?legacy` loads, toggleDusk). A failure leaves
 `<out>/<test>.png` and `<out>/<test>.txt` (default `smoke-artifacts/`, git-ignored); exit code 1 if any test fails.
 The browser-free parts (args, console classification, pixel and stance geometry, the server) are unit-tested by
-`tools/test_smoke_helpers.mjs` in `npm test`. CI: job `smoke` in `pages.yml` (non-blocking for now).
+`tools/test_smoke_helpers.mjs` in `npm test`. Not in CI (software GL on GitHub's runners only times out): it runs on a GPU after every bake and before UI pushes.
 Do not run it on a laptop you are working on: SwiftShader and real GPUs both load the machine for minutes.
 
 Other tests that need a browser or dev server (`_smoke`, `playtest`, `tourtest`, `pets_*`, ...) are manual tools and are not part of `npm test`.

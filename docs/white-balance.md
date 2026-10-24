@@ -78,10 +78,9 @@ worst under 80: the office at golden hour with the recalibrated lamps, -69, wher
 wall more than the walls in view) while the bake is the one measured; after a rebake it prints the error and how to
 re-measure instead (the frames: a gate (c) visitor run of those cameras with `&wb=0` appended to the page query).
 
-## Known issue: lamp surfaces glow cooler than their light
+## Lamp surfaces glow in their light's colour (fixed in 9c4dfe2)
 
-The lamp surfaces' emissive colours (`0xfff4e6` .. `0xffc98a`, about 5500-3300 K; the dining and office paper lanterns
-`0xffe6bf`, about 4300 K) are cooler than the light the bake gives their lamps (3000 K, about 2750 K after the bounce,
-encoding.json's group colours). Before, a lantern read white against an orange room; white-balanced to the room, it
-reads light blue. The class fix is the glow's colour from its group's light (lamp_groups.js applyGlow, or the
-fixtures' declared colour temperature), not a camera setting.
+The lamp surfaces' emissive colours used to be cooler (about 5500-3300 K) than the light the bake gives their lamps
+(3000 K, about 2750 K after the bounce), so white-balanced to the room a lantern read light blue. Now there is one rule:
+the site glows each lamp surface in its group's baked colour (encoding.json, lamp_groups.js), and the bake uses 3000 K
+(bake/scripts/fixture_lights.py); `web/tools/test_runtime_fixes.mjs` checks it.

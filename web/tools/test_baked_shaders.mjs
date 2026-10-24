@@ -110,6 +110,14 @@ try {
   for (let i = 0; i < 150; i++) { still.position.x += 0.01; scene.updateMatrixWorld(); pcss.update(0.02); }
   const ambient = pcss.version; for (let i = 0; i < 20; i++) { still.position.x += 0.01; scene.updateMatrixWorld(); pcss.update(0.02); } assert.equal(pcss.version, ambient); assert.equal(pcss.stats.ambient, 1);
   scene.remove(still); pcss.update(0.1);
+  // The hover highlight (interact.js) swaps in a tinted copy with the same shader hook: depth does not change, so the still
+  // caster is neither promoted nor redrawn (it was: every seat the crosshair crossed cost a full base redraw).
+  const seat = new T.Mesh(new T.BoxGeometry(), new T.MeshStandardMaterial()); seat.castShadow = true; scene.add(seat); pcss.invalidate(); pcss.update(0.1);
+  const seatTracked = pcss.stats.tracked, seatStatic = pcss.stats.staticRenders, tint = seat.material.clone(); tint.onBeforeCompile = seat.material.onBeforeCompile;
+  seat.material = tint; for (let i = 0; i < 150; i++) pcss.update(0.02);
+  assert.equal(pcss.stats.tracked, seatTracked); assert.equal(pcss.stats.staticRenders, seatStatic);
+  tint.alphaTest = 0.5; for (let i = 0; i < 150; i++) pcss.update(0.02); assert.equal(pcss.stats.tracked, seatTracked + 1);   // a cut-out change still counts
+  scene.remove(seat); pcss.update(0.1);
   // A tracked caster leaves base (one base redraw) when it starts moving and returns there 2 s after it stops.
   mesh.castShadow = true; for (let i = 0; i < 25; i++) pcss.update(0.1); pcss.invalidate(); pcss.update(0.1); assert.equal(pcss.stats.hot, 0);
   const staticRenders = pcss.stats.staticRenders; parent.position.x += 0.5; pcss.update(0.1);
@@ -129,6 +137,37 @@ try {
   renderer.render = () => { throw new Error('render fixture'); };
   assert.throws(() => pcss.render(), /render fixture/); assert.equal(mesh.material, material); assert.equal(mesh.visible, true); assert.equal(renderer.shadowMap.enabled, true); renderer.render = render;
   let depthDisposed = false; depth.addEventListener('dispose', () => { depthDisposed = true; }); pcss.dispose(); assert.ok(depthDisposed);
+  // A tracked caster leaving base, and folding back, redraws only base's texels around it: the casters whose bounds reach
+  // that rect, under a scissor, with the scene's lights as a full redraw has them; one far away is not drawn.
+  {
+    const s2 = new T.Scene(), sun2 = new T.DirectionalLight(), lamp = new T.PointLight(); sun2.position.set(3, 10, 2); s2.add(sun2, sun2.target, lamp);
+    Object.assign(sun2.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 }); sun2.shadow.camera.updateProjectionMatrix();
+    const drawn = [], scissors = [];
+    const r2 = { autoClear: false, capabilities: { maxTextureSize: 16384 }, shadowMap: { enabled: true }, target: null, getRenderTarget() { return this.target; }, setRenderTarget(t) { this.target = t; },
+      render(s, cam) {
+        const list = [], lit = []; s.traverseVisible(o => { if (o.isMesh && o.layers.test(cam.layers)) list.push(o); if (o.isLight && o.layers.test(cam.layers)) lit.push(o); });
+        drawn.push({ list, lit }); scissors.push(this.target?.scissorTest ? this.target.scissor.clone() : null);
+      } };
+    const box = (x, z) => { const m = new T.Mesh(new T.BoxGeometry(0.5, 1, 0.5), new T.MeshStandardMaterial()); m.position.set(x, 0.5, z); m.castShadow = true; s2.add(m); return m; };
+    const near = box(1, 0), far = box(15, 15), door = new T.Group(), leaf = box(0, 0); s2.remove(leaf); door.add(leaf); s2.add(door);
+    s2.updateMatrixWorld(true);
+    const p2 = createSunPCSS(r2, s2, sun2, 512); p2.track(door); p2.update(0.1);
+    const fullLights = drawn.at(-1).lit.length;
+    assert.equal(p2.stats.partialRenders, 0); assert.ok(drawn.some(d => d.list.includes(far)));   // the first redraw is a full one
+    const before = drawn.length; door.rotation.y = 0.3; door.updateMatrixWorld(true); p2.update(0.1);
+    const region = drawn.slice(before).find((d, i) => scissors[before + i]);
+    assert.equal(p2.stats.partialRenders, 1, 'leaving base is a partial redraw'); assert.ok(region, 'under a scissor');
+    assert.ok(region.list.includes(near) && !region.list.includes(far) && !region.list.includes(leaf), 'the casters around the door, not the far one, not the hot leaf');
+    assert.equal(region.lit.length, fullLights, 'the same lights as a full redraw');
+    assert.equal(p2.stats.staticRenders, 2);
+    for (let i = 0; i < 40; i++) p2.update(0.1);   // cools after 2 s, folds back about a second later
+    assert.equal(p2.stats.partialRenders, 2, 'folding back is a partial redraw too'); assert.equal(p2.stats.hot, 0);
+    const back = drawn.filter((d, i) => scissors[i]).at(-1);
+    assert.ok(back.list.includes(leaf) && !back.list.includes(far), 'the leaf returns to base, the far caster is not redrawn');
+    assert.ok(near.layers.test(new T.Camera().layers) && !near.layers.isEnabled(28) && !lamp.layers.isEnabled(28), 'layers restored');
+    p2.render(); assert.equal(p2.stats.partialRenders, 2, 'a forced render is a full one');
+    p2.dispose();
+  }
   // Slabs explicitly branch around parallel rays (including origins ON a box face), mip zero at roughness zero.
   const slab = (p, r) => {
     let near = -1e20, far = 1e20;

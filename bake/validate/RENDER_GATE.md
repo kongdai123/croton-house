@@ -83,3 +83,11 @@ CI cannot run the smoke suite (web/tools/smoke): in software GL on GitHub's runn
 and every test times out. Run the whole suite on a scavenger GPU node after every bake and before pushing UI changes, from
 the site copy used for this gate: `node tools/smoke/run.mjs --gpu --out=<dir>` (all 9 tests, about 5 minutes; on Linux `--gpu` uses ANGLE on Vulkan,
 web/tools/smoke/session.mjs LINUX_GPU).
+
+## After a wall, opening or culling change: the room-culling check on a GPU
+
+Room culling (web/src/visibility.js) trusts the plan's walls; a wall built differently from the plan (a pass-through, a
+lowered wall: house.js `LOW_WALLS`) makes it hide what is visible. `node web/tools/cull_check.mjs --site <site>
+--out <dir> --slots sunrise,dusk` draws every gate camera, a door shut / opening / open, a carried chair, a called pet and
+the visitor's walk with culling on and off, and checks the sun-shadow cache's partial redraws against a full one: every
+pair must be pixel-identical (about 10 minutes on an RTX 2080 Ti; differing frames are written as PNGs).

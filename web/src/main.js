@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { warmPrograms } from './shader_warmup.js';
 import { createLighting } from './lighting.js';
-import { buildHouse, CEIL, getDoors } from './house.js';
+import { buildHouse, CEIL, getDoors, LOW_WALLS } from './house.js';
 import { buildGarden } from './grass.js';
 import { Player } from './player.js';
 import { Layout } from './layout.js';
@@ -30,6 +30,9 @@ import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
 import { createGuard } from './startup_guard.js';
 import { createTAA } from './taa.js';
 import { featureWanted } from './volumetric_slots.js';
+import { createRoomCulling } from './visibility.js';
+import { createFrameRate } from './frame_rate.js';
+import { createStartQuality } from './start_quality.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -158,6 +161,9 @@ if (bakedWanted && !state.bakedFallback) {
       onProgress: p => ui.progress(0.69 + p * 0.22) });
     state.baked = true; state.dusk = false;
     state.bakedSlots = baked.availableSlots; state.bakedSlot = baked.slotName;
+    // the enclosed fit-outs updateRoomVisibility shows and hides: tracked casters for the sun-shadow cache, so walking in
+    // and out of their rooms redraws base around them, not all of it (a 60 ms hitch at bedroom 3's door)
+    if (batch.rooms?.length) baked.sunShadow.track(batch.rooms.flatMap(r => [r.group, ...r.roots]));
   } catch (err) { state.bakedFallback = err.message; }
 }
 if (lighting.taa && baked) lighting.taa.noise = baked.sunShadow.uniforms.uSunFrame;   // PCSS rotations integrate under TAA
@@ -264,7 +270,9 @@ async function fallbackLegacy(err) {
   if (mirrorsReady) layout.prepareMirrors();
 }
 // The detected tier is the starting point; J switches to its pair (hq/laptop <-> mobile, mobile <-> laptop) and back.
-function toggleQuality() { const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
+// (J also ends the adaptive start: the visitor's choice stands)
+let startQuality = null;
+function toggleQuality() { startQuality?.cancel(); const [own, other] = qualityPair(state.tier); setQuality(state.quality === own ? other : own); }
 ui.renderHelp(); ui.syncLegends();
 
 if (Q.has('eye')) { player.eyeHeight = +Q.get('eye'); player.eye = player.eyeHeight; }
@@ -301,6 +309,7 @@ const compiling = warmScene().then(() => baked?.checkPatches()).catch(async err 
   if (!baked) throw err;
   await fallbackLegacy(err); await warmScene();
 }).catch(err => console.warn('shader warmup', err));   // never reject: the load awaits this below
+const puddleShaders = soft('puddle shaders', () => baked?.puddleRefl?.warm?.());   // the ground reflection's own copies (puddles.js)
 // Real progress for the loading screen: KHR_parallel_shader_compile answers "is this program linked yet?" without
 // blocking, so the bar counts finished programs out of all of them. Without the extension the bar stays indeterminate.
 const stopCompileProgress = (() => {
@@ -324,7 +333,7 @@ if (!baked) { // The file was requested at startup and is normally long here; ne
   }
   state.daylightSource = lighting.daylight?.source; }
 lapStart = lap('bake', lapStart);
-await Promise.race([compiling, new Promise(resolve => setTimeout(resolve, 120000))]);
+await Promise.race([Promise.all([compiling, puddleShaders]), new Promise(resolve => setTimeout(resolve, 120000))]);
 stopCompileProgress(); document.getElementById('warmbar').style.width = '94%';
 // The first draw below blocks the page for a moment (texture uploads, shadow maps, the last shader links). Name that step and
 // let it paint first, so a visitor already on the loading screen sees "Lighting the rooms" rather than a stalled count.
@@ -343,6 +352,10 @@ try {
   try { renderer.render(scene, camera); } catch (_) {}
 }
 lapStart = lap('draw', lapStart);
+// Room visibility (visibility.js): from here on the walkthrough camera skips what the plan's walls hide from it; shadows,
+// mirrors and reflections still see everything. ?cull=0 turns it off.
+const culling = Q.get('cull') === '0' ? null : soft('room culling', () => createRoomCulling({ THREE, camera, roots: [houseRoot, layout.root, garden.group, batch.world],
+  moving: layout.interactive.filter(o => !o.userData.toggle), swinging: [...getDoors().map(d => d.group), ...layout.animated], doors: getDoors(), lowWalls: LOW_WALLS }));
 firstFrameDrawn = true;
 document.getElementById('warmbar').style.width = '100%';
 ui.hideLoading();
@@ -387,6 +400,7 @@ function frame(dt) {
   minimap.draw();
   soft('lighting.update', () => lighting.update(dt, false, togglesMoving() || !!interact.grab || interact.returning.length > 0 || getDoors().some(d => d._t < 1)));
   try { baked?.updateMovables(dt); } catch (err) { if (!gl0.isContextLost()) fallbackLegacy(err); }   // a lost context is not the bake's fault
+  if (culling) soft('room culling', culling.update);   // after everything that moves the camera or a door this frame
   try {
     // An opaque panorama hides the whole house, so only its sphere is drawn. While it fades in, the house goes through the
     // composer as usual and the sphere is laid over it: drawing the house straight to the screen instead would compile a
@@ -420,21 +434,39 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const dt = Math.max(0, Math.min(0.1, t - simT)); frame(dt || 1 / 60); };
-window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles };
-// Frame cap: 30 fps by default to keep laptops cool and fans quiet; ?fps=60 picks another cap, ?fps=0 runs uncapped.
-// Skipped display refreshes cost nothing. The schedule advances by whole frame periods so 120/144 Hz screens still average the
-// cap, and it never runs more than one period behind, so a stall or a hidden tab does not cause a burst of catch-up frames.
-const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && Number.isFinite(+fpsParam) ? Math.max(0, +fpsParam) : 30;
-const framePeriod = fpsCap > 0 ? 1000 / fpsCap : 0;
-state.fpsCap = fpsCap;
-let readyFrames = 0, nextFrameAt = 0;
+window.__app = { baked, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
+// Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
+// 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
+// the old 30 fps cap. Skipped display refreshes cost nothing.
+const fpsParam = Q.get('fps'), fpsCap = fpsParam !== null && fpsParam !== '' && Number.isFinite(+fpsParam) ? Math.max(0, +fpsParam) : detected.tier === 'mobile' ? 30 : null;
+const pacing = createFrameRate({ cap: fpsCap });
+state.fpsCap = fpsCap; state.pacing = pacing;
+let readyFrames = 0;
 // ?capture: the app stops drawing on its own so a recorder can step it frame by frame with renderAt (tools/promo.mjs).
 const CAPTURE = Q.has('capture');
+// Adaptive start (start_quality.js): a desktop's tier, guessed from its GPU's name, is timed once after the first frames
+// and stepped up or down once (a step up is timed again and may be handed back). J, ?tier=, ?capture, ?adapt=0 and ?fast
+// end it.
+startQuality = createStartQuality({ tier: state.quality, enabled: detected.adaptive && !CAPTURE && Q.get('adapt') !== '0' && !Q.has('fast'),
+  setTier: async name => {
+    state.tier = name; state.tierSource = 'measured'; state.qualityHigh = qualityPair(name).find(q => q !== 'mobile') ?? 'mobile';
+    await setQuality(name);
+    await soft('puddle shaders', () => baked?.puddleRefl?.warm?.());   // hq's ground reflection, made just now
+  } });
+state.startQuality = startQuality.state;
 const loop = (now) => {
   requestAnimationFrame(loop);
   if (CAPTURE && readyFrames >= 12) return;
-  // The cap is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo at 30 fps judders.
-  if (framePeriod && !viewpoints.panoOpaque) { if (now < nextFrameAt - 1) return; nextFrameAt = (now - nextFrameAt > framePeriod ? now : nextFrameAt) + framePeriod; }
-  const dt = Math.min(0.1, clock.getDelta()); if (!document.hidden) soft('frame', () => frame(dt)); if (++readyFrames === 12) window.__ready = true;
+  // The pacing is lifted inside an opaque panorama: drawing one textured sphere is nearly free, and panning a photo judders.
+  if (!pacing.tick(now) && !viewpoints.panoOpaque) return;
+  startQuality.begin(now);
+  if (document.hidden || viewpoints.panoActive || photo.active) startQuality.pause(now);
+  const timed = startQuality.wants(now);
+  const dt = Math.min(0.1, clock.getDelta()), t0 = performance.now();
+  if (!document.hidden) soft('frame', () => frame(dt));
+  const work = performance.now() - t0;
+  if (timed) { gl0.finish(); startQuality.sample(work, performance.now() - t0, now); }   // the frame's whole cost, GPU included
+  if (!viewpoints.panoOpaque) pacing.drawn(now, work);   // a panorama's cheap frames say nothing about the house's
+  if (++readyFrames === 12) window.__ready = true;
 };
 requestAnimationFrame(loop);

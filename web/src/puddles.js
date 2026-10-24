@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { isInside } from './plan.js';
 import { lightingOf, meshLighting } from './lighting_roles.js';
 import { isBaked, materialOptions, setPlanarPuddle } from './shaders/baked_material.js';
+import { warmPrograms } from './shader_warmup.js';
 
 export const PUDDLE_PARAMS = { enabled: true, scale: 0.5, maxWidth: 1280, maxHeight: 720, hz: 30, visibilityHz: 10, ground: 0.012, terrace: 0.22, clip: 0.001, edge: 0.06, wind: 0.003, minRadius: 0.08, minPixels: 2, range: 60, maxDraws: 500, maxTriangles: 1200000 };
 // house.js: concrete .012, front walk .014, porch .020; shell -.008..0, raised front terrace .220.
@@ -225,6 +226,8 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
     candidates.length = 0; refresh(sources);
     for (const e of sources) {
       e.proxy.visible = false;
+      // (not room culling's verdict, layers.culled: the reflection is looked up off its plane on raised terraces and under
+      // the wind ripples, so it shows a little of what the walls hide from the camera; cull_check saw it at the doors)
       if (!reflectionVisible(e.source) || e.box.max.y <= plane + P.clip || !frustum.intersectsSphere(e.sphere)) continue;
       const d = Math.max(0.1, camera.position.distanceTo(e.sphere.center)), pixels = e.sphere.radius * h * Math.abs(camera.projectionMatrix.elements[5]) / d;
       if (d - e.sphere.radius > P.range || pixels < P.minPixels) continue;
@@ -263,7 +266,15 @@ export function createPuddles({ scene, renderer, wet = 1, params = {}, furniture
   const hook = function (r, s, cam, ...args) { before?.call(this, r, s, cam, ...args); update(cam); };
   scene.onBeforeRender = hook;
   stats.samples = samples.length; stats.sources = sources.length; stats.materials = patches.length;
-  return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
+  // The copies' programs, compiled under the loading screen (main.js): the first puddle in view otherwise links them all
+  // in one frame (0.3-1.2 s on the patio at hq). Environments and lights are synced first, as a render does.
+  function warm() {
+    for (const [source, entry] of materials) { const m = entry.material; if (m.isMeshStandardMaterial && entry.env !== source.envMap) { entry.env = m.envMap = source.envMap; m.needsUpdate = true; } }
+    for (const { source, proxy } of lights) { proxy.visible = visible(source); proxy.castShadow = source.castShadow; }
+    flat.background = scene.background; flat.fog = scene.fog;
+    return warmPrograms(renderer, flat, camera, rt);
+  }
+  return { uniforms, stats, params: P, target: rt, samples, sources, candidates, update, warm, setEnabled(value) { P.enabled = !!value; if (!P.enabled) uniforms.uPuddleValid.value = 0; }, dispose() {
     if (scene.onBeforeRender === hook) scene.onBeforeRender = before;
     for (const m of patches) setPlanarPuddle(m, false);
     for (const { material } of materials.values()) material.dispose();

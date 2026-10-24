@@ -66,7 +66,12 @@ const PCSS_TIER = { hq: 0, laptop: 1, mobile: 2 };
 // and after the slow scan finds an untracked caster moving. Cooled casters return to base at its next redraw.
 // Shader-only motion (garden wind in custom depth materials) stays a snapshot, and so does anything that never stops
 // moving on its own (ambient, below).
-const DYN_LAYER = 29;
+// A caster leaving base or returning to it redraws only base's texels around it (REGION_LAYER: the casters whose bounds
+// reach that rect, drawn with the full map's camera under a scissor, so every texel comes out as a full redraw would make
+// it): about a hundred draws instead of every caster in the garden (~55 ms of CPU on a 2.1 GHz Xeon at each door click,
+// twice). Promotions by the slow scan, tier and load changes still redraw it all. ?pcssregion=0: full redraws only.
+const DYN_LAYER = 29, REGION_LAYER = 28;
+const PARTIAL_BASE = new URLSearchParams(globalThis.location?.search ?? '').get('pcssregion') !== '0';
 function createSunPCSS(renderer, scene, sun, size = 4096) {
   const target = n => { const t = new THREE.WebGLRenderTarget(n, n, { depthBuffer: true, format: THREE.RedFormat, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter }); t.depthTexture = new THREE.DepthTexture(n, n, THREE.FloatType); return t; };
   const rt = target(size), base = target(size);
@@ -74,7 +79,14 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
   const cache = new Map(), entries = new Map(), swaps = [], roots = new Set(), always = new Set(), promoted = new Set();
   let dynamic = [], statics = [], cursor = 0;
   let version = 0, clock = 1, now = 0, wasMoving = false, dirty = true, staticDirty = true, classifyDirty = true, staticDue = 0;
-  const stats = { casters: 0, tracked: 0, hot: 0, ambient: 0, staticRenders: 0, refreshes: 0, staticMs: 0, refreshMs: 0 };
+  // region: world box of base texels to redraw (null: none); fullDue: the pending staticDue needs a full redraw (a
+  // promotion: the caster's old pose is unknown); foldDue: it folds cooled casters back
+  let region = null, fullDue = false, foldDue = false, lights = [];
+  const stats = { casters: 0, tracked: 0, hot: 0, ambient: 0, staticRenders: 0, partialRenders: 0, regionDraws: 0, refreshes: 0, staticMs: 0, refreshMs: 0 };
+  const boxOf = o => new THREE.Box3().setFromObject(o);
+  const addRegion = box => { if (!box.isEmpty()) (region ??= new THREE.Box3()).union(box); };
+  // a caster that turns hot leaves base: its texels there are redrawn without it
+  const leaveBase = e => { if (!PARTIAL_BASE) { staticDirty = true; return; } if (e.inBase) addRegion(e.baseBox); e.inBase = false; };
   const depthOf = m => {
     if (!m) return m;
     let d = cache.get(m);
@@ -115,6 +127,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     });
     const live = new Set([...dynamic, ...statics]); for (const o of entries.keys()) if (!live.has(o)) entries.delete(o);
     stats.casters = live.size; stats.tracked = dynamic.length; cursor = 0;
+    lights = []; scene.traverse(o => { if (o.isLight) lights.push(o); });
   };
   const sync = () => {
     sun.updateWorldMatrix(true, false); sun.target.updateWorldMatrix(true, false); sun.shadow.updateMatrices(sun);
@@ -158,12 +171,71 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     gl.blitFramebuffer(0, 0, n, n, 0, 0, n, n, gl.DEPTH_BUFFER_BIT, gl.NEAREST);
     renderer.resetState();
   };
+  // Redraw all of base; every tracked caster drawn into it is in base at its box now.
+  const fullBase = cam => {
+    draw(base, cam, true); staticDirty = false; region = null; foldDue = false;
+    for (const o of dynamic) { const e = entries.get(o); if (!o.layers.isEnabled(DYN_LAYER)) { e.inBase = !!e.visible; e.baseBox = boxOf(o); } else e.inBase = false; }
+  };
+  // Redraw base's texels under `region` (see REGION_LAYER). Cooled casters due back fold in here, at their pose now.
+  // Returns false (nothing drawn), true, or 'full' (the region covers most of the map: redraw it all instead).
+  const v = new THREE.Vector3(), sphere = new THREE.Sphere(), regionSwaps = [];
+  const drawRegion = cam => {
+    if (foldDue) {
+      for (const o of dynamic) { const e = entries.get(o); if (e.hot && (e.cold || e.ambient)) { heat(o, e, false); if (e.visible) addRegion(boxOf(o)); } }
+      foldDue = false;
+    }
+    const box = region?.expandByScalar(0.1); region = null;
+    if (!box) return false;
+    // the region's texel rect (two texels of slack), and that rect back in the light's frame
+    const n = base.width, W = cam.right - cam.left, H = cam.top - cam.bottom;
+    let lx0 = Infinity, lx1 = -Infinity, ly0 = Infinity, ly1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(cam.matrixWorldInverse);
+      lx0 = Math.min(lx0, v.x); lx1 = Math.max(lx1, v.x); ly0 = Math.min(ly0, v.y); ly1 = Math.max(ly1, v.y);
+    }
+    const x0 = Math.max(0, Math.floor((lx0 - cam.left) / W * n) - 2), x1 = Math.min(n, Math.ceil((lx1 - cam.left) / W * n) + 2);
+    const y0 = Math.max(0, Math.floor((ly0 - cam.bottom) / H * n) - 2), y1 = Math.min(n, Math.ceil((ly1 - cam.bottom) / H * n) + 2);
+    if (x1 <= x0 || y1 <= y0) return false;   // off the map: nothing to redraw
+    if ((x1 - x0) * (y1 - y0) > n * n / 3) return 'full';   // most of it: as cheap to draw it all
+    const ux0 = cam.left + x0 / n * W, ux1 = cam.left + x1 / n * W, uy0 = cam.bottom + y0 / n * H, uy1 = cam.bottom + y1 / n * H;
+    const bg = scene.background, override = scene.overrideMaterial, auto = renderer.autoClear, shadow = renderer.shadowMap?.enabled, mask = cam.layers.mask;
+    let k = 0;
+    try {
+      for (const list of [statics, dynamic]) for (const o of list) {
+        if (o.layers.isEnabled(DYN_LAYER) || !o.castShadow) continue;
+        const g = o.geometry, s = o.isInstancedMesh ? (o.boundingSphere ?? (o.computeBoundingSphere(), o.boundingSphere)) : (g.boundingSphere ?? (g.computeBoundingSphere(), g.boundingSphere));
+        sphere.copy(s).applyMatrix4(o.matrixWorld); v.copy(sphere.center).applyMatrix4(cam.matrixWorldInverse);
+        const r = sphere.radius + 0.5;   // slack for vertex wind in the depth shaders (leaves, grass)
+        if (v.x + r < ux0 || v.x - r > ux1 || v.y + r < uy0 || v.y - r > uy1) continue;
+        const e = entries.get(o), w = regionSwaps[k] ??= {}; k++; w.o = o; w.material = o.material;
+        o.layers.enable(REGION_LAYER); swapIn(o, w);
+        if (list === dynamic) { e.inBase = !!e.visible; e.baseBox = boxOf(o); }
+      }
+      for (const l of lights) l.layers.enable(REGION_LAYER);   // the same lights as a full redraw: the same depth programs
+      scene.background = scene.overrideMaterial = null; renderer.autoClear = true;
+      if (renderer.shadowMap) renderer.shadowMap.enabled = false;
+      cam.layers.set(REGION_LAYER);
+      base.scissor.set(x0, y0, x1 - x0, y1 - y0); base.scissorTest = true;   // the clear and the draws stay inside the rect
+      renderer.setRenderTarget(base); renderer.render(scene, cam);
+    } finally {
+      base.scissorTest = false; base.scissor.set(0, 0, n, n);
+      cam.layers.mask = mask; renderer.autoClear = auto; scene.background = bg; scene.overrideMaterial = override;
+      if (renderer.shadowMap) renderer.shadowMap.enabled = shadow;
+      for (const l of lights) l.layers.disable(REGION_LAYER);
+      for (let i = 0; i < k; i++) { const w = regionSwaps[i]; w.o.material = w.material; w.o.layers.disable(REGION_LAYER); }
+    }
+    stats.partialRenders++; stats.regionDraws = k;
+    return true;
+  };
   const refresh = (full = false) => {
     if (classifyDirty) classify();
     const prev = renderer.getRenderTarget(), face = renderer.getActiveCubeFace?.(), mip = renderer.getActiveMipmapLevel?.(), t0 = performance.now();
     try {
       const cam = sync();
-      if (full || staticDirty) { draw(base, cam, true); staticDirty = false; stats.staticRenders++; stats.staticMs = +(performance.now() - t0).toFixed(1); }
+      let redrawn = false;
+      if (full || staticDirty) { fullBase(cam); redrawn = true; }
+      else if (region || foldDue) { const r = drawRegion(cam); if (r === 'full') fullBase(cam); redrawn = r !== false; }
+      if (redrawn) { stats.staticRenders++; stats.staticMs = +(performance.now() - t0).toFixed(1); }
       copyBase();
       stats.hot = dynamic.reduce((n, o) => n + o.layers.isEnabled(DYN_LAYER), 0);
       if (stats.hot) draw(rt, cam, false);
@@ -171,6 +243,8 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
       for (const e of entries.values()) e.pending = false;
     } finally { renderer.setRenderTarget(prev, face, mip); }
   };
+  // the shader hook a material's depth copy runs (its vertex deformation), once per material
+  const hooks = new WeakMap(), hookOf = m => { if (!m) return null; let h = hooks.get(m); if (h === undefined) { h = ownShader(m).compile ?? null; hooks.set(m, h); } return h; };
   // Visibility (LOD levels are three's to switch: not a change), world matrices (doors, toggles, carried objects and
   // parent transforms), skin, morph and instance data, geometry and material changes. Snapshots are reused.
   const changedArray = (e, key, a) => {
@@ -196,9 +270,12 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
     if (ms.length !== n) { ms.length = n; changed = true; }
     for (let i = 0; i < n; i++) {
       const m = multi ? o.material[i] : o.material, a = ms[i] ??= {};
-      // what the depth pass reads (not the version: environment maps and the like recompile without changing depth)
-      if (a.m !== m || a.alpha !== m?.alphaTest || a.visible !== m?.visible || a.map !== m?.map || a.alphaMap !== m?.alphaMap || a.side !== (m?.shadowSide ?? m?.side)) {
-        a.m = m; a.alpha = m?.alphaTest; a.visible = m?.visible; a.map = m?.map; a.alphaMap = m?.alphaMap; a.side = m?.shadowSide ?? m?.side; changed = true;
+      // what the depth pass reads (not the version: environment maps and the like recompile without changing depth; not
+      // the material object either: the hover highlight swaps in a tinted copy with the same shader hook, and counting
+      // that as motion redrew every still caster each time the crosshair crossed a seat)
+      const hook = hookOf(m);
+      if (a.hook !== hook || a.alpha !== m?.alphaTest || a.visible !== m?.visible || a.map !== m?.map || a.alphaMap !== m?.alphaMap || a.side !== (m?.shadowSide ?? m?.side) || a.disp !== m?.displacementMap) {
+        a.hook = hook; a.alpha = m?.alphaTest; a.visible = m?.visible; a.map = m?.map; a.alphaMap = m?.alphaMap; a.side = m?.shadowSide ?? m?.side; a.disp = m?.displacementMap; changed = true;
       }
     }
     return changed;
@@ -219,7 +296,7 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
       // ambient: back into base as a snapshot and no longer a reason to refresh, so the soft shadows and the light
       // shafts' history can settle. Pets and the visitor never do.
       if (!e.always && now - e.last <= 0.5 && now - e.first > (promoted.has(o) ? 2 : 20)) { e.ambient = true; stats.ambient++; staticDue = 0.5; continue; }
-      if (c && !e.hot) { heat(o, e, true); if (promoted.has(o)) staticDue = 0.5; else staticDirty = true; }   // must leave base now
+      if (c && !e.hot) { heat(o, e, true); if (promoted.has(o)) { staticDue = 0.5; fullDue = true; } else leaveBase(e); }   // must leave base now
       // cooled down 2 s after its last change: folded back into base by one redraw a second later (keeps refreshes cheap)
       if (c) e.cold = false; else if (e.hot && !e.always && !e.cold && now - e.last > 2) { e.cold = true; staticDue = Math.max(staticDue, 1); }
       settled ||= !!(e.moving && !c && e.pending); e.moving = c; e.pending ||= c; moving ||= c;
@@ -229,9 +306,9 @@ function createSunPCSS(renderer, scene, sun, size = 4096) {
       const o = statics[cursor++ % statics.length], e = entries.get(o);
       // tracked and hot from now on; base is redrawn without it once promotions pause for half a second. Plants sway
       // on their own clock: a snapshot, as before (their near/far copies swap too), never promoted.
-      if (changed(o, e) && !e.plant) { promoted.add(o); e.hot = true; classifyDirty = true; staticDue = 0.5; moving = true; e.moving = e.pending = true; }
+      if (changed(o, e) && !e.plant) { promoted.add(o); e.hot = true; classifyDirty = true; staticDue = 0.5; fullDue = true; moving = true; e.moving = e.pending = true; }
     }
-    if (staticDue > 0 && (staticDue -= dt) <= 0) { staticDirty = true; moving = true; }
+    if (staticDue > 0 && (staticDue -= dt) <= 0) { if (fullDue || !PARTIAL_BASE) staticDirty = true; else foldDue = true; fullDue = false; moving = true; }
     dirty ||= moving; clock += dt;
     if (dirty && (clock >= 0.05 || settled || (!moving && wasMoving))) refresh();
     wasMoving = moving;

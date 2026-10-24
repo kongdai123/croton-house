@@ -4,7 +4,7 @@
 // hq: Apple M-series Max / Ultra. laptop: other Apple M GPUs, NVIDIA and every unrecognised desktop GPU.
 // mobile: iPhone, iPad (including iPadOS reporting a Mac with touch points), coarse pointers, software rasterisers.
 export const TIERS = {
-  hq: { name: 'hq', contact: true, puddles: true, shafts: false, taa: false, pixelRatio: 2, shadowMap: 4096, hqShadow: true, gtao: { samples: 16, pd: 16 }, smaa: true, msaa: 4, ssr: true, anisotropy: 16, grass: 'hq', mirrors: true, textureCap: Infinity },
+  hq: { name: 'hq', contact: true, puddles: true, shafts: true, taa: false, pixelRatio: 2, shadowMap: 4096, hqShadow: true, gtao: { samples: 16, pd: 16 }, smaa: true, msaa: 4, ssr: true, anisotropy: 16, grass: 'hq', mirrors: true, textureCap: Infinity },
   laptop: { name: 'laptop', contact: true, puddles: false, shafts: false, taa: false, pixelRatio: 1.25, shadowMap: 2048, hqShadow: true, gtao: { samples: 6, pd: 6 }, smaa: false, msaa: 2, anisotropy: 4, grass: 'laptop', mirrors: false, textureCap: 2048 },
   mobile: { name: 'mobile', contact: false, puddles: false, shafts: false, taa: false, pixelRatio: 1, shadowMap: 1024, hqShadow: false, gtao: null, smaa: false, msaa: 0, anisotropy: 1, grass: 'fast', mirrors: false, textureCap: 1024 },
 };

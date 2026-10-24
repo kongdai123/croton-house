@@ -127,6 +127,27 @@ English, mist, wet ground and puddles, a real camera (focal length on full frame
 focus), lens finish, sizes to 4K, PNG export and a gentle 30% GPU option. It remains the stills tool. Its sky and
 mood presets should drive the bake slots, so a mood looks the same in a still and in the live view.
 
+## Volumetric light and TAA, built 2026-10-24
+
+**Volumetric light** (`web/src/volumetric.js`; the media per slot in `web/src/volumetric_slots.js`): on for the hq tier,
+`?shafts=0` turns it off, `?shafts` turns it on for another tier. One pass in the linear chain after GTAO and before the
+OutputPass (inside TAA's internal chain when TAA is on), so auto exposure meters it and the tone curve maps it.
+- Single scattering of the live sun through the readable PCSS sun depth (`lightmap.js` `createSunPCSS`, 2 cm texels over
+  the lot; glass casts no sun shadow there: scene invariant `glass-casts-no-sun`), one jittered tap per step, 32 steps
+  per ray at half resolution, a reprojected history (it follows walking and turning, depth rejects what was hidden, a
+  jump drops it) and a depth-aware upsample.
+- Media: outdoors a haze plus a ground mist falling off with height (sunrise after rain: ~250 m visibility at the ground,
+  2.5 m deep), lit by the sun and by the sky (the slot sky's mean radiance, read from its HDR, plus the ground's share);
+  indoors dust (0.016 / m at the low sun, 0.006 at noon), lit by the sun only: its in-scattering of the room light and
+  its extinction of it cancel, so only the beam is added (no veil, no probe lookups through walls). Two-lobe
+  Henyey-Greenstein phase functions. The media and the sky light follow the slot crossfade (`lightmap_slots.js`
+  `fading`). At dusk the sun is down: no beams, a faint sky-lit haze outdoors.
+- Where the sun gets in: at sunrise (az 58, el 8) through the north french doors and sliders and the east windows (beams
+  in the office, dining room and bedroom B, seen toward the windows); at golden hour (az 255, el 7) the neighbours'
+  trees and fences keep the low sun off the west and south openings, so the beams are outdoors (shafts through the
+  palms, the haze around the sun); at noon short beams beside the south windows.
+- Cost on an RTX 2080 Ti at 2560 x 1440 (GPU timer queries, same run): 0.53-0.87 ms with MSAA, 0.42-0.63 ms under TAA.
+
 ## Sources
 
 - WebGPU ray tracing status: [gpuweb roadmap notes](https://kaelan.fyi/research/webgpu-future-roadmap/),

@@ -113,6 +113,8 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
   const runtime = {
     uniforms, wet, available, resolution: initial.resolution,
     get params() { return params; }, get desired() { return queue.desired; }, get name() { return current.name; },
+    // the fade in progress, read-only (the volumetric pass blends its media and sky light with it), or null
+    get fading() { return fading ? { name: fading.data.name, sky: fading.data.sky, t: blend.value } : null; },
     request(name, onProgress) {
       if (onProgress) progressListeners.add(onProgress);
       return queue.request(name).finally(() => progressListeners.delete(onProgress));

@@ -343,6 +343,20 @@ invariant('lighting-manifest-complete', 'every visible mesh has a lighting manif
   invariant('no-name-based-lighting', 'no lighting decision keyed on a name, id or coordinate outside the declarations (lighting_roles.js manifest)', off);
 }
 
+// ---- 12. glass never blocks the sun --------------------------------------------------------------------------------------------
+// Baked mode (lightmap.js) makes every lightmapped unit cast and clears castShadow where the manifest's sun.cast is false.
+// The sun depth draws every material group of a casting mesh, so a mesh mixing glass with an opaque frame would stop the
+// sunbeams (volumetric.js) and the sun patches at its panes; sun.cast is decided by the first material alone.
+{
+  const off = [];
+  for (const { node: o } of ix.meshes) {
+    const ms = mats(o); if (!visible(o)) continue;
+    const r = w.roles.meshLighting(o), casts = r.bake === 'lightmap' || (r.sun.cast !== false && o.castShadow);
+    if (casts && ms.some(m => w.roles.lightingOf(m)?.castsSun === false)) off.push(ix.pathOf(o) + ' [' + ms.map(m => m.name || m.type).join(', ') + ']');
+  }
+  invariant('glass-casts-no-sun', 'no mesh drawn into the sun depth in baked mode carries a material that lets the sun through (glass, presentation)', off);
+}
+
 // ---- report ---------------------------------------------------------------------------------------------------------------------------
 const known = existsSync(KNOWN) ? JSON.parse(readFileSync(KNOWN, 'utf8')) : { invariants: {} };
 if (process.env.UPDATE_KNOWN) {

@@ -28,6 +28,8 @@ import { applyLightmaps } from './lightmap.js';
 import { createContact } from './contact.js';
 import { bakedRequested, bakedCapabilityError } from './baked_mode.js';
 import { createGuard } from './startup_guard.js';
+import { createTAA } from './taa.js';
+import { featureWanted } from './volumetric_slots.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -100,6 +102,9 @@ const lighting = createLighting(renderer, scene, camera, house, preset);
 if (bakedWanted && !lighting.renderConfig.hdr) bakedUnavailable = 'HDR framebuffer unavailable';
 const { fixtures, composer, gtao } = lighting;
 post = composer; fitView();
+// TAA (taa.js): ?taa[=internal scale] / ?taa=0, else the tier's flag (a number: the scale). It takes over the linear chain
+// before any other pass joins it (contact, volumetric light, local adaptation find it as lighting.taa).
+if (lighting.renderConfig.hdr && featureWanted(location.search, 'taa', preset)) soft('taa', () => { lighting.taa = createTAA(renderer, camera, lighting, Q.get('taa') || preset.taa); });
 async function applyTime() {
   if (baked) state.dusk = baked.slotName === 'dusk';
   await soft('lighting.applyTime', () => lighting.applyTime(baked ? false : state.dusk));   // baked slots own their sky, sun and physical lamp level
@@ -155,6 +160,7 @@ if (bakedWanted && !state.bakedFallback) {
     state.bakedSlots = baked.availableSlots; state.bakedSlot = baked.slotName;
   } catch (err) { state.bakedFallback = err.message; }
 }
+if (lighting.taa && baked) lighting.taa.noise = baked.sunShadow.uniforms.uSunFrame;   // PCSS rotations integrate under TAA
 await step(0.92, 'controls');
 
 // ---- Player, interaction, UI systems ----

@@ -5,10 +5,16 @@
 //   node record.mjs --site <dir> --out <framesDir> [--script choreography.js|twitter.js] [--lang zh|en] [--fps 30]
 //                   [--every N] [--size 1920x1080] [--dsf 1] [--clean] [--shots a,b] [--stills poses.json]
 //                   [--query 'tier=hq&lmres=full'] [--max seconds] [--tour-slot noon|sunrise|golden] [--no-hearts]
+//                   [--png-frames n,n] [--wall-clock]
 // --every N keeps one frame in N (a quick preview of the whole film: compositions, timings).
 // --clean hides the site's interface (top bar, plan, crosshair, labels, captions, cursor) with film-only CSS.
 // --dsf 2 renders the page at a device scale factor of 2 (the site caps its drawing buffer at 2560 x 1440) and keeps
 //   CSS-pixel screenshots, so every frame is supersampled.
+// --png-frames 30,1290 also writes those kept frames as lossless PNG (p00030.png ...), for posters.
+// The page's performance.now() follows the frame clock once it is ready (each renderAt(t) draws at the base time + t):
+// render-path code that reads the wall clock (TAA's stall reset, the puddles' ripples) would otherwise see the
+// recorder's own pace, 100-300 ms a frame with a screenshot, and drop TAA's history on every kept frame. --wall-clock
+// turns this off.
 // Two choreography protocols:
 //   - choreography.js (the 2:50 demo film): an async script on the demonstration's frame clock; the recorder steps
 //     renderAt until it is done.
@@ -33,6 +39,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = opt('--script', 'choreography.js'), SCRIPT_PATH = isAbsolute(SCRIPT) ? SCRIPT : join(HERE, SCRIPT);
 const SHOTS = opt('--shots') ? opt('--shots').split(',') : null;
 const STILLS = opt('--stills') ? JSON.parse(await readFile(opt('--stills'), 'utf8')) : null;
+const PNG_FRAMES = new Set((opt('--png-frames') || '').split(',').filter(Boolean).map(Number));
 if (!ROOT || !OUT) { console.log('usage: node record.mjs --site <dir> --out <dir> [--script twitter.js] [--fps 60] [--every N] [--clean]'); process.exit(1); }
 await mkdir(OUT, { recursive: true });
 
@@ -53,6 +60,10 @@ await ctx.addInitScript(({ lang, options }) => {
   localStorage.setItem('croton-lang', lang); localStorage.setItem('croton-music', '0');
   Element.prototype.requestPointerLock = function () { return Promise.resolve(); };
   window.__videoOptions = options;
+  // the frame clock as performance.now() (see the header); the real clock until the recorder sets a time
+  const realNow = performance.now.bind(performance); let virtualNow = null;
+  performance.now = () => virtualNow ?? realNow();
+  window.__filmClock = (ms) => { virtualNow = ms; };
 }, { lang: LANG, options: { fps: FPS, shots: SHOTS, stills: STILLS, hearts: !flag('--no-hearts'), tourSlot: opt('--tour-slot') } });
 const page = await ctx.newPage();
 const errors = [];
@@ -71,14 +82,27 @@ await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
 await new Promise(r => setTimeout(r, 1500));
 const info = await page.evaluate(() => { const A = window.__app; return { tier: A.state.tier, quality: A.state.quality, slot: A.state.bakedSlot, slots: A.state.bakedSlots, baked: A.state.baked, fallback: A.state.bakedFallback ?? null, autoExposure: !!A.lighting.autoExposure, taa: !!A.lighting.taa, pixelRatio: A.renderer.getPixelRatio() }; });
 console.log('loaded in', ((Date.now() - t0) / 1000).toFixed(0), 's', JSON.stringify(info));
+if (!flag('--wall-clock')) await page.evaluate(() => {
+  const base = performance.now() - window.simTime() * 1000, renderAt = window.renderAt;
+  window.renderAt = (t) => { window.__filmClock(base + t * 1000); renderAt(t); };
+});
+// QA: count TAA history resets (a reset frame is a single jittered sample, aliased); a kept frame should only have one
+// at a cut, never inside a shot
+await page.evaluate(() => {
+  const taa = window.__app.lighting.taa; window.__taaResets = 0;
+  if (taa) { const reset = taa.reset.bind(taa); taa.reset = () => { window.__taaResets++; reset(); }; }
+});
 // film-only: no interface on screen (the site's HUD, landing and warm-up screens, the cursor); the choreography's own
 // title layer (#film) stays
 if (CLEAN) await page.addStyleTag({ content: 'body > :not(#gl):not(#film) { display:none !important } *, *::before, *::after { cursor:none !important }' });
 await page.addScriptTag({ path: SCRIPT_PATH });
 const timeline = await page.evaluate(() => !!window.__video?.timeline);
-const shot = (frame) => page.screenshot({ path: join(OUT, `f${String(frame).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 95, scale: 'css' });
+const shot = async (frame) => {
+  await page.screenshot({ path: join(OUT, `f${String(frame).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 95, scale: 'css' });
+  if (PNG_FRAMES.has(frame)) await page.screenshot({ path: join(OUT, `p${String(frame).padStart(5, '0')}.png`), type: 'png', scale: 'css' });
+};
 
-const steps = [], holds = {};
+const steps = [], holds = {}, taaResetsKept = [];
 let frame = 0, tHold = 0, drawn = 0;
 const tStart = Date.now();
 const waitHold = async (hold) => {
@@ -98,8 +122,9 @@ if (timeline) {
       if (hold) return { hold };
       const r = V.step(dt);
       if (r.done) return r;
+      const before = window.__taaResets;
       window.renderAt(window.simTime() + dt);
-      return r;
+      return { ...r, taaReset: window.__taaResets > before };
     }, { dt: 1 / FPS, force });
     force = false;
     if (s.hold) { if (!(await waitHold(s.hold))) force = true; continue; }
@@ -109,6 +134,7 @@ if (timeline) {
     drawn++;
     if (!s.save) continue;
     if (s.shot !== lastShot) { steps.push({ t: +(frame / FPS).toFixed(3), frame, shot: s.shot }); lastShot = s.shot; console.log(`${(frame / FPS).toFixed(2)} s  shot ${s.shot}`); }
+    if (s.taaReset) taaResetsKept.push(frame);
     if (frame % EVERY === 0) await shot(frame);
     frame++;
     if (frame % (10 * FPS) === 0) console.log(`frame ${frame} (${(frame / FPS).toFixed(0)} s of film, ${drawn} drawn) in ${((Date.now() - tStart) / 1000).toFixed(0)} s`);
@@ -144,6 +170,7 @@ if (timeline) {
     if (frame > MAX_SECONDS * FPS) { console.log('film longer than', MAX_SECONDS, 's: stopping'); break; }
   }
 }
-await writeFile(join(OUT, 'meta.json'), JSON.stringify({ fps: FPS, frames: frame, every: EVERY, size: [W, H], dsf: DSF, lang: LANG, query: QUERY, script: SCRIPT, shots: SHOTS, stills: STILLS?.map(s => s.name), gpu, info, steps, holds, errors }, null, 1));
+await writeFile(join(OUT, 'meta.json'), JSON.stringify({ fps: FPS, frames: frame, every: EVERY, size: [W, H], dsf: DSF, lang: LANG, query: QUERY, script: SCRIPT, shots: SHOTS, stills: STILLS?.map(s => s.name), gpu, info, steps, holds, taaResetsKept, errors }, null, 1));
+if (taaResetsKept.length) console.log('TAA history reset on kept frames', taaResetsKept.slice(0, 40).join(' '), taaResetsKept.length > 40 ? '...' : '');
 console.log('done', frame, 'frames', (frame / FPS).toFixed(1), 's of film in', ((Date.now() - tStart) / 1000).toFixed(0), 's; errors', errors.length);
 await browser.close(); server.close();

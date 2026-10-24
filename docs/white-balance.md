@@ -23,10 +23,11 @@ chromatic adaptation; neither is a grade.
    crossfade's next volume blended in).
    - **Indoors: the light on the surfaces in view.** Five rays across the view (-30..+30 degrees about the horizontal
      view direction, at eye height) run to the first plan wall piece (openings let them through) or to where they leave
-     the room's side of the house's outline (a window), at most 8 m. 0.4 m short of there the probe irradiance facing back
-     along the ray, evaluated as the shader lights a probe-lit surface (`probeEvalL1`), is the light on a white wall there;
-     the five are summed, so brighter walls weigh more.
-   - **Outdoors: the mean light at the eye** (the probe's L0 at the eye and 1 m and 2 m ahead): the sky is much of the view.
+     the room's side of the house's outline (a window), at most 8 m. 0.4 m short of there the probe irradiance facing
+     back along the ray, evaluated as the shader lights a probe-lit surface (`probeEvalL1`), is the light on a white wall
+     there; the five are summed, so brighter walls weigh more.
+   - **Outdoors: the mean light at the eye** (the probe's L0 at the eye and 1 m and 2 m ahead): the sky is much of the
+     view.
    - In a doorway the two colours blend at equal luminance by the plan's indoor weight (`plan.indoorWeight`).
    The first version used the eye's mean light indoors too. Measured against the walls of rendered frames (below) it
    missed by up to 165 mired: a camera beside a lamp-lit doorway (the primary bedroom next to the kitchen at golden hour)
@@ -43,8 +44,9 @@ chromatic adaptation; neither is a grade.
 3. **Partial von Kries adaptation in CAT16 cone space** towards the display white (D65), per cone
    `gain = D * white / illuminant + 1 - D` at equal luminance. D = 0 is the identity, D = 1 makes the illuminant neutral;
    at any D the illuminant keeps its luminance, so the auto exposure's meter is unaffected. The degree is `0.8` indoors
-   (an interior photographer's white balance: under the lamps a white wall displays warm-white, about 178/166/158, instead of
-   208/150/93) and `0.4` outdoors (golden hour stays golden, blue hour stays blue), blended by the indoor weight.
+   (an interior photographer's white balance: under the lamps a white wall displays warm-white, about 178/166/158,
+   instead of 208/150/93; 0.75 read cream, 0.85 almost daylight-neutral) and `0.4` outdoors (golden hour stays golden,
+   blue hour stays blue), blended by the indoor weight.
 4. **Eased in time**: temperature (in mired), tint and degree glide with a time constant of 1.5 s, frame-rate
    independent; a jump of more than 1.5 m in one frame (a teleport, a tour cut) snaps, as do the first frame and a
    restored WebGL context.
@@ -55,7 +57,8 @@ chromatic adaptation; neither is a grade.
 ## When
 
 On with the auto exposure, i.e. what a visitor sees. Off with `?wb=0`, and never with a fixed exposure (`?capture`,
-`?fixedexposure`, `?rawtone`, `autoexp=0`): gate (c)'s fixed set stays comparable with Cycles, bit for bit as before.
+`?fixedexposure`, `?rawtone`, `autoexp=0`): gate (c)'s fixed set stays comparable with Cycles (AgX's input matrix is
+then exactly IN; fixed frames of this build and of master differ only by the gate's run-to-run noise, 0.08/255 mean).
 `?wbd=<indoor>,<outdoor>` overrides the degrees (calibration). `window.__app.lighting.whiteBalance.state` shows the
 illuminant, its raw and clamped temperature and tint, the degree, the matrix and the CPU time of the last update.
 
@@ -73,4 +76,12 @@ recalibration's balance): Blender AgX inverted on hand-picked wall boxes, over t
 (`web/tools/wb_walls.py`). `test_white_balance_bake.mjs` holds the adapting illuminant to them (mean under 12 mired, the
 worst under 80: the office at golden hour with the recalibrated lamps, -69, where the dining pendant lights the measured
 wall more than the walls in view) while the bake is the one measured; after a rebake it prints the error and how to
-re-measure instead.
+re-measure instead (the frames: a gate (c) visitor run of those cameras with `&wb=0` appended to the page query).
+
+## Known issue: lamp surfaces glow cooler than their light
+
+The lamp surfaces' emissive colours (`0xfff4e6` .. `0xffc98a`, about 5500-3300 K; the dining and office paper lanterns
+`0xffe6bf`, about 4300 K) are cooler than the light the bake gives their lamps (3000 K, about 2750 K after the bounce,
+encoding.json's group colours). Before, a lantern read white against an orange room; white-balanced to the room, it
+reads light blue. The class fix is the glow's colour from its group's light (lamp_groups.js applyGlow, or the
+fixtures' declared colour temperature), not a camera setting.

@@ -2,7 +2,7 @@
 // the array layout (single slot: daylight then lamps; slots: both halves then lamps), the weights from the lamp groups'
 // levels by group name, and the fallback when the layers do not match the probes.
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

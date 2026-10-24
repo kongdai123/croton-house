@@ -429,7 +429,7 @@ export function createPet(opts = {}) {
 
   // ---- animation state
   const W = Object.fromEntries(MODES.map((m) => [m, m === 'idle' ? 1 : 0])), clk = Object.fromEntries(MODES.map((m) => [m, 0]));
-  const poses = Object.fromEntries(MODES.map((m) => [m, new Float32Array(NP)])), out = new Float32Array(NP), Q = new Float32Array(NP);
+  const poses = Object.fromEntries(MODES.map((m) => [m, new Float32Array(NP)])), out = new Float32Array(NP);
   let T = 0, phase = 0, wagPh = 0, wt = 0, lastMode = 'idle', landT = 9, baseY = 0, haveBase = false, petKind = 0, petSide = 1, belly = 0, lookTarget = null;
   const brain = { next: 1.2, rnd: rng(opts.seed ?? 5), ty: 0, tp: 0, tr: 0, ts: 0, ta: 0, tw: 0.35, yaw: new Spring(0.9, 1), pitch: new Spring(0.9, 1), roll: new Spring(0.7, 1), sniff: new Spring(0.8, 1), alert: new Spring(0.5, 1), wag: new Spring(0.5, 1) };
   brain.wag.x = 0.35;

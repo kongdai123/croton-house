@@ -10,7 +10,7 @@ await page.goto('http://127.0.0.1:8780/tools/dog_viewer.html?auto=1&w=640&h=480'
 await page.waitForFunction(() => window.__ready === true);
 const draw = await page.evaluate(() => window.show({ view: 'q34' }));
 console.log('draw calls (incl. 1 ground):', draw.calls, ' triangles:', draw.tris, ' counts:', JSON.stringify(draw.counts));
-const bones = await page.evaluate(() => { const p = window.show({}); return null; });
+await page.evaluate(() => { window.show({}); });
 console.log('foot slide (m/s of a planted paw, world space):');
 for (const v of [0.2, 0.35, 0.6, 0.8, 0.9, 1.0]) {
   const r = await page.evaluate((v) => window.slide(v), v);

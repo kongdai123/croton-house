@@ -1,7 +1,7 @@
 // bedrooms — primary suite A (owner-built whitewashed pine platform bed), bedroom B (acacia bed), bedroom 3 (pine bed),
 // closet louvered bifolds, walnut bar/shelf cabinet, rugs, side tables. Refs: refs/bedrooms/ (g26-g35, rednote build photos).
 // Local frame: origin on the floor at the footprint centre, +Z = front (a bed's foot points to +Z, headboard at -Z).
-import { THREE, M, box, cyl, lathe, extrude, tube, group, at, repeat, legs, addSeat, setMovable, autoCollider, setCollider, describe, sphere, declare } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, group, addSeat, autoCollider, setCollider, describe, sphere, declare } from '../kit.js';
 import { wood, wood as woodBase, merge, vc, pillowMesh, ruffle, drape, book, cup, mats, rng, projectUV } from './bedrooms_parts.js';
 
 const PI = Math.PI;

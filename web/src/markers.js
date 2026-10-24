@@ -24,7 +24,6 @@ export class Markers {
     for (const p of rednote.posts) { const s = rednote.spotOf(p.slug); if (s) sources.push({ kind: 'rn', post: p, spot: s, target: { ...s, kind: 'rn', id: p.slug }, src: `assets/rednote/${p.media[0] || `${p.slug}_cover.jpg`}` }); }
     for (const v of viewpoints.targets) if (v.quality !== 'poor') sources.push(this.sourceOf(v));
     for (const kind of ['rn', 'pano', 'photo']) {
-      const stored = localStorage.getItem(STORE[kind]) ?? (kind === 'rn' ? localStorage.getItem('croton-pins') : null);
       this.enabled[kind] = false;   // every visit starts with the pins off (the stored choice is not restored)
       const root = new THREE.Group(); root.name = `${kind}-pins`; this.root.add(root);
       const pins = sources.filter(p => p.kind === kind), color = COLORS[kind];

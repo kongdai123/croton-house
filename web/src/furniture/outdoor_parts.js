@@ -137,7 +137,7 @@ function seamNormals(g, cols, rows, rowsWrap = false) {
 // (phi = 0 is the front, +Z), with a rim height top(phi) and foot height bottom(phi); both rim and foot are rounded.
 // Used for the wicker barrel chair (rim sweeps down at the front) and the moulded patio armchair (legs at corners).
 export function ringShell({ outer, top, bottom, t = 0.05, nU = 96, nV = 18, nc = 6, botSquash = 0.4, tile = WEAVE_TILE }, mat) {
-  const cols = nU + 1, sec = [];
+  const cols = nU + 1;
   const nrm = (phi, y) => { const e = 1e-3, [x1, z1] = outer(phi - e, y), [x2, z2] = outer(phi + e, y); const tx = x2 - x1, tz = z2 - z1, l = Math.hypot(tx, tz) || 1; return [-tz / l, tx / l]; };
   const pos = [], uvs = [];
   let circ = 0; { const ym = (top(Math.PI) + bottom(Math.PI)) / 2; let [px, pz] = outer(-Math.PI, ym); for (let i = 1; i <= 64; i++) { const [x, z] = outer(-Math.PI + (i / 64) * 2 * Math.PI, ym); circ += Math.hypot(x - px, z - pz); px = x; pz = z; } }

@@ -5,7 +5,7 @@
 // fall exactly on a rule's boundary (-3.5, 3.97, 0.42, ...) therefore exercise the <= / < choice too.
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -48,7 +48,7 @@ function glslOutside(src) {
 }
 
 export function jsClassifiers(w) {
-  const H = w.house, T = w.T;
+  const H = w.house;
   // the wall boxes the light-probe volume tests visibility against (lightmap.js probeWalls, scene frame), at 0.95 m
   const probeWalls = w.probeWalls(w.probeWallPieces).filter(b => b[2] <= 0.95 && 0.95 <= b[3]);
   const rect = (r, x, y) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;

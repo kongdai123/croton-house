@@ -18,7 +18,7 @@ try {
   const context = deep;
   const element = () => ({ getContext: () => context, addEventListener() {}, removeEventListener() {}, setAttribute() {}, style: {} });
   globalThis.document = { createElement: element, createElementNS: element };
-  const { T, stillParts, batchStatic, decor, outdoor, garage, plants } = await import(pathToFileURL(file));
+  const { T, stillParts, batchStatic, decor, outdoor, garage } = await import(pathToFileURL(file));
   const meshes = r => { const out = []; r.traverse(o => { if (o.isMesh) out.push(o); }); return out; };
   const cases = { cellularShade: decor.cellularShade, curtainSheer: decor.curtainSheer, umbrella: outdoor.umbrella, firePit: outdoor.firePit, garageDoorOpen: garage.garageDoorOpen };   // plants paint canvases this mock cannot hold: checked in the browser
   const report = {};

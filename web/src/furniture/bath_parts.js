@@ -318,7 +318,7 @@ export function pingPongTable() {
 // bar pulls, cubby grid of lighter weathered wood below, slatted sides; white double-handled jug with dried flowers.
 export function consoleRustic() {
   const W = 1.2, D = 0.4, H = 0.8, root = new THREE.Group();
-  const dk = L.woodDark(), dkH = L.woodDarkH(), lt = L.woodLight(), ltH = L.woodLightH();
+  const dkH = L.woodDarkH(), lt = L.woodLight(), ltH = L.woodLightH();
   const topT = 0.045, legW = 0.06;
   root.add(box(W, topT, D, dkH, { r: 0.008, y: H - topT, bottom: true }));
   root.add(legs(W - 0.02, D - 0.02, legW / 2, () => group(box(legW, H - topT, legW, lt, { r: 0.006, bottom: true }))));

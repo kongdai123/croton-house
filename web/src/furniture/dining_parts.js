@@ -27,10 +27,10 @@ export function boxUV(mesh, grain = 'y', off = [0, 0], scale = 1) {
   }
   uv.needsUpdate = true; return mesh;
 }
-let woodSeed = 1; const wr = rng(99);
+const wr = rng(99);
 // Lift a root so its lowest point sits on y = 0 (tilted round feet dip a few mm below otherwise).
 export function ground(root) { root.updateMatrixWorld(true); const b = new THREE.Box3().setFromObject(root); if (b.min.y < 0) for (const c of root.children) c.position.y -= b.min.y; return root; }
-export function wood(mesh, grain = 'y') { woodSeed++; return boxUV(mesh, grain, [wr() * 3, wr() * 3]); }
+export function wood(mesh, grain = 'y') { return boxUV(mesh, grain, [wr() * 3, wr() * 3]); }
 
 // Sweep a closed 2-D section along a 3-D path with parallel-transport frames. sectionAt(t) -> [[a,b],...] where a is
 // along the frame normal (starts as `up`), b along the binormal; points go counter-clockwise in the (b,a) plane.

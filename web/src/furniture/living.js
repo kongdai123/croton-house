@@ -2,7 +2,7 @@
 // window seat (towers + slatted alcove + cubby bench), jute rug, small pine side bench, spare pillows.
 // Frame per kit.js: origin on the floor at the footprint centre, +Z = front.
 import { THREE, M, cyl, lathe, extrude, group, addSeat, setMovable, setCollider, autoCollider, describe, shadow } from '../kit.js';
-import { rng, metricUV, pineTexture, PINE_TILE, bake, weaveMaps, wbox, wspan, blob, blobEquator, pipe, rrect, rrectXZ, bookRow, bookStack } from './living_parts.js';
+import { rng, metricUV, pineTexture, bake, weaveMaps, wbox, wspan, blob, blobEquator, pipe, rrect, rrectXZ, bookRow, bookStack } from './living_parts.js';
 
 const once = (fn) => { let v; return () => (v ??= fn()); };
 const tint = (base, k, props = {}) => { const m = base.clone(); m.color.multiplyScalar(k); Object.assign(m, props); return m; };

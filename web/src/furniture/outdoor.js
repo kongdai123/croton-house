@@ -3,7 +3,7 @@
 // cinder-block stools, navy market umbrella), g37/g38/g39/g44 (white moulded patio armchairs), g03/g05/g06 (front yard:
 // low lumber platform bench, white pots, porch sconce), g43 (white rendered planters), rednote dusk shots (white urn).
 import { THREE, M, box, cyl, tube, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow, declare } from '../kit.js';
-import { ss, rng, wickerResin, WEAVE_TILE, pitSteel, galvanized, powderBlack, lumberTop, soil, concreteGrey, cinder, vinylShade, ash, charEnd, lumberPT, barkDark, cushionCream, navyDeep, renderWhite,
+import { ss, wickerResin, WEAVE_TILE, pitSteel, galvanized, powderBlack, lumberTop, soil, concreteGrey, cinder, vinylShade, ash, charEnd, lumberPT, barkDark, cushionCream, navyDeep, renderWhite,
   board, latheM, ringShell, strut, puffPillow, roundCushion, fireScreen, sconceAlpha, animatedToggle } from './outdoor_parts.js';
 
 const PI = Math.PI;
@@ -149,7 +149,7 @@ function wickerOttoman() {
 const boltGeo = new THREE.LatheGeometry([[0, 0], [0.0125, 0], [0.012, 0.002], [0.008, 0.0055], [0, 0.007]].map(([r, h]) => new THREE.Vector2(r, h)), 16);
 function bolt(x, y, z, nx, nz) { const m = shadow(new THREE.Mesh(boltGeo, galvanized())); m.position.set(x, y, z); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(nx, 0, nz)); return m; }
 function benchTable() {
-  const g = root(), H = 0.75, T = 0.045, L = 1.5, D = 0.5;
+  const g = root(), H = 0.75, T = 0.045, L = 1.5;
   // top: three weathered boards with 10 mm gaps, galvanized mending plates across the seams
   [-1, 0, 1].forEach((k, i) => g.add(board(L, T, 0.16, lumberTop(), { axis: 'x', r: 0.006, y: H - T / 2, z: k * 0.17, off: i * 0.31, tile: 0.8 })));
   for (const x of [-0.62, -0.2, 0.22, 0.6]) for (const z of [-0.085, 0.085]) g.add(box(0.05, 0.002, 0.035, galvanized(), { x, y: H, z, r: 0.0008, seg: 1 }));

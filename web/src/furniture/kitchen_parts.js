@@ -1,6 +1,6 @@
 // kitchen_parts — helpers, local materials and canvas textures for kitchen.js (2513 Croton Ave, 2025 remodel).
 // Shaker fronts, bar pulls, tile panels, world-scaled UVs, per-material mesh merging, appliance builders.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, declare } from '../kit.js';
+import { THREE, M, box, cyl, extrude, plane, group, declare } from '../kit.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // ---------- shared dimensions (metres) ----------

@@ -1,7 +1,7 @@
 // bath — three bathrooms (refs/bath g30 primary, g31/g34 hall, g36 guest) + garage / laundry (g48, g49).
 // Bathroom pieces live here; shared local materials and the garage pieces are in bath_parts.js.
 // Units metres; origin on the floor at the footprint centre; +Z = front; wall-mounted pieces have their back at -Z.
-import { THREE, M, box, cyl, lathe, extrude, tube, plane, group, at, repeat, setCollider, autoCollider, describe, sphere, torus, declare } from '../kit.js';
+import { THREE, M, box, cyl, lathe, extrude, tube, at, repeat, setCollider, autoCollider, describe, sphere, declare } from '../kit.js';
 import { L, PI, retile, rod, washerDryer, waterHeater, wireShelving, pingPongTable, consoleRustic, electricalPanel } from './bath_parts.js';
 
 const rrect = (x0, y0, x1, y1, r, n = 6) => {

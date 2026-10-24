@@ -1,5 +1,5 @@
 // decor.js plus a few small extras composed here (keeps the modeler's file untouched).
-import { THREE, M, box, plane, group, describe } from '../kit.js';
+import { THREE, box, group, describe } from '../kit.js';
 import { items as base } from './decor.js';
 import * as proc from '../proc.js';
 function redCanvas() {

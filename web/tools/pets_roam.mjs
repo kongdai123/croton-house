@@ -21,7 +21,7 @@ if (doors === 'open') {
   await page.waitForTimeout(2500);   // doors ease open in the frame loop; the pets' grid rebuilds once they settle
 }
 const res = await page.evaluate(({ minutes }) => {
-  const A = window.__app, P = A.pets, THREE = A.THREE;
+  const A = window.__app, P = A.pets;
   // colliders as the pets see them (walls, furniture, closed doors, movables, open leaves) minus the pets' own lot fences
   P.rebuild();
   const rects = P.colliders().filter(c => !/^pet-(lot|street)/.test(c.tag)).map(c => c.circle ? { x0: c.x - c.r * 0.7, x1: c.x + c.r * 0.7, z0: c.z - c.r * 0.7, z1: c.z + c.r * 0.7, tag: c.tag } : c);

@@ -1,7 +1,7 @@
 // GTA-style minimap: a round, heading-up radar in the corner drawn from the Zillow vector floor plan, with blips for
 // panoramas (blue), listing photos (green) and RedNote posts (red). M opens the full plan where every dot is clickable.
 import { THREE } from './kit.js';
-import { getLang, t } from './ui.js';
+import { getLang } from './ui.js';
 import { EXT_FP, pointInPoly, PATIO, COURT_A, COURT_B, WALK, DRIVE, PAD, PORCH, GARDEN, FRONT_BED } from './house.js';
 import { BEDS, SHELL, PAVED } from './layout.js';
 import { plan } from './plan.js';
@@ -66,7 +66,6 @@ export class Minimap {
   drawSite(c, X, Y, k, ms, view) {
     if (!this.site && this.plan) this.collectSite();
     const fill = (r, col) => { c.fillStyle = col; c.fillRect(X(r.x0), Y(r.y1), (r.x1 - r.x0) * k, (r.y1 - r.y0) * k); };
-    const inView = (x, y, r) => !view || (x + r > view.x0 && x - r < view.x1 && y + r > view.y0 && y - r < view.y1);
     // paving and courts
     for (const r of [PATIO, WALK, DRIVE, PAD, PORCH]) fill(r, 'rgba(26,25,23,.08)');
     for (const r of [COURT_A, COURT_B]) fill(r, 'rgba(26,25,23,.04)');
@@ -162,7 +161,7 @@ export class Minimap {
     for (const n of this.plan?.notes ?? []) {
       if (!n.label || /closet/i.test(n.label)) continue;
       const pts = n.area?.length ? n.area : [n.at], xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      const [cx, cy] = AT[n.label] ?? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], roomW = (Math.max(...xs) - Math.min(...xs)) * k;
+      const [cx, cy] = AT[n.label] ?? [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
       label(NAME[n.label] ?? n.label, X(cx), Y(cy));
     }
     const areas = [[-5.7, -2.6, 'Garage', '车库'], [0.9, 7.9, 'Patio', '露台'], [1.2, 12.8, 'Back garden', '后花园'], [3.5, -10.5, 'Front garden', '前院'], [-6.5, -10.5, 'Drive', '车道']];

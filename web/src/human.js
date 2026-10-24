@@ -1,6 +1,6 @@
 // Seated body you see when you look down: the Yireeb World Builder block-human proxy (1.70 m, spine .485, thigh .43,
 // shin .42, hip width .28) posed sitting, with the same Mii-style face so he recognises the little guy.
-import { THREE, M, box, sphere, cyl, group, declare } from './kit.js';
+import { THREE, box, sphere, declare } from './kit.js';
 
 const BODY = { spine: 0.485, thigh: 0.43, shin: 0.42, hipWidth: 0.28, ankleHeight: 0.06, head: 0.305 };
 export class Human {

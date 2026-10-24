@@ -1,16 +1,10 @@
-// Report furniture pieces whose world boxes intersect each other or a wall collider (clipping check).
+// Report furniture pieces whose world boxes intersect each other (clipping check).
 import { chromium } from 'playwright';
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
 await page.goto('http://127.0.0.1:8780/index.html?x=0&y=-3.5&h=0&fast=1', { waitUntil: 'load' });
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 90000 });
-const report = await page.evaluate(() => {
-  const THREE_Box3 = window.__app.scene.constructor && null;
-  const app = window.__app; const placed = app.layout.placed;
-  const boxes = placed.map(o => { o.updateMatrixWorld(true); const b = new (o.position.constructor.name === 'Vector3' ? window.__THREE.Box3 : Object)(); return null; });
-  return 'need THREE';
-}).catch(e => String(e));
-// expose THREE via the app: fall back to computing with the objects' own methods
+// world boxes from the objects' own methods (no THREE handle needed)
 const res = await page.evaluate(() => {
   const app = window.__app; const placed = app.layout.placed;
   const vol = (b) => Math.max(0, b.x1 - b.x0) * Math.max(0, b.y1 - b.y0) * Math.max(0, b.z1 - b.z0);
@@ -23,8 +17,6 @@ const res = await page.evaluate(() => {
     const ib = { x0: Math.max(a.b.x0, b.b.x0), y0: Math.max(a.b.y0, b.b.y0), z0: Math.max(a.b.z0, b.b.z0), x1: Math.min(a.b.x1, b.b.x1), y1: Math.min(a.b.y1, b.b.y1), z1: Math.min(a.b.z1, b.b.z1) };
     const v = vol(ib); if (v > 0.004 && ib.x1 > ib.x0 + 0.03 && ib.z1 > ib.z0 + 0.03 && ib.y1 > ib.y0 + 0.03) out.push(`${a.name} × ${b.name}: ${(ib.x1 - ib.x0).toFixed(2)}×${(ib.y1 - ib.y0).toFixed(2)}×${(ib.z1 - ib.z0).toFixed(2)} m`);
   }
-  // walls: house colliders tagged 'wall' (xz boxes)
-  const cols = (app.scene.userData.colliders || []);
   return out;
 });
 console.log(res.join('\n') || 'no furniture overlaps');

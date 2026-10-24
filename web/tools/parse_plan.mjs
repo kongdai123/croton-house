@@ -2,7 +2,7 @@
 // Walls are axis-aligned rectangles; doors/windows are rectangles sitting inside wall rectangles.
 import { readFileSync, writeFileSync } from 'node:fs';
 const svg = readFileSync(new URL('../../source/zillow/floor_shape.svg', import.meta.url), 'utf8');
-const section = (name) => { const i = svg.indexOf(`<g id="${name}">`); let d = 0, j = i; const re = /<g\b|<\/g>/g; re.lastIndex = i; let m; while ((m = re.exec(svg))) { d += m[0] === '</g>' ? -1 : 1; if (d === 0) return svg.slice(i, m.index + m[0].length); } };
+const section = (name) => { const i = svg.indexOf(`<g id="${name}">`); let d = 0; const re = /<g\b|<\/g>/g; re.lastIndex = i; let m; while ((m = re.exec(svg))) { d += m[0] === '</g>' ? -1 : 1; if (d === 0) return svg.slice(i, m.index + m[0].length); } };
 const polys = (s) => [...s.matchAll(/points="([^"]+)"/g)].map(m => m[1].trim().split(/\s+/).map(p => p.split(',').map(Number)));
 const rect = (pts) => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; };
 const walls = [...section('walls').matchAll(/<g id="([^"]+)" class="wall"><polygon points="([^"]+)"/g)].map(m => { const r = rect(polys(`points="${m[2]}"`)[0]); const w = r.x1 - r.x0, h = r.y1 - r.y0; return { id: m[1], ...r, dir: w > h ? 'H' : 'V', thick: Math.min(w, h) }; });
@@ -15,7 +15,7 @@ const notes = [...section('notes').matchAll(/<g id="([0-9a-f]+)" class="note" da
 const footprint = polys(section('footprint'))[0];
 const vb = svg.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
 // Attach openings to walls and split walls into solid pieces + lintel/sill pieces.
-const CEIL = 2.44, DOOR_H = 2.06, WIN_SILL = 0.95, WIN_HEAD = 2.06, LOW_SILL = 0.0;
+const CEIL = 2.44, DOOR_H = 2.06, WIN_SILL = 0.95, WIN_HEAD = 2.06;
 const pieces = [];
 for (const w of walls) {
   const along = w.dir === 'H' ? ['x0', 'x1'] : ['y0', 'y1'];

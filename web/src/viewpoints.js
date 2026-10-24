@@ -1,7 +1,7 @@
 // Zillow viewpoints: fly to the exact spot a listing photo or 3D-Home panorama was taken, then compare the real image with
 // the 3D view (wipe slider), or step into the panorama itself (C toggles).
 import { THREE } from './kit.js';
-import { t, getLang } from './ui.js';
+import { t } from './ui.js';
 import { buildGrid, navPath } from './nav.js';
 import { getDoors, setFrench, setHinged, setBifold } from './house.js';
 import { doorIsOpen } from './interact.js';
@@ -87,7 +87,6 @@ export class Viewpoints {
   }
   buildTargets() {
     const list = [];
-    const byId = Object.fromEntries(this.tour.panos.map(p => [p.id, p]));
     for (const p of [...this.points.panorama].sort((a, b) => a.order - b.order)) { const [x, y] = toPlan(p.x, p.y); list.push({ kind: 'pano', id: p.id, x, y, heading: this.panoYaw[p.id] ?? 0, title: p.title, thumb: `assets/pano_thumbs/${p.id}.webp`, order: p.order }); }
     for (const [id, e] of Object.entries(EXTRA_PANO)) list.push({ kind: 'pano', id, x: e.x, y: e.y, heading: this.panoYaw[id] ?? 0, title: e.title, thumb: `assets/pano_thumbs/${id}.webp`, order: 20 });
     const order = this.points.photo.slice().sort((a, b) => a.gallery - b.gallery);
@@ -103,7 +102,6 @@ export class Viewpoints {
     return list.sort((a, b) => a.kind === b.kind && a.kind === 'photo' ? a.gallery - b.gallery : 0);
   }
   extraBlips() { return Object.entries(EXTRA_PANO).map(([id, e]) => ({ kind: 'pano', id, x: e.x, y: e.y, title: e.title })); }
-  roomOf(x, y) { for (const n of this.points_notes || []) {} return ''; }
   togglePanel(kind = 'pano') {
     if (this.panelOpen && this.panelKind === kind) { this.ui.closePanel(); this.panelOpen = false; this.panelKind = ''; return; }
     this.renderPanel(kind);

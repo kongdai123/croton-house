@@ -40,7 +40,7 @@ export function materialClassify(w, m, fakeMesh) {
 }
 
 export function captureClassify(w, ix) {
-  const { T, scene } = w;
+  const { T } = w;
   const fake = m => ({ isMesh: true, material: m });
   // lightmap.js applyLightmaps: a face mesh's probe-lit materials take the sided lookup (copied when another mesh shares them)
   const R = w.roles.meshLighting, sidedOf = m => !m.lightMap && !m.transparent && !(m.transmission > 0);
@@ -80,9 +80,9 @@ export function captureClassify(w, ix) {
     o2.unwrapSkip = ms.length > 0 && ms.every(m => w.roles.lightingOf(m).bake === 'probe');
     // unwrap.py:118 ground/far
     if (o2.batchable) {
-      const pos = o.geometry.attributes.position, idx = o.geometry.index, e = o.matrixWorld.elements; let sx = 0, sy = 0, sz = 0, area = 0;
+      const pos = o.geometry.attributes.position, idx = o.geometry.index, e = o.matrixWorld.elements; let sx = 0, sz = 0, area = 0;
       const n = pos.count, W = new Float32Array(n * 3);
-      for (let i = 0; i < n; i++) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i); const wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14]; W[3 * i] = wx; W[3 * i + 1] = wy; W[3 * i + 2] = wz; sx += wx; sy += wy; sz += wz; }
+      for (let i = 0; i < n; i++) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i); const wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14]; W[3 * i] = wx; W[3 * i + 1] = wy; W[3 * i + 2] = wz; sx += wx; sz += wz; }
       const tri = idx ? idx.count / 3 : n / 3;
       for (let t = 0; t < tri; t++) {
         const i0 = idx ? idx.getX(3 * t) : 3 * t, i1 = idx ? idx.getX(3 * t + 1) : 3 * t + 1, i2 = idx ? idx.getX(3 * t + 2) : 3 * t + 2;

@@ -1,7 +1,6 @@
 // Step the guided tour headlessly (logic only, no rendering) and report how close the camera gets to any collider,
 // plus frame-to-frame camera jitter. Saves a few mid-flight screenshots. usage: node tools/tourtest.mjs [outDir]
 import { chromium } from 'playwright';
-const out = process.argv[2] || '/tmp/ch/tour';
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));

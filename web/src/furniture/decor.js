@@ -374,7 +374,7 @@ function wallLightBlack() {
     root.add(box(w - 0.004, 0.012, 0.006, B, { r: 0.002, y: y + s * (h / 2 - 0.006), z: d / 2 - 0.003 }));   // top/bottom lips
     const glow = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.014, d - 0.02), L.warm()); glow.rotation.x = s > 0 ? -Math.PI / 2 : Math.PI / 2; glow.position.set(0, y + s * (h / 2 - 0.02), 0.002); root.add(glow);
     // the wash card 3.5 mm off the back (the porch wall's stucco face: 1.5 mm left it a hair inside the skin, invariant
-    // nothing-under-the-skin)
+    // nothing-under-the-skin); the raster look only: over the bake it is off (lighting_roles.js glowLevel)
     const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.55), L.wash()); wash.position.set(0, y + s * (h / 2 + 0.26), zb + 0.0035); if (s < 0) wash.rotation.z = Math.PI; root.add(wash);
   }
   // its one light, just in front of the perforated panel (an exterior light: on at dusk, off by day)

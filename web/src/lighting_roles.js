@@ -467,9 +467,12 @@ export const ownedLights = holder => LIGHTS.get(holder) ?? [];
 // at dusk, its own base by day for fixtures meant to be on by day (spec.day), else the faint 0.12 off-level; baked: the
 // physical luminance the bake gave it (luminance: its fixture's lumens through its glowing area, bake/scripts/
 // fixture_lights.py, the lamp group member's in encoding.json) at the lamp level, else x1.8 its base (a bake before the
-// lumen model); a wash card at its base times the level.
+// lumen model). A wash card (an additive, untone-mapped sprite of the light a fixture throws on its wall) stands in for
+// light the raster look lacks: baked, the bake carries that light on the wall itself, so the card is off. Drawn over the
+// bake it counted the light twice, at a fixed radiance the exposure then scales: at dusk (+3.5 EV in the garden) the
+// porch sconce's two cards blew out into white cones Cycles does not have (gate c rc_dcd68d4, frontWalk_1 +2.3 stops).
 export function glowLevel(glow, { baked = false, dusk = false, day = false, level = 1, luminance = null } = {}) {
-  if (glow.wash) return glow.base * (baked ? level : 1);
+  if (glow.wash) return baked ? 0 : glow.base;
   if (baked) return (luminance ?? glow.base * 1.8) * level;
   return dusk ? glow.base * 1.8 : day ? glow.base : 0.12;
 }

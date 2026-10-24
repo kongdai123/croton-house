@@ -73,7 +73,7 @@ for (const [kind, name, old, now, expected, why] of FIXES) {
   const light = (exterior, day) => ({ userData: { exterior, day } });
   const table = [
     [glowLevel(g, { dusk: true }), 3.6], [glowLevel(g, { day: true }), 2], [glowLevel(g), 0.12], [glowLevel(wash, { dusk: true }), 0.4],
-    [glowLevel(g, { baked: true, level: 0.5 }), 1.8], [glowLevel(wash, { baked: true, level: 0.5 }), 0.2],
+    [glowLevel(g, { baked: true, level: 0.5 }), 1.8], [glowLevel(wash, { baked: true, level: 0.5 }), 0], [glowLevel(wash, { baked: true, level: 1 }), 0],
     [lightLevel(light(true), { dusk: false }), 0], [lightLevel(light(true), { dusk: true }), 1], [lightLevel(light(true), { manual: true }), 1],
     [lightLevel(light(false), { dusk: true }), 5], [lightLevel(light(false, 2.5), { indoor: 1 }), 2.5], [lightLevel(light(false), { indoor: 0 }), 0], [lightLevel(light(false), { indoor: 0, manual: true }), 0.2],
     [standInEmission(1, true), 1.8], [standInEmission(1, false), 0.12],

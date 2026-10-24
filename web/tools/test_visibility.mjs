@@ -36,12 +36,17 @@ const TAU = Math.PI * 2, close = (a, b) => Math.abs(a - b) < 1e-9;
 }
 
 // ---- 2. conservative against plan lines of sight ------------------------------------------------------------------------
-const model = V.buildModel(plan);
-check(model.portals.length === plan.openings.length, `every opening is a portal (${model.portals.length} of ${plan.openings.length})`);
+// the real house, built headless (section 3); its low walls (house.js LOW_WALLS) are seen over, so they are portals in the
+// model and no blockers in the line-of-sight truth
+const w = await buildRealScene({ extra: "export * as vis from './src/visibility.js';", variant: 'visibility' });
+const LOW = w.houseConsts.LOW_WALLS;
+check(Object.keys(LOW).length > 0 && Object.keys(LOW).every(id => plan.pieces.some(p => p.wall === id)), 'the low walls are plan wall pieces');
+const model = V.buildModel(plan, { lowWalls: LOW }), lowPieces = plan.pieces.filter(p => LOW[p.wall] !== undefined);
+check(model.portals.length === plan.openings.length + lowPieces.length, `every opening and low wall is a portal (${model.portals.length} of ${plan.openings.length} + ${lowPieces.length})`);
 const hinged = model.portals.filter(p => p.hinged).map(p => p.id).sort();
 check(hinged.length === plan.openings.filter(o => o.kind === 'door' && ['door', 'front'].includes(o.type)).length, 'hinged doors are the door and front types');
 // blockers: full-height wall pieces, plus the openings of shut hinged doors
-const solid = plan.pieces.filter(p => p.kind === 'solid' && p.z0 <= 0.01 && p.z1 >= plan.levels.ceiling - 0.01);
+const solid = plan.pieces.filter(p => p.kind === 'solid' && p.z0 <= 0.01 && p.z1 >= plan.levels.ceiling - 0.01 && LOW[p.wall] === undefined);
 check(solid.length > 50, 'the plan has its wall pieces');
 const doorRect = id => { const o = plan.openings.find(q => q.id === id); return { x0: o.x0, x1: o.x1, y0: o.y0, y1: o.y1 }; };
 // first parameter t in [0, 1] at which the segment p->q is inside rect r (Liang-Barsky), or Infinity
@@ -136,12 +141,11 @@ check(V.reach(model, 0, 40, 1.5) === null, 'no culling off the lot');
 
 // ---- 3. the real house ------------------------------------------------------------------------------------------------
 {
-  const w = await buildRealScene({ extra: "export * as vis from './src/visibility.js';", variant: 'visibility' });
   const { T, scene, vis, layout, doors } = w;
   const camera = new T.PerspectiveCamera(62, 16 / 9, 0.05, 300), sunCam = new T.OrthographicCamera(), other = new T.PerspectiveCamera();
   scene.add(camera);
   const cull = vis.createRoomCulling({ THREE: T, camera, roots: [w.houseRoot, layout.root, w.garden.group, w.batch.world], moving: layout.interactive.filter(o => !o.userData.toggle),
-    swinging: [...doors.map(d => d.group), ...layout.animated], doors });
+    swinging: [...doors.map(d => d.group), ...layout.animated], doors, lowWalls: LOW });
   check(cull.stats.meshes > 1000 && cull.stats.units > 500, `registers the house (${cull.stats.meshes} meshes in ${cull.stats.units} footprints)`);
   let lights = 0; scene.traverse(o => { if (o.isLight && o.layers.test !== T.Layers.prototype.test) lights++; });
   check(lights === 0, 'no light is ever culled (a light-count change recompiles every shader)');

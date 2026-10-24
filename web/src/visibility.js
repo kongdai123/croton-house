@@ -27,7 +27,8 @@ const norm = a => { a %= TAU; return a < 0 ? a + TAU : a; };   // [0, 2pi)
 
 // ---- the model: cells and portals -----------------------------------------------------------------------------------------
 const HINGED = new Set(['door', 'front']);   // opening types with a swinging solid leaf (house.js buildDoor: a pivot)
-export function buildModel(plan = PLAN) {
+// lowWalls: wall ids built below eye height although the plan has them full height (house.js LOW_WALLS): portals too.
+export function buildModel(plan = PLAN, { lowWalls = {} } = {}) {
   const cells = [], index = new Map();
   const add = (id, poly, interior) => { index.set(id, cells.length); cells.push({ id, poly, box: poly ? bbox(poly) : null, interior, portals: [] }); };
   for (const s of plan.spaces) if (s.zone !== 'exterior') add(s.id, s.polygon, true);
@@ -38,7 +39,8 @@ export function buildModel(plan = PLAN) {
   // seam between two open-plan rooms (the office's French doors also front the dining room), and a line of sight through
   // it then starts in the room it does not name.
   const portals = [];
-  for (const o of plan.openings) {
+  const low = plan.pieces.filter(p => lowWalls[p.wall] !== undefined).map(p => ({ ...p, id: 'low ' + p.wall, kind: 'low', type: 'low', connects: [] }));
+  for (const o of [...plan.openings, ...low]) {
     const joined = new Set(o.connects.map(cellOf).filter(i => i !== undefined));
     // grown through the wall, a little shrunk along it (a space meeting the opening only at its end is not in front of it)
     const t = PORTAL_REACH, s = 0.02, g = o.dir === 'H' ? { x0: o.x0 + s, x1: o.x1 - s, y0: o.y0 - t, y1: o.y1 + t } : { x0: o.x0 - t, x1: o.x1 + t, y0: o.y0 + s, y1: o.y1 - s };
@@ -249,10 +251,10 @@ function behindHouse(reached, x, y, rect) {
 // roots: the subtrees to cull (house, layout, garden, merged batches). moving: roots carried or dragged (movables, seats):
 // their footprint is measured again whenever their world matrix changes. swinging: roots whose parts move in place (doors,
 // within about a leaf of their frame; toggles and swaying plants within 0.5 m): a fixed footprint grown by that much.
-// doors: house.js getDoors() (a hinged door shut blocks the view). Meshes added later (pets, the visitor, pins, overlays)
-// are never culled.
-export function createRoomCulling({ THREE, camera, roots, moving = [], swinging = [], doors = [], plan = PLAN, enabled = true }) {
-  const model = buildModel(plan), main = camera.layers;
+// doors: house.js getDoors() (a hinged door shut blocks the view); lowWalls: house.js LOW_WALLS. Meshes added later
+// (pets, the visitor, pins, overlays) are never culled.
+export function createRoomCulling({ THREE, camera, roots, moving = [], swinging = [], doors = [], lowWalls = {}, plan = PLAN, enabled = true }) {
+  const model = buildModel(plan, { lowWalls }), main = camera.layers;
   const box = new THREE.Box3(), part = new THREE.Box3(), m4 = new THREE.Matrix4();
   // the walkthrough camera alone is refused a culled mesh
   function test(layers) { return (this.mask & layers.mask) !== 0 && !(this.culled === true && layers === main); }

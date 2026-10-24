@@ -26,35 +26,45 @@ const port = server.address().port;
 const browser = await chromium.launch({ headless: true, args: ['--use-angle=vulkan', '--enable-features=Vulkan', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-vulkan-surface'] });
 const vfov = lens => 2 * Math.atan(18 / lens * 9 / 16) * 180 / Math.PI;
 
-// in the page: draw the current state with culling on, then off (no simulation step between), compare the canvases. The
-// two draws are 60 ms apart so the puddle reflection (redrawn at most 30 times a second) is drawn afresh by each.
+// in the page: draw the current state with culling on, then off twice (no simulation step between), compare the canvases;
+// the two draws without culling show what differs between draws anyway (noise: then the shot says so). The draws are
+// 60 ms apart so the puddle reflection (redrawn at most 30 times a second) is drawn afresh by each, with its wind ripples
+// held still, and the SSR pass's frame counter pinned (the clock- and frame-driven shading in a draw).
 async function compareInPage(name) {
   const A = window.__app, r = A.renderer, gl = r.getContext(), c = A.culling, w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
   const grab = () => { r.setRenderTarget(null); const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
-  const draw = () => { const calls = r.info.render.calls; r.info.autoReset = false; A.lighting.composer.render(); const n = r.info.render.calls - calls; r.info.autoReset = true; return n; };
-  c.setEnabled(true); c.update(); const culled = c.stats.culled, off = c.stats.off;
-  const wait = () => new Promise(r => setTimeout(r, 60));
-  await wait(); const callsOn = draw(), on = grab();
-  c.setEnabled(false); await wait(); const callsOff = draw(), offPx = grab();
-  c.setEnabled(true); c.update();
+  // the SSR pass jitters its rays by a frame counter: every draw here gets the same one
+  const ssr = A.lighting.reflections, f0 = ssr?.frame ?? 0;
+  const draw = () => { if (ssr) ssr.frame = f0; const calls = r.info.render.calls; r.info.autoReset = false; A.lighting.composer.render(); const n = r.info.render.calls - calls; r.info.autoReset = true; return n; };
+  const wind = A.baked?.puddleRefl?.uniforms.uPuddleWind, windWas = wind?.value; if (wind) wind.value = 0;
+  try {
+    c.setEnabled(true); c.update(); const culled = c.stats.culled, off = c.stats.off;
+    const wait = () => new Promise(r => setTimeout(r, 60));
+    await wait(); const callsOn = draw(), on = grab();
+    c.setEnabled(false); await wait(); const callsOff = draw(), offPx = grab();
+    await wait(); draw(); const again = grab();
+    c.setEnabled(true); c.update();
+    const noise = diffImages(offPx, again, w, h);
+    return { name, culled, cullingOff: off, callsOn, callsOff, noise: noise.diff, ...diffImages(on, offPx, w, h) };
+  } finally { if (wind) wind.value = windWas; }
+}
+// pixel difference of two RGBA readbacks (GL rows bottom up), with PNGs of both and of the difference when they differ
+function diffImages(a, b, w, h) {
   let diff = 0, max = 0;
-  for (let i = 0; i < on.length; i += 4) { let d = 0; for (let k = 0; k < 3; k++) d = Math.max(d, Math.abs(on[i + k] - offPx[i + k])); if (d > 2) diff++; if (d > max) max = d; }
-  const res = { name, culled, cullingOff: off, callsOn, callsOff, diff, max };
-  if (diff) {
-    const png = (px, f) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d'), img = x.createImageData(w, h);
-      for (let y = 0; y < h; y++) for (let i = 0; i < w * 4; i++) img.data[y * w * 4 + i] = f(px, ((h - 1 - y) * w * 4) + i, i % 4);
-      x.putImageData(img, 0, 0); return cv.toDataURL('image/png'); };
-    res.images = { on: png(on, (p, j) => p[j]), off: png(offPx, (p, j) => p[j]), diff: png(on, (p, j, ch) => ch === 3 ? 255 : Math.min(255, Math.abs(p[j] - offPx[j]) * 8)) };
-  }
-  return res;
+  for (let i = 0; i < a.length; i += 4) { let d = 0; for (let k = 0; k < 3; k++) d = Math.max(d, Math.abs(a[i + k] - b[i + k])); if (d > 2) diff++; if (d > max) max = d; }
+  if (!diff) return { diff, max };
+  const png = f => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const x = cv.getContext('2d'), img = x.createImageData(w, h);
+    for (let y = 0; y < h; y++) for (let i = 0; i < w * 4; i++) img.data[y * w * 4 + i] = f(((h - 1 - y) * w * 4) + i, i % 4);
+    x.putImageData(img, 0, 0); return cv.toDataURL('image/png'); };
+  return { diff, max, images: { on: png(j => a[j]), off: png(j => b[j]), diff: png((j, ch) => ch === 3 ? 255 : Math.min(255, Math.abs(a[j] - b[j]) * 8)) } };
 }
 
 const results = [];
 async function shot(page, name) {
   const r = await page.evaluate(compareInPage, name);
-  if (r.images) { for (const [k, v] of Object.entries(r.images)) await writeFile(join(OUT, `${name}.${k}.png`), Buffer.from(v.split(',')[1], 'base64')); delete r.images; }
+  if (r.images) { for (const [k, v] of Object.entries(r.images)) await writeFile(join(OUT, `${name.replace('/', '_')}.${k}.png`), Buffer.from(v.split(',')[1], 'base64')); delete r.images; }
   results.push(r);
-  console.log(`${r.diff ? 'DIFF' : 'ok  '} ${name.padEnd(40)} culled ${String(r.culled).padStart(5)} draws ${r.callsOn} / ${r.callsOff}${r.cullingOff ? ' (no culling here)' : ''}${r.diff ? `  ${r.diff} px, max ${r.max}` : ''}`);
+  console.log(`${r.diff ? (r.noise ? 'NOISE' : 'DIFF') : 'ok  '} ${name.padEnd(40)} culled ${String(r.culled).padStart(5)} draws ${r.callsOn} / ${r.callsOff}${r.cullingOff ? ' (no culling here)' : ''}${r.diff ? `  ${r.diff} px, max ${r.max}` : ''}${r.noise ? `  (two draws without culling differ by ${r.noise} px)` : ''}`);
 }
 const step = (page, n) => page.evaluate(n => { for (let i = 0; i < n; i++) window.renderAt(window.simTime() + 1 / 30); }, n);
 const place = (page, c, fov = 62) => page.evaluate(([c, fov]) => { const A = window.__app; A.player.eyeHeight = c.z ?? 1.6; A.player.eye = c.z ?? 1.6; A.player.teleport(c.x, -c.y, c.h, c.p ?? 0); A.camera.fov = fov; A.camera.updateProjectionMatrix(); }, [c, fov]);
@@ -67,6 +77,7 @@ for (const slot of slots) {
   if (/SwiftShader|llvmpipe|software/i.test(gpu)) { console.log('software rasteriser: refusing'); process.exit(2); }
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 600000 });
   if (!(await page.evaluate(() => !!window.__app.culling))) { console.log('no room culling in this build'); process.exit(2); }
+  await page.evaluate(`window.diffImages = ${diffImages.toString()}`);
   await page.evaluate(() => { window.__app.player.move = () => {}; });
   // gate cameras, with their door states
   for (const c of cams) {
@@ -101,6 +112,30 @@ for (const slot of slots) {
     await page.evaluate(() => { const c = window.__chair; c.o.position.copy(c.p); c.o.updateMatrixWorld(true); }); await step(page, 4);
     // the dog called to the visitor in the hall (pets are never culled; this checks nothing near them is)
     await place(page, hall); await page.evaluate(() => window.__app.pets?.call?.('dog')); await step(page, 90); await shot(page, `${slot}/pet_called`);
+    // the sun-shadow cache's partial redraws (lightmap.js REGION_LAYER) against a full redraw. The scene's clock stands
+    // still (wind in the depth shaders is a snapshot either way): a full redraw, frame A; then a door swings open and back
+    // driven through the cache's own update (leaving base and folding back in are partial redraws), frame B: A = B.
+    for (const [id, at] of [['60bf34160a', { x: 4.55, y: 0.6, z: 1.6, h: 180, p: -0.15 }], ['bf8cb9f37a', { x: 2.8, y: 3.4, z: 1.6, h: 0, p: -0.2 }],
+      ['ca2bb42b5a', { x: 0.2, y: -3.2, z: 1.6, h: 180, p: -0.2 }], ['161782cdfa', { x: -0.2, y: 3.0, z: 1.6, h: 0, p: -0.2 }]]) {
+      await place(page, at); await step(page, 4);
+      const r = await page.evaluate(async ([name, id]) => {
+        const A = window.__app, r = A.renderer, gl = r.getContext(), w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, pc = A.baked.sunShadow;
+        const grab = () => { r.setRenderTarget(null); const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+        const ssr = A.lighting.reflections, f0 = ssr?.frame ?? 0, draw = () => { if (ssr) ssr.frame = f0; A.lighting.composer.render(); };
+        const d = A.getDoors().find(d => d.id === id), leaves = d.pivot ? [d.pivot] : d.leaves.map(l => l.pivot), rest = leaves.map(p => p.rotation.y);
+        pc.render(); await new Promise(res => setTimeout(res, 60)); draw(); const a = grab();
+        const partials = pc.stats.partialRenders, full = pc.stats.staticRenders - partials;
+        leaves.forEach(p => { p.rotation.y += 0.8; p.updateMatrixWorld(true); }); for (let i = 0; i < 5; i++) pc.update(0.1);
+        leaves.forEach((p, i) => { p.rotation.y = rest[i]; p.updateMatrixWorld(true); }); for (let i = 0; i < 50; i++) pc.update(0.1);
+        const used = pc.stats.partialRenders - partials, fulls = pc.stats.staticRenders - pc.stats.partialRenders - full;
+        await new Promise(res => setTimeout(res, 60)); draw(); const b = grab();
+        return { name, partials: used, fulls, ...window.diffImages(a, b, w, h) };
+      }, [`${slot}/shadow_partial_${id}`, id]);
+      if (r.images) { for (const [k, v] of Object.entries(r.images)) await writeFile(join(OUT, `${r.name.replace('/', '_')}.${k}.png`), Buffer.from(v.split(',')[1], 'base64')); delete r.images; }
+      const fail = r.diff || !r.partials;
+      results.push({ name: r.name, culled: 0, callsOn: 0, callsOff: 0, diff: fail ? Math.max(1, r.diff) : 0, max: r.max, shadow: true, partials: r.partials, fulls: r.fulls });
+      console.log(`${fail ? 'DIFF' : 'ok  '} ${r.name.padEnd(40)} ${r.partials} partial and ${r.fulls} full redraws${r.diff ? `  ${r.diff} px, max ${r.max}` : ''}`);
+    }
     // the walk, every 2 m
     const WALK = [[0, -9], [-0.06, -5.4], [-0.06, -4.66], [0, -3], [-2.3, -2], [-2.3, 0.5], [0, 0.5], [0.77, 1.76], [0, 3.6], [2.5, 3.6], [2.8, 5.41],
       [2.6, 7.6], [-0.8, 8.2], [-0.2, 5.41], [-0.2, 3.4], [1.2, 0.3], [3.97, 0.32], [4.55, 0.3], [4.53, 1.51], [5.6, 3.6], [4.53, 1.51], [4.55, -1],
@@ -113,9 +148,9 @@ for (const slot of slots) {
   }
   await page.close();
 }
-const bad = results.filter(r => r.diff);
+const bad = results.filter(r => r.diff && !r.noise), noisy = results.filter(r => r.noise);
 await writeFile(join(OUT, 'report.json'), JSON.stringify({ size: [W, H], slots, shots: results.length, differing: bad.length, results }, null, 1));
 const culled = results.filter(r => !r.cullingOff);
-console.log(`\n${results.length} shots, ${bad.length} differing; draws with culling ${culled.reduce((s, r) => s + r.callsOn, 0)} vs ${culled.reduce((s, r) => s + r.callsOff, 0)} without`);
+console.log(`\n${results.length} shots, ${bad.length} differing, ${noisy.length} with draw-to-draw noise; draws with culling ${culled.reduce((s, r) => s + r.callsOn, 0)} vs ${culled.reduce((s, r) => s + r.callsOff, 0)} without`);
 await browser.close(); server.close();
 process.exit(bad.length ? 1 : 0);

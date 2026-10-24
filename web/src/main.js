@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { warmPrograms } from './shader_warmup.js';
 import { createLighting } from './lighting.js';
-import { buildHouse, CEIL, getDoors } from './house.js';
+import { buildHouse, CEIL, getDoors, LOW_WALLS } from './house.js';
 import { buildGarden } from './grass.js';
 import { Player } from './player.js';
 import { Layout } from './layout.js';
@@ -343,7 +343,7 @@ lapStart = lap('draw', lapStart);
 // Room visibility (visibility.js): from here on the walkthrough camera skips what the plan's walls hide from it; shadows,
 // mirrors and reflections still see everything. ?cull=0 turns it off.
 const culling = Q.get('cull') === '0' ? null : soft('room culling', () => createRoomCulling({ THREE, camera, roots: [houseRoot, layout.root, garden.group, batch.world],
-  moving: layout.interactive.filter(o => !o.userData.toggle), swinging: [...getDoors().map(d => d.group), ...layout.animated], doors: getDoors() }));
+  moving: layout.interactive.filter(o => !o.userData.toggle), swinging: [...getDoors().map(d => d.group), ...layout.animated], doors: getDoors(), lowWalls: LOW_WALLS }));
 firstFrameDrawn = true;
 document.getElementById('warmbar').style.width = '100%';
 ui.hideLoading();

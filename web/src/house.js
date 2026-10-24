@@ -21,6 +21,9 @@ const V = plan.spaces.find(s => s.id === 'bedroom3').view;   // bedroom 3, its d
 export const FRONT_CLOSET_VIEW = { key: V.key, x0: V.x0, x1: V.x1, z0: -V.y1, z1: -V.y0 };
 const GD = opening('garageDoor'), SD = opening('gside');
 export const GARAGE_DOOR = { x0: GD.x0, x1: GD.x1, h: GD.head };   // 8' × 7' sectional, open (g04)
+// Wall pieces built lower than the plan's full height (wall id -> top, m): the kitchen's counter-height pass-through to the
+// office. Room culling (visibility.js) treats them as openings: the eye sees over them.
+export const LOW_WALLS = { 'null-88b2e5c46a': 1.02 };
 export const SIDE_DOOR = { y0: SD.y0, y1: SD.y1 };                 // west wall, to the parking pad
 export const LOT = { x0: plan.lot.x0, x1: plan.lot.x1, y0: plan.lot.y0, y1: plan.lot.y1 };   // 95' × 110' lot
 export const PATIO = rectOf('patio');
@@ -135,7 +138,7 @@ export function buildHouse(house, mods, opts = {}) {
   const outside = (p) => isExteriorPiece(p, EXT_FP);
   for (const p of pieces) {
     const mat = p.wall.startsWith('niche-') ? nichePaint : wallMat;
-    if (p.wall === 'null-88b2e5c46a') { interior.add(wallBox(p.x0, p.x1, p.y0, p.y1, 0, 1.02, wallMat, true)); interior.add(box(p.x1 - p.x0 + 0.04, 0.03, 0.30, M.quartz(), { x: (p.x0 + p.x1) / 2, y: 1.035, z: -(p.y0 + p.y1) / 2 })); continue; }
+    if (LOW_WALLS[p.wall]) { interior.add(wallBox(p.x0, p.x1, p.y0, p.y1, 0, LOW_WALLS[p.wall], wallMat, true)); interior.add(box(p.x1 - p.x0 + 0.04, 0.03, 0.30, M.quartz(), { x: (p.x0 + p.x1) / 2, y: LOW_WALLS[p.wall] + 0.015, z: -(p.y0 + p.y1) / 2 })); continue; }
     interior.add(wallBox(p.x0, p.x1, p.y0, p.y1, p.z0, p.z1, mat, p.kind === 'solid' || p.kind === 'sill'));
     if (outside(p)) {
       // exterior skin: stucco, 0.15 thick, flush with the openings

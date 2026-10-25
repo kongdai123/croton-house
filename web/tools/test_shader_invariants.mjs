@@ -29,6 +29,7 @@ const ALLOWED = {
   'daylight.js': [13, 'the legacy raster lighting\'s daylight volume (called from lighting.js\'s raster wrapper only)'],
   'hq.js': [9, 'the legacy raster HQ shadow chunk; the mirror\'s Reflector (its own ShaderMaterial); the mirrors\' merged material, which keeps a baked source\'s composed hook with the surface option, or (legacy fallback) wraps the raster hook with compose.js surfacePatch'],
   'taa.js': [5, 'TAA\'s texture LOD bias for the legacy raster materials (baked ones: the taa flag)'],
+  'motion.js': [2, 'TAA\'s motion vectors: their own velocity material (a ShaderMaterial, not drawn in the scene) runs a moving material\'s vertex hook on three\'s chunks, twice (this frame, the previous one)'],
   'lightmap.js': [1, 'the sun-depth material takes its hook from baked_material.js sunDepthShader'],
   'materials.js': [6, 'own shader hooks: the turf\'s macro noise, the shell white (they run first inside the composed shader)'],
   'reflections.js': [4, 'own shader hook: the SSR tag in the alpha (it runs first inside the composed shader)'],

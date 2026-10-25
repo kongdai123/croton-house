@@ -1,5 +1,7 @@
 // ?taa[=0.75]: jittered linear-HDR scene/SSR/GTAO at reduced resolution, temporal reconstruction before output/grade.
-// Camera-only motion: depth reprojection plus YCoCg variance clipping/reactivity for pets, movables and leaf sway.
+// Reprojection: what moves on its own (pets, a door in its swing, a carried chair, the grass wind near the camera) by its
+// own motion vectors (motion.js; ?taamv=0 turns them off), everything else through the depth buffer and the camera's
+// motion; YCoCg variance clipping and reactivity stay as the safety net.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
@@ -7,6 +9,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { taaBias, TAA_MAPS } from './shaders/compose.js';
 import { isBaked, setBakedTaa } from './shaders/baked_material.js';
 import { frameClock, staleSince } from './frame_clock.js';
+import { createMotion } from './motion.js';
 
 const vertex = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
 const color = `
@@ -16,10 +19,10 @@ vec3 ycocg(vec3 c) { return vec3(dot(c, vec3(0.25, 0.5, 0.25)), (c.r - c.b) * 0.
 vec3 rgb(vec3 c) { return vec3(c.x + c.y - c.z, c.x + c.z, c.x - c.y - c.z); }
 `;
 const resolve = `
-uniform sampler2D tCurrent, tDepth, tHistory;
+uniform sampler2D tCurrent, tDepth, tHistory, tVelocity;
 uniform mat4 uInvVP, uView, uPrevVP, uPrevView;
 uniform vec3 uEye; uniform vec2 uSize, uFullSize, uJitter;
-uniform float uValid, uFeedback, uGamma, uDepthAbsolute, uDepthRelative, uReactive;
+uniform float uValid, uFeedback, uGamma, uDepthAbsolute, uDepthRelative, uReactive, uMotionFeedback, uMotionPixels, uHasVelocity;
 varying vec2 vUv;
 ${color}
 // Catmull-Rom weights for a texel-centre grid at p (in texels).
@@ -70,10 +73,18 @@ void main() {
   bool sky = near >= 0.9999999, skyFar = far >= 0.9999999; vec4 world = worldAt(nearUv, near);
   vec4 old = uPrevVP * (sky ? vec4(world.xyz - uEye, 0.0) : world);
   vec2 oldUv = old.xy / max(old.w, 0.000001) * 0.5 + 0.5;
-  vec2 velocity = nearUv - uJitter - oldUv, historyUv = vUv - velocity;
+  vec2 velocity = nearUv - uJitter - oldUv;
   // Expected previous view depth of the nearest and farthest surfaces around this pixel (the sky counts as SKY metres).
   float expected = sky ? SKY : -(uPrevView * world).z;
   float expectedFar = skyFar ? SKY : -(uPrevView * worldAt(farUv, far)).z;
+  bool onScreen = old.w > 0.0 && (sky || (old.z >= -old.w && old.z <= old.w));
+  // a surface that moves on its own: its own velocity and previous depth (motion.js), dilated from the nearest one as well
+  if (uHasVelocity > 0.5) {
+    vec4 mv = texture2D(tVelocity, nearUv), mvFar = texture2D(tVelocity, farUv);
+    if (mv.a > 0.5) { velocity = mv.xy; expected = mv.z; onScreen = true; }
+    if (mvFar.a > 0.5) expectedFar = mvFar.z;
+  }
+  vec2 historyUv = vUv - velocity;
   float depth = centerDepth >= 0.9999999 ? 0.0 : -(uView * worldAt(center, centerDepth)).z;
   // History alpha is the view depth in metres of the pixel's own centre (0 = sky), fetched nearest: no interpolation across
   // edges. With the jitter the centre moves inside the neighbourhood from frame to frame, so a still pixel on a silhouette
@@ -85,16 +96,15 @@ void main() {
   float slope = sky ? 0.0 : min(2.0 * max(abs(dFdx(expected)), abs(dFdy(expected))), 0.05 * expected);
   float tolerance = uDepthAbsolute + uDepthRelative * expected + slope, toleranceFar = uDepthAbsolute + uDepthRelative * expectedFar;
   bool inside = all(greaterThanEqual(historyUv, 0.5 / uFullSize)) && all(lessThanEqual(historyUv, 1.0 - 0.5 / uFullSize));
-  bool accepted = uValid > 0.5 && old.w > 0.0 && inside && (sky || (old.z >= -old.w && old.z <= old.w))
-    && previousDepth >= expected - tolerance && previousDepth <= expectedFar + toleranceFar;
+  bool accepted = uValid > 0.5 && onScreen && inside && previousDepth >= expected - tolerance && previousDepth <= expectedFar + toleranceFar;
   vec3 h = ycocg(compress(history));
   lo = max(lo, mean - uGamma * sigma); hi = min(hi, mean + uGamma * sigma);
   vec3 mid = (lo + hi) * 0.5, extent = max((hi - lo) * 0.5, vec3(0.0001)), delta = h - mid;
   vec3 distance = abs(delta / extent); float outside = max(distance.x, max(distance.y, distance.z));
   h = mid + delta / max(1.0, outside);
-  float weight = mix(uFeedback, 0.72, clamp(length(velocity * uFullSize) / 32.0, 0.0, 1.0));
-  // Reactivity for things without motion vectors (pets, movables, leaf sway): history far outside the clip box is stale,
-  // so it also loses weight. Aliasing and noise keep the history inside the box and are left to accumulate.
+  float weight = mix(uFeedback, uMotionFeedback, clamp(length(velocity * uFullSize) / uMotionPixels, 0.0, 1.0));
+  // Reactivity (what the motion vectors miss: shading that changes, a surface uncovered): history far outside the clip box
+  // is stale, so it also loses weight. Aliasing and noise keep the history inside the box and are left to accumulate.
   weight *= 1.0 - uReactive * smoothstep(2.0, 6.0, outside);
   gl_FragColor = vec4(expand(clamp(rgb(mix(current, h, accepted ? weight : 0.0)), rgbLo, rgbHi)), depth);
 }`;
@@ -130,6 +140,13 @@ const target = (name, depth = false) => {
 const TAA_SLICE = 400;
 // ?taascan=1: the whole scene every frame, as before (A/B: tools/ab_check.mjs)
 const FULL_SCAN = new URLSearchParams(globalThis.location?.search ?? '').get('taascan') === '1';
+// ?taamv=0: no per-object motion vectors (camera-only reprojection, as before; A/B)
+const MOTION = new URLSearchParams(globalThis.location?.search ?? '').get('taamv') !== '0';
+// ?taaset=key:value,key:value: the pass's settings for tuning and A/B (tools/video/flicker_check.mjs)
+function querySettings() {
+  const raw = new URLSearchParams(globalThis.location?.search ?? '').get('taaset'); if (!raw) return {};
+  return Object.fromEntries(raw.split(',').map(kv => kv.split(':')).filter(([k, v]) => k && Number.isFinite(+v)).map(([k, v]) => [k, +v]));
+}
 export const taaQuality = (preset, query) => query.has('taa') ? { ...preset, msaa: 0, smaa: false } : preset;
 
 class TAAPass extends Pass {
@@ -139,7 +156,7 @@ class TAAPass extends Pass {
     // mipBias: added to the internal scale's bias (log2 scale) on every surface map: the accumulated jittered frames
     // resolve finer texture detail than one frame's mip selection assumes. With sharpen 0.55, TAA at full scale keeps
     // MSAA's texture detail (wood grain, cane weave) without its foliage dither and shadow speckle (gate-c stills, 2026-10-24).
-    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.55, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: -0.5, ...options };
+    this.settings = { feedback: 0.92, gamma: 1.25, sharpen: 0.55, depthAbsolute: 0.02, depthRelative: 0.01, reactive: 0.5, mipBias: -0.5, motionFeedback: 0.72, motionPixels: 32, ...options, ...querySettings() };
     this.scene = passes[0].scene; this.lodBias = { value: Math.log2(this.scale) + this.settings.mipBias }; this.materials = new Map(); this.seen = new WeakMap(); this.drawing = false;
     this.internal = new EffectComposer(renderer, target('TAA scene', true)); this.internal.setPixelRatio(1); this.internal.renderToScreen = false;
     for (const pass of passes) this.internal.addPass(pass);
@@ -148,11 +165,14 @@ class TAAPass extends Pass {
     this.position = new THREE.Vector3(); this.previousPosition = new THREE.Vector3(); this.rotation = new THREE.Quaternion(); this.previousRotation = new THREE.Quaternion();
     const uniforms = { tCurrent: { value: null }, tDepth: { value: null }, tHistory: { value: null }, uInvVP: { value: new THREE.Matrix4() }, uView: { value: new THREE.Matrix4() },
       uPrevVP: { value: new THREE.Matrix4() }, uPrevView: { value: new THREE.Matrix4() }, uEye: { value: this.position }, uSize: { value: new THREE.Vector2() }, uFullSize: { value: new THREE.Vector2() },
-      uJitter: { value: new THREE.Vector2() }, uValid: { value: 0 }, uFeedback: { value: 0 }, uGamma: { value: 0 }, uDepthAbsolute: { value: 0 }, uDepthRelative: { value: 0 }, uReactive: { value: 0 } };
+      uJitter: { value: new THREE.Vector2() }, uValid: { value: 0 }, uFeedback: { value: 0 }, uGamma: { value: 0 }, uDepthAbsolute: { value: 0 }, uDepthRelative: { value: 0 }, uReactive: { value: 0 }, uMotionFeedback: { value: 0 }, uMotionPixels: { value: 32 },
+      tVelocity: { value: null }, uHasVelocity: { value: 0 } };
     this.resolve = material(resolve, uniforms);
+    this.motion = MOTION ? createMotion() : null; this.movers = 0; this.motionJitter = new THREE.Vector2();
+    this.previousView = { view: uniforms.uPrevView.value, projection: this.previousProjection, position: this.previousPosition };
     this.sharpen = material(sharpen, { tResolved: { value: null }, uTexel: { value: new THREE.Vector2() }, uSharpen: { value: 0 } }); this.quad = new FullScreenQuad(null);
   }
-  reset() { this.valid = false; this.frame = 0; }
+  reset() { this.valid = false; this.frame = 0; this.motion?.reset(); }
   setScale(value) { this.scale = scaleOf(value); this.lodBias.value = Math.log2(this.scale) + this.settings.mipBias; this.setSize(this.width, this.height); this.reset(); }
   // The LOD bias on every surface map: a flag of the composed baked shader (shaders/baked_material.js setBakedTaa),
   // and for the legacy raster materials (no baked shader: the fallback) a wrapper of their hook.
@@ -204,7 +224,7 @@ class TAAPass extends Pass {
     const iw = Math.max(1, Math.round(this.width * this.scale)), ih = Math.max(1, Math.round(this.height * this.scale));
     const changed = this.history[0].width !== this.width || this.history[0].height !== this.height || this.internal.renderTarget1.width !== iw || this.internal.renderTarget1.height !== ih;
     for (const rt of this.history) rt.setSize(this.width, this.height);
-    this.internal.setSize(iw, ih); this.resolve.uniforms.uSize.value.set(iw, ih); this.resolve.uniforms.uFullSize.value.set(this.width, this.height);
+    this.internal.setSize(iw, ih); this.motion?.setSize(iw, ih); this.resolve.uniforms.uSize.value.set(iw, ih); this.resolve.uniforms.uFullSize.value.set(this.width, this.height);
     this.sharpen.uniforms.uTexel.value.set(1 / this.width, 1 / this.height); if (changed) this.reset();
   }
   render(renderer, writeBuffer) {
@@ -229,14 +249,22 @@ class TAAPass extends Pass {
       u.tDepth.value = this.internal.readBuffer.depthTexture;
       this.drawing = true; try { this.internal.render(frameClock.dt); } finally { this.drawing = false; }
       u.tCurrent.value = this.internal.readBuffer.texture;
+      // what moved on its own since the previous frame: its velocity (motion.js), drawn with this frame's jittered camera
+      this.movers = 0;
+      if (this.motion && this.valid) {
+        this.motionJitter.copy(u.uJitter.value).multiplyScalar(2);
+        this.movers = this.motion.render(renderer, cam, u.tDepth.value, this.previousView, this.motionJitter, frameClock.dt);
+      }
+      u.tVelocity.value = this.motion?.target.texture ?? null; u.uHasVelocity.value = this.movers > 0 ? 1 : 0;
       const next = this.history[this.index], previous = this.history[1 - this.index]; u.tHistory.value = previous.texture; u.uValid.value = +this.valid;
       if (!this.valid) renderer.initRenderTarget(previous);
-      for (const key of ['feedback', 'gamma', 'depthAbsolute', 'depthRelative', 'reactive']) u['u' + key[0].toUpperCase() + key.slice(1)].value = this.settings[key];
+      for (const key of ['feedback', 'gamma', 'depthAbsolute', 'depthRelative', 'reactive', 'motionFeedback', 'motionPixels']) u['u' + key[0].toUpperCase() + key.slice(1)].value = this.settings[key];
       this.quad.material = this.resolve; renderer.setRenderTarget(next); this.quad.render(renderer);
       this.sharpen.uniforms.tResolved.value = next.texture; this.sharpen.uniforms.uSharpen.value = this.settings.sharpen;
       this.quad.material = this.sharpen; renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); this.quad.render(renderer);
       u.uPrevVP.value.multiplyMatrices(this.projection, cam.matrixWorldInverse); u.uPrevView.value.copy(cam.matrixWorldInverse);
       this.previousProjection.copy(this.projection); this.previousPosition.copy(this.position); this.previousRotation.copy(this.rotation);
+      this.motion?.advance();
       this.valid = true; this.index = 1 - this.index; this.frame++; this.lastT = frameClock.t;
     } catch (err) { this.reset(); throw err; }
     finally { cam.projectionMatrix.copy(this.projection); cam.projectionMatrixInverse.copy(this.inverseProjection); renderer.autoClear = autoClear; renderer.setRenderTarget(savedTarget); }
@@ -250,7 +278,7 @@ class TAAPass extends Pass {
       if (m.customProgramCacheKey === programKey) m.customProgramCacheKey = key;
       m.needsUpdate = true;
     }
-    this.materials.clear(); this.internal.dispose(); for (const rt of this.history) rt.dispose(); this.resolve.dispose(); this.sharpen.dispose(); this.quad.dispose();
+    this.materials.clear(); this.motion?.dispose(); this.internal.dispose(); for (const rt of this.history) rt.dispose(); this.resolve.dispose(); this.sharpen.dispose(); this.quad.dispose();
   }
 }
 
@@ -265,7 +293,7 @@ export function createTAA(renderer, camera, lighting, value = '', options = {}) 
   // the scene's own draws inside the pass: each material is checked for the texture bias before its program is chosen
   const direct = renderer.renderBufferDirect;
   if (direct) renderer.renderBufferDirect = function (camera, scene, geometry, material, object, group) {
-    if (pass.drawing && scene === pass.scene && material) pass.drawn(material);
+    if (pass.drawing && scene === pass.scene && material) { pass.drawn(material); if (camera === pass.camera && !scene.overrideMaterial) pass.motion?.seen(object); }
     return direct.call(this, camera, scene, geometry, material, object, group);
   };
   for (const rt of [composer.renderTarget1, composer.renderTarget2]) { if (rt.samples) { rt.samples = 0; rt.dispose(); } }

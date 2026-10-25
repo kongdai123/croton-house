@@ -56,7 +56,8 @@ const L = {
     const grd = g.createLinearGradient(0, 256, 0, 0); grd.addColorStop(0, 'rgba(255,214,150,0.9)'); grd.addColorStop(0.35, 'rgba(255,214,150,0.35)'); grd.addColorStop(1, 'rgba(255,214,150,0)');
     g.fillStyle = grd; g.beginPath(); g.moveTo(52, 250); g.lineTo(76, 250); g.lineTo(118, 10); g.lineTo(10, 10); g.closePath(); g.fill();
     const t = ctex(c); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-    return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4, toneMapped: false });
+    // the raster look's stand-in for the light on the wall: hidden over the bake (lighting_roles.js sprite)
+    return declare(new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4, toneMapped: false }), { sprite: 'standIn' });
   }),
   plateWhite: once(() => new THREE.MeshStandardMaterial({ color: 0xf2f1ec, roughness: 0.5, metalness: 0.2 })),
   dried: once(() => new THREE.MeshStandardMaterial({ color: 0xc8b28a, roughness: 0.9 })),

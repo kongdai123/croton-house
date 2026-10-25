@@ -3,6 +3,7 @@
 // cinder-block stools, navy market umbrella), g37/g38/g39/g44 (white moulded patio armchairs), g03/g05/g06 (front yard:
 // low lumber platform bench, white pots, porch sconce), g43 (white rendered planters), rednote dusk shots (white urn).
 import { THREE, M, box, cyl, tube, group, at, addSeat, setMovable, setCollider, autoCollider, describe, shadow, declare } from '../kit.js';
+import { liveLevel } from '../lighting_roles.js';
 import { ss, wickerResin, WEAVE_TILE, pitSteel, galvanized, powderBlack, lumberTop, soil, concreteGrey, cinder, vinylShade, ash, charEnd, lumberPT, barkDark, cushionCream, navyDeep, renderWhite,
   board, latheM, ringShell, strut, puffPillow, roundCushion, fireScreen, sconceAlpha, animatedToggle } from './outdoor_parts.js';
 
@@ -48,7 +49,14 @@ function firePit() {
     const l = shadow(new THREE.Mesh(logGeo, mats)); l.rotation.set(0, ry, PI / 2 + (i - 1) * 0.12, 'YXZ'); l.position.set(x, y + (cy - 0.48), z); g.add(l); });
   // One permanent warm light; intensity fades to zero in daylight or when extinguished.
   const glow = new THREE.PointLight(0xff8b38, 0, 3.5, 2); glow.position.y = 0.55; g.add(glow);
-  declare(glow, { emits: { kind: 'fire' }, bake: false });   // the fire's light: live (and in photo mode), not in the bake
+  // the fire's light: live (and in photo mode), not in the bake. A small wood fire: 5-10 kW at ~0.3 lm/W, ~2000 lm at
+  // ~2000 K (over the bake: lighting_roles.js bakedLiveLevel, 0.025 in the bake's units for the raster look's 2.3), a warm
+  // pool on the gravel within ~1.5 m. No shadow: it reaches the gravel through the bowl, a small leak at this size.
+  const FIRE_LM = 2000, RASTER_GLOW = 2.3;
+  declare(glow, { emits: { kind: 'fire' }, bake: false, output: { lm: FIRE_LM } });
+  // the flames, embers, sparks and the steel's glow over the bake: the level that reads at the dusk garden's exposure as
+  // orange flame through the mesh (300 lm's worth of the light's level; at the full 2000 they read as a white ball)
+  const FLAME_LM = 300;
   const flameMat = new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 }, strength: { value: 0 } }, transparent: true,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
@@ -66,6 +74,7 @@ function firePit() {
         vec3 col = mix(vec3(1.0, 0.72, 0.19), vec3(1.0, 0.12, 0.008), y);
         gl_FragColor = vec4(col * 2.2, a * strength * 0.8); }`,
   });
+  declare(flameMat, { sprite: 'source' });   // the fire itself, drawn in both looks
   // Several crossed tongues share one draw call, so flames read from every standing view.
   const pos = [], uv = [], seeds = [], indices = [];
   for (let k = 0; k < 5; k++) for (let cross = 0; cross < 2; cross++) {
@@ -87,11 +96,12 @@ function firePit() {
   const ctx = canvas.getContext('2d'), gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
   gradient.addColorStop(0, 'rgba(255,155,58,0.5)'); gradient.addColorStop(0.35, 'rgba(255,101,20,0.25)'); gradient.addColorStop(1, 'rgba(255,68,0,0)');
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
-  const washMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 });
+  // the raster look's stand-in for the fire's light on the gravel: hidden over the bake, where the live light lights the gravel
+  const washMat = declare(new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }), { sprite: 'standIn' });
   const wash = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.1), washMat); wash.rotation.x = -PI / 2; wash.position.y = 0.018;
   wash.userData.allowOverride = false; wash.raycast = () => {}; g.add(wash);
   const sparkPos = new Float32Array(12 * 3), sparkGeo = new THREE.BufferGeometry(); sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
-  const sparkMat = new THREE.PointsMaterial({ color: 0xffb04c, size: 0.012, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const sparkMat = declare(new THREE.PointsMaterial({ color: 0xffb04c, size: 0.012, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }), { sprite: 'source' });
   const sparks = new THREE.Points(sparkGeo, sparkMat); sparks.userData.allowOverride = false; sparks.raycast = () => {}; g.add(sparks);
   // Collider belongs to the steel footprint, rather than the flame/glow effects.
   describe(g, { id: 'outdoor-fire-pit', name: 'fire sphere', zh: '球形火盆' });
@@ -101,11 +111,13 @@ function firePit() {
     label: { en: 'Light fire pit', zh: '点燃火盆' }, labelOn: { en: 'Extinguish fire pit', zh: '熄灭火盆' }, duration: 1.1,
     apply(on, t) {
       const flicker = 0.88 + 0.09 * Math.sin(t * 11.7) + 0.06 * Math.sin(t * 17.3 + 1.2) + 0.04 * Math.sin(t * 7.1);
-      flameMat.uniforms.time.value = t; flameMat.uniforms.strength.value = on;
-      glow.intensity = on * flicker * 2.3;
-      steel.emissiveIntensity = on * flicker * 0.08; screen.emissiveIntensity = on * flicker * 0.12;
-      embers.emissiveIntensity = on * flicker * 2.8; bark.emissiveIntensity = on * flicker * 0.45; ends.emissiveIntensity = on * flicker * 1.7;
-      washMat.opacity = on * flicker * 0.65; sparkMat.opacity = on * 0.85;
+      // the raster look's levels, or over the bake the light at its lumens and the visible fire at FLAME_LM's share of them
+      const light = liveLevel(glow, RASTER_GLOW) / RASTER_GLOW, k = glow.userData.bakedLevel === undefined ? 1 : light * FLAME_LM / FIRE_LM;
+      flameMat.uniforms.time.value = t; flameMat.uniforms.strength.value = on * k;
+      glow.intensity = on * flicker * RASTER_GLOW * light;
+      steel.emissiveIntensity = on * flicker * 0.08 * k; screen.emissiveIntensity = on * flicker * 0.12 * k;
+      embers.emissiveIntensity = on * flicker * 2.8 * k; bark.emissiveIntensity = on * flicker * 0.45 * k; ends.emissiveIntensity = on * flicker * 1.7 * k;
+      washMat.opacity = on * flicker * 0.65; sparkMat.opacity = on * 0.85 * k;
       for (let i = 0; i < 12; i++) {
         const life = (t * (0.32 + i * 0.011) + i * 0.137) % 1;
         sparkPos[i * 3] = Math.sin(i * 13.7 + life * 3) * (0.035 + life * 0.12);

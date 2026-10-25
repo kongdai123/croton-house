@@ -38,7 +38,7 @@ void main() {
 }`;
 const filterShader = `
 uniform sampler2D tMeter, tPrevious;
-uniform float uDt, uValid, uFast, uTau, uDeadBand;
+uniform float uDt, uValid, uFast, uTau, uDeadBand, uFade;
 void main() {
   vec2 sum = vec2(0.0);
   for (int y = 0; y < ${METER.height / 4}; y++) for (int x = 0; x < ${METER.width / 4}; x++)
@@ -49,13 +49,14 @@ void main() {
   float filtered = mix(old.b, uFast > 0.5 ? raw : median, 1.0 - exp(-uDt / uTau));
   float error = filtered - old.a;
   float held = old.a + sign(error) * max(0.0, abs(error) - uDeadBand);
-  gl_FragColor = uValid > 0.5 ? vec4(raw, old.r, filtered, held) : vec4(raw);
+  // through a slot fade every frame's reading as it is: the fade, not the view, changes the light
+  gl_FragColor = uValid > 0.5 && uFade < 0.5 ? vec4(raw, old.r, filtered, held) : vec4(raw);
 }`;
 const adaptShader = `
 uniform sampler2D tMeter, tPrevious;
 uniform vec3 uSlot; // base EV, minimum/maximum EV offsets
 uniform vec4 uTimes; // brighten, darken, ease, teleport (seconds)
-uniform float uDt, uValid, uFast, uIndoor, uKey, uOutdoor; // uOutdoor: the visitor's offset outdoors (slot autoExposure.outdoor)
+uniform float uDt, uValid, uFast, uIndoor, uKey, uOutdoor, uFade; // uOutdoor: the visitor's offset outdoors; uFade: a slot crossfade runs
 void main() {
   float sceneLog = texture2D(tMeter, vec2(0.5)).a;
   float target = clamp(log2(uKey) - sceneLog, uSlot.x + uSlot.y, uSlot.x + uSlot.z);
@@ -73,9 +74,16 @@ void main() {
   float reference = uValid > 0.5 ? old.b : sceneLog, referenceDrive = uValid > 0.5 ? old.a : sceneLog;
   float nextReference = sceneLog + (reference - sceneLog) * b + (referenceDrive - sceneLog) * coupling;
   gl_FragColor = vec4(exp2(next), target + (drive - target) * a, nextReference, sceneLog + (referenceDrive - sceneLog) * a);
+  // A slot crossfade is the light changing on purpose, in the frame the meter reads (this frame's): the exposure is its
+  // target every frame, with no glide behind it. The garden's target is the fade's own exposure (lighting_slots.js
+  // fadeExposure, in exposed space); a room's is the meter's, so the picture's mean moves from one key to the other.
+  // Glides lagging a fade pumped the picture (75 -> 22 -> 90 in the garden, 175 -> 130 -> 155 in the living room).
+  if (uFade > 0.5) gl_FragColor = vec4(exp2(target), target, sceneLog, sceneLog);
 }`;
 
-export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier = () => query.get('tier') ?? 'laptop', query = new URLSearchParams(location.search), settings = {} }) {
+// fading(): a slot crossfade steps this frame (lightmap_slots.js stepping, its last frame included): the meter reads every
+// frame and the exposure is its target
+export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier = () => query.get('tier') ?? 'laptop', query = new URLSearchParams(location.search), settings = {}, fading = () => false }) {
   if (!autoExposureEnabled(query)) return null;
   const { outputPass, camera, indoorWeight } = lighting;
   if (!outputPass || !camera) return null;
@@ -89,12 +97,12 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
   const reduction = material(reduceShader, { tMeter: { value: meter.texture } });
   const filtering = material(filterShader, {
     tMeter: { value: reduced.texture }, tPrevious: { value: null }, uDt: { value: 0 }, uValid: { value: 0 },
-    uFast: { value: 0 }, uTau: { value: params.meterTau }, uDeadBand: { value: params.deadBand },
+    uFast: { value: 0 }, uTau: { value: params.meterTau }, uDeadBand: { value: params.deadBand }, uFade: { value: 0 },
   });
   const adaptation = material(adaptShader, {
     tMeter: { value: null }, tPrevious: { value: null }, uSlot: { value: new THREE.Vector3() },
     uDt: { value: 0 }, uValid: { value: 0 }, uFast: { value: 0 }, uIndoor: { value: 0 },
-    uTimes: { value: new THREE.Vector4() }, uKey: { value: 1 }, uOutdoor: { value: 0 },
+    uTimes: { value: new THREE.Vector4() }, uKey: { value: 1 }, uOutdoor: { value: 0 }, uFade: { value: 0 },
   });
   const quad = new FullScreenQuad(null), position = new THREE.Vector3(), rotation = new THREE.Quaternion();
   let valid = false, meterValid = false, meterIndex = 0, index = 0, frame = 0, elapsed = 0, meterElapsed = 0, fast = 0, disposed = false;
@@ -115,9 +123,10 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
     if (moved) fast = params.fastDuration;
     position.copy(camera.position); rotation.copy(camera.quaternion);
     const dt = elapsed; elapsed = 0; meterElapsed += dt;
+    const fade = +!!fading();
     const saved = renderer.getRenderTarget();
     try {
-      if (!valid || moved || frame % METER.interval === 0) {
+      if (!valid || moved || fade || frame % METER.interval === 0) {
         metering.uniforms.tScene.value = readBuffer.texture;
         draw(meter, metering); draw(reduced, reduction);
         const f = filtering.uniforms;
@@ -125,7 +134,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
         // A teleport restarts the meter history at the new view. Easing the old view's reading out (tau 0.2 s) made
         // the fast exposure glide chase a stale target and overshoot (0.4 EV into the primary bath at dusk).
         f.uDt.value = meterElapsed; f.uValid.value = +(meterValid && !moved); f.uFast.value = +moved;
-        f.uTau.value = moved ? params.teleport : params.meterTau; f.uDeadBand.value = params.deadBand;
+        f.uTau.value = moved ? params.teleport : params.meterTau; f.uDeadBand.value = params.deadBand; f.uFade.value = fade;
         meterIndex = 1 - meterIndex; draw(meterHistory[meterIndex], filtering);
         meterElapsed = 0; meterValid = true;
       }
@@ -134,7 +143,7 @@ export function createBakedAutoExposure({ renderer, lighting, getSlot, getTier =
       u.uIndoor.value = indoorWeight(camera.position);
       u.uDt.value = dt; u.uValid.value = +valid; u.uFast.value = +(fast > 0);
       u.uTimes.value.set(params.brighten, params.darken, params.ease, params.teleport); u.uKey.value = params.key ?? mood.autoExposure.key;   // settings.key: a test's override
-      u.uOutdoor.value = mood.autoExposure.outdoor ?? 0;
+      u.uOutdoor.value = mood.autoExposure.outdoor ?? 0; u.uFade.value = fade;
       u.tMeter.value = meterHistory[meterIndex].texture;
       u.tPrevious.value = valid ? history[index].texture : reduced.texture;
       index = 1 - index; draw(history[index], adaptation);

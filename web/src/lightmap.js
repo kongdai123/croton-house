@@ -35,7 +35,7 @@ import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.
 import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
 import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader, dryCompile } from './shaders/baked_material.js';
-import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
+import { bakedEmission, glowLevel, lightingOf, meshLighting, bakedLiveLevel, LM_PER_BAKE_UNIT } from './lighting_roles.js';
 import { VolumetricPass, installVolume } from './volumetric.js';
 import { featureWanted } from './volumetric_slots.js';
 
@@ -691,6 +691,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   // the live lights the bake now carries
   for (const l of [...lighting.windowLights, ...lighting.fixtures.children]) if (l.isLight) { lightVisibility.set(l, l.visible); l.visible = false; }
   scene.traverse(o => { if (o.isHemisphereLight) { lightVisibility.set(o, o.visible); o.visible = false; } });
+  // Light in the raster look's units over the bake: the stand-in sprites (a sconce's wash, the fire's glow on the gravel) are
+  // hidden, the bake carries that light; a live light outside the bake (the fire's) takes its lumens in the bake's units
+  // (lighting_roles.js sprite, bakedLiveLevel). Here and only here.
+  const standIns = new Map(), liveLights = [], lmPerW = groupMeta?.lmPerW ?? LM_PER_BAKE_UNIT;
+  scene.traverse(o => {
+    if (o.isLight) { const v = bakedLiveLevel(o, lmPerW); if (v !== null) { o.userData.bakedLevel = v; liveLights.push(o); } return; }
+    for (const m of [].concat(o.material ?? [])) if (m && !standIns.has(m) && lightingOf(m)?.sprite === 'standIn') { standIns.set(m, m.visible); m.visible = false; }
+  });
   // every lit surface that did not get a lightmap takes the probe volume (and the soft sun)
   let probeLitCount = 0, foliage = null, envTarget = null, windows = null, stats = null;
   const hooks = new Map(), envs = new Map(), sided = new Set();
@@ -861,7 +869,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let removeShafts = null;
   const shaftsState = () => {
     const f = slots?.fading;
-    return { current: slots?.name ?? slot, next: f?.name ?? null, t: f?.t ?? 0, sky: skyBg, nextSky: f?.sky ?? null };
+    return { current: slots?.name ?? slot, next: f?.name ?? null, t: f?.t ?? 0, progress: f?.progress ?? 0, sky: skyBg, nextSky: f?.sky ?? null, exposureShift: slots?.exposureShift ?? 0 };
   };
   const setShafts = name => {
     const want = featureWanted(location.search, 'shafts', TIERS[name]) && !!lighting.renderConfig?.hdr;
@@ -874,7 +882,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (api.shafts) api.shafts.enabled = want;
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
-  const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
+  const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier, fading: () => !!slots?.stepping });
   // the camera's white balance, from the probe volume's light on the surfaces in view (white_balance.js); with the auto
   // exposure only (a fixed exposure, ?capture, stays comparable with Cycles)
   const whiteBalance = autoExposure && createWhiteBalance({ lighting, renderer, volume: volume.uniforms, walls });
@@ -915,6 +923,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     for (const c of faceCopies.values()) c.dispose();
     for (const [o, v] of shadowCasters) if (!originalMeshes.has(o)) o.castShadow = v;
     for (const [l, v] of lightVisibility) l.visible = v;
+    for (const [m, v] of standIns) m.visible = v;
+    for (const l of liveLights) delete l.userData.bakedLevel;
     for (const m of mats.values()) m.dispose();
     if (!slots) layers.forEach(disposeAtlas);
   };
@@ -954,7 +964,16 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       } catch (err) { cleanup(); env?.dispose(); for (const u of Object.values(nextVolume?.uniforms ?? {})) if (u.value?.isTexture) u.value.dispose(); throw err; }
     };
     const initialLayers = layers.slice(), initialK = [enc.K.slot, enc.K.lamps];
-    slots = createSlotRuntime({ scene, renderer, available: availableSlots, load: stageSlot, disposeAtlas, foliage,
+    // A slot fade blends in exposed space (lighting_slots.js fadeExposure): the two slots' exposures for this view, of which
+    // only the difference counts. The fixed exposure (?capture): the slots' ev. The visitor outdoors: the garden's (ev +
+    // outdoor offset), which its exposure holds. In a room the visitor's exposure is the meter's, every frame of the fade
+    // (auto_exposure.js uFade), so the radiance blends linearly there; in a doorway the two mix as the exposure target does.
+    const exposureBases = (a, b) => {
+      if (!autoExposure) return [a.ev, b.ev];
+      const w = THREE.MathUtils.clamp(lighting.indoorWeight(lighting.camera.position), 0, 1);
+      return [0, ((b.ev + (b.autoExposure.outdoor ?? 0)) - (a.ev + (a.autoExposure.outdoor ?? 0))) * (1 - w)];
+    };
+    slots = createSlotRuntime({ scene, renderer, available: availableSlots, load: stageSlot, disposeAtlas, foliage, exposureBases,
       initial: { name: slot, enc, layers, volume, sky: skyBg, refl, foliage: foliageData, resolution,
         remip: () => linearMips(renderer, initialLayers, initialK) },
       setParams(mood) {
@@ -981,6 +1000,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       },
     });
     volume.slots = slots; Object.assign(lmUniforms, slots.uniforms);
+    api.slots = slots;   // read-only for validation (tools/fade_check.mjs --trace: the fade's weight, progress and exposure bases)
   }
   // Optional callback: (fraction, { name, loaded, total, phase }); transition marks the start of the fade.
   api.setSlot = (name, onProgress) => slots ? slots.request(name, onProgress) : Promise.resolve(name === slot);

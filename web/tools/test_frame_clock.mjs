@@ -91,6 +91,17 @@ try {
   run(60, 0.1); advanceFrameClock(1 / 60, 1 / 60); advanceFrameClock(0.1); advanceFrameClock(0.1);   // 0.2 s the pass did not draw
   assert.equal(draw(), 0, 'frames the pass skipped drop the history');
   assert.ok(frameClock.frame > 0);
+  // a slot fade in exposed space drops the radiance as the exposure rises (lightmap_slots.js exposureShift): the history is
+  // last frame's light rescaled by that change, so it lags the picture, not the radiance (unscaled, golden hour's mist
+  // showed at the dusk exposure)
+  const scale = () => vol.march.uniforms.uHistoryScale.value;
+  state = { current: 'golden', next: 'dusk', t: 0.5, exposureShift: 0 }; run(60, 0.05); close(scale(), 1, 1e-12, 'no shift, no rescale');
+  state = { ...state, exposureShift: 2 }; run(60, 1 / 60); close(scale(), 0.25, 1e-12, 'the exposure up 2 EV: the history at a quarter');
+  run(60, 1 / 60); close(scale(), 1, 1e-12, 'then as it is');
+  // the air's density follows the fade's progress, the light its radiance weight (into sunrise the weight stays ~0 until
+  // the last frames): the exposed in-scattering moves with the picture
+  state = { current: 'dusk', next: 'sunrise', t: 0.01, progress: 0.5, exposureShift: 2 }; run(60, 1 / 60);
+  close(vol.medium.mist, (F.MEDIA.dusk.mist + F.MEDIA.sunrise.mist) / 2, 1e-12, 'the mist halfway at half the progress');
   vol.dispose();
 } finally { await rm(dir, { recursive: true, force: true }); }
 

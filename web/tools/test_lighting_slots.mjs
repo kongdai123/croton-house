@@ -27,6 +27,17 @@ assert.deepEqual(await discoverSlots('', null, async url => {
 const mid = blendSlot(SLOTS.sunrise, SLOTS.dusk, 0.5);
 assert.equal(mid.lamps, 1); assert.equal(mid.wet, 0.5); assert.ok(Math.abs(mid.ev - 1.2) < 1e-12);
 for (const [k, v] of Object.entries(blendSlot(SLOTS.noon, SLOTS.golden, 1))) assert.deepEqual(v, SLOTS.golden[k]);
+// every value of every fade finite, at its ends too (0 / 0 at the end of a fade into dusk turned the sun, then the
+// exposure and the whole picture, NaN: black for good)
+const finite = (o, path = '') => { for (const [k, v] of Object.entries(o)) { if (typeof v === 'object') finite(v, `${path}${k}.`); else assert.ok(Number.isFinite(v), `${path}${k} = ${v}`); } };
+for (const x of SLOT_ORDER) for (const y of SLOT_ORDER) for (const t of [0, 1e-9, 0.5, 1 - 1e-9, 1]) finite(blendSlot(SLOTS[x], SLOTS[y], t));
+// the sun from or to dusk (no sun) stays where the sunny slot has it and only fades: never below the horizon mid-fade
+for (const t of [0.05, 0.5, 0.95]) {
+  const into = blendSlot(SLOTS.golden, SLOTS.dusk, t), out = blendSlot(SLOTS.dusk, SLOTS.sunrise, t);
+  assert.deepEqual([into.az, into.el, into.color], [SLOTS.golden.az, SLOTS.golden.el, SLOTS.golden.color]);
+  assert.deepEqual([out.az, out.el], [SLOTS.sunrise.az, SLOTS.sunrise.el]); assert.ok(Math.abs(out.strength - t * SLOTS.sunrise.strength) < 1e-12);
+  out.color.forEach((c, i) => assert.ok(Math.abs(c - SLOTS.sunrise.color[i]) < 1e-12));
+}
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const tick = () => new Promise(setImmediate);
 const loaded = [], begun = [], released = [];

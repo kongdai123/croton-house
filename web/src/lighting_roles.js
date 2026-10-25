@@ -42,6 +42,13 @@ export const SCHEMA = {
     bake: ['lightmap', 'probe'],                   // probe: meshes whose every material says so get no lightmap unit
     contact: 'enters the contact-shadow depth pass',
     zone: [null, 'exterior'],                      // exterior: the street faces of the shell, always the exterior copy
+    // An additive or untone-mapped sprite with light in it. 'source': the light's own visible form (flames, sparks), drawn
+    // in both looks. 'standIn': the light a source throws on nearby surfaces (a sconce's wash on its wall, the fire's glow on
+    // the gravel), painted for the raster look; over the bake, which carries that light on the surfaces themselves, it is
+    // hidden (lightmap.js, the one place). Drawn over the bake it counted the light twice at a fixed radiance the exposure
+    // then scales: at dusk (+3.5 EV outdoors) the porch sconce's cards became white cones and the fire's card clipped 70% of
+    // the gravel around it (2026-10-24). test_light_sprites.mjs holds every additive or untone-mapped sprite to a declaration.
+    sprite: [null, 'source', 'standIn'],
   },
   mesh: {
     role: ['architecture', 'furniture', 'plant', 'ground', 'glass', 'cloth', 'mirror', 'emitter', 'fixture', 'door', 'movable', 'pet', 'visitor', 'presentation'],
@@ -134,6 +141,7 @@ export function resolveMaterial(m) {
     // the contact-shadow depth pass draws solid depth: no plants (wind), nothing see-through, no cut-outs (no alpha there)
     contact: d.contact ?? !(foliage || alphaCutout || m.transparent || m.transmission > 0 || m.isShaderMaterial),
     zone: d.zone !== undefined ? d.zone : null,
+    sprite: d.sprite ?? null,
   };
   RECORDS.set(m, r);
   return r;
@@ -459,6 +467,17 @@ export const exteriorAt = (x, y) => spaceAt(x, y, 0.3)?.zone === 'exterior';
 const LIGHTS = new WeakMap();
 export function ownLight(holder, light) { if (!LIGHTS.has(holder)) LIGHTS.set(holder, []); LIGHTS.get(holder).push(light); }
 export const ownedLights = holder => LIGHTS.get(holder) ?? [];
+// A live light outside the bake (declared { bake: false, output: { lm } }: the fire pit's) in the bake's units: its flux as a
+// point light's intensity, lm / (4 pi) candela, over the lumens per bake unit (encoding.json lmPerW; bake/scripts/
+// fixture_lights.py LM_PER_W). lightmap.js puts it in userData.bakedLevel over the bake; liveLevel reads it, else the raster
+// look's own level. The fire's light drawn at its raster level over the bake was ~90x its 2000 lm (2.3 for 0.025): with its
+// wash card and the dusk garden's exposure it clipped the gravel around the pit.
+export const LM_PER_BAKE_UNIT = 6400;
+export function bakedLiveLevel(light, lmPerW = LM_PER_BAKE_UNIT) {
+  const d = light.userData?.lighting;
+  return d?.bake === false && d.output?.lm > 0 ? d.output.lm / (4 * Math.PI * lmPerW) : null;
+}
+export const liveLevel = (light, raster) => light.userData?.bakedLevel ?? raster;
 
 // ---- emission levels -------------------------------------------------------------------------------------------------------
 // How bright an emitter or a live light is, one rule per path (the raster walkthrough, the baked lighting), read by every

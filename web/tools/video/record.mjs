@@ -6,11 +6,16 @@
 //                   [--every N] [--size 1920x1080] [--dsf 1] [--clean] [--shots a,b] [--stills poses.json]
 //                   [--query 'tier=hq&lmres=full'] [--max seconds] [--tour-slot noon|sunrise|golden] [--no-hearts]
 //                   [--png-frames n,n] [--wall-clock] [--opt key=value,key=value (more window.__videoOptions for a script)]
+//                   [--shutter n] [--angle 180]
 // --every N keeps one frame in N (a quick preview of the whole film: compositions, timings).
 // --clean hides the site's interface (top bar, plan, crosshair, labels, captions, cursor) with film-only CSS.
 // --dsf 2 renders the page at a device scale factor of 2 (the site caps its drawing buffer at 2560 x 1440) and keeps
 //   CSS-pixel screenshots, so every frame is supersampled.
 // --png-frames 30,1290 also writes those kept frames as lossless PNG (p00030.png ...), for posters.
+// --shutter n (twitter.js timeline only): a film camera's shutter: each kept frame is drawn as several steps of the clock
+//   and n of them, over the shutter's angle (--angle, default 180 degrees: the second half of the frame's interval), are
+//   averaged in the page and shown over the canvas for the screenshot. Motion blur: fine detail that moves about half
+//   its own period a frame strobes at 60 fps without it (tools/video/flicker_check.mjs measures by how much).
 // The page's performance.now() follows the frame clock once it is ready (each renderAt(t) draws at the base time + t):
 // render-path code that reads the wall clock (TAA's stall reset, the puddles' ripples) would otherwise see the
 // recorder's own pace, 100-300 ms a frame with a screenshot, and drop TAA's history on every kept frame. --wall-clock
@@ -38,6 +43,7 @@ const FPS = +opt('--fps', 30), MAX_SECONDS = +opt('--max', 400), DSF = +opt('--d
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = opt('--script', 'choreography.js'), SCRIPT_PATH = isAbsolute(SCRIPT) ? SCRIPT : join(HERE, SCRIPT);
 const SHOTS = opt('--shots') ? opt('--shots').split(',') : null;
+const SHUTTER = +opt('--shutter', 0), ANGLE = +opt('--angle', 180);
 const STILLS = opt('--stills') ? JSON.parse(await readFile(opt('--stills'), 'utf8')) : null;
 const PNG_FRAMES = new Set((opt('--png-frames') || '').split(',').filter(Boolean).map(Number));
 if (!ROOT || !OUT) { console.log('usage: node record.mjs --site <dir> --out <dir> [--script twitter.js] [--fps 60] [--every N] [--clean]'); process.exit(1); }
@@ -94,7 +100,29 @@ await page.evaluate(() => {
 });
 // film-only: no interface on screen (the site's HUD, landing and warm-up screens, the cursor); the choreography's own
 // title layer (#film) stays
-if (CLEAN) await page.addStyleTag({ content: 'body > :not(#gl):not(#film) { display:none !important } *, *::before, *::after { cursor:none !important }' });
+if (CLEAN) await page.addStyleTag({ content: 'body > :not(#gl):not(#film):not(#shutter) { display:none !important } *, *::before, *::after { cursor:none !important }' });
+// --shutter: the average of a frame's open steps, drawn over the canvas (window.__shutter)
+if (SHUTTER) await page.evaluate(() => {
+  const gl = window.__app.renderer.domElement, over = document.createElement('canvas'), grab = document.createElement('canvas');
+  over.id = 'shutter'; gl.after(over);
+  const x = grab.getContext('2d', { willReadFrequently: true }), o = over.getContext('2d');
+  let acc = null, n = 0;
+  window.__shutter = {
+    sub: 0,
+    add() {
+      if (grab.width !== gl.width || grab.height !== gl.height) { grab.width = over.width = gl.width; grab.height = over.height = gl.height; acc = null; }
+      x.drawImage(gl, 0, 0); const px = x.getImageData(0, 0, grab.width, grab.height).data;
+      acc ??= new Float32Array(px.length); for (let i = 0; i < px.length; i++) acc[i] += px[i]; n++;
+    },
+    clear() { acc?.fill(0); n = 0; },
+    show() {
+      const r = gl.getBoundingClientRect(), img = o.createImageData(over.width, over.height);
+      for (let i = 0; i < acc.length; i++) img.data[i] = Math.round(acc[i] / n);
+      o.putImageData(img, 0, 0); acc.fill(0); n = 0;
+      Object.assign(over.style, { position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, pointerEvents: 'none', zIndex: getComputedStyle(gl).zIndex });
+    },
+  };
+});
 await page.addScriptTag({ path: SCRIPT_PATH });
 const timeline = await page.evaluate(() => !!window.__video?.timeline);
 const shot = async (frame) => {
@@ -115,24 +143,35 @@ const waitHold = async (hold) => {
 if (timeline) {
   // ---- twitter.js: the choreography decides per frame whether the frame is kept ----
   await page.evaluate(() => window.__video.start());
-  let lastShot = '', force = false;
+  let lastShot = '', force = false, stepResets = false;
   for (;;) {
-    const s = await page.evaluate(({ dt, force }) => {
+    const s = await page.evaluate(({ dt, force, shutter, angle }) => {
       const V = window.__video, hold = force ? '' : V.hold();
       if (hold) return { hold };
-      const r = V.step(dt);
+      // with a shutter, one call is one step of the frame; the frame is kept on its last step
+      const S = window.__shutter, steps = shutter ? Math.round(shutter * 360 / angle) : 1;
+      const r = V.step(dt / steps);
       if (r.done) return r;
       const before = window.__taaResets;
-      window.renderAt(window.simTime() + dt);
-      return { ...r, taaReset: window.__taaResets > before };
-    }, { dt: 1 / FPS, force });
+      window.renderAt(window.simTime() + dt / steps);
+      const taaReset = window.__taaResets > before;
+      if (shutter && r.save) {
+        if (S.shot !== r.shot) { S.shot = r.shot; S.sub = 0; S.clear(); }
+        if (++S.sub > steps - shutter) S.add();
+        if (S.sub < steps) return { step: true, taaReset };
+        S.sub = 0; S.show();
+      }
+      return { ...r, taaReset };
+    }, { dt: 1 / FPS, force, shutter: SHUTTER, angle: ANGLE });
     force = false;
     if (s.hold) { if (!(await waitHold(s.hold))) force = true; continue; }
     tHold = 0;
     if (s.error) { console.log('choreography error', s.error); errors.push(s.error); }
     if (s.done) break;
     drawn++;
-    if (!s.save) continue;
+    if (s.taaReset) stepResets = true;
+    if (s.step || !s.save) continue;
+    s.taaReset ||= stepResets; stepResets = false;
     if (s.shot !== lastShot) { steps.push({ t: +(frame / FPS).toFixed(3), frame, shot: s.shot }); lastShot = s.shot; console.log(`${(frame / FPS).toFixed(2)} s  shot ${s.shot}`); }
     if (s.taaReset) taaResetsKept.push(frame);
     if (frame % EVERY === 0) await shot(frame);
@@ -170,7 +209,7 @@ if (timeline) {
     if (frame > MAX_SECONDS * FPS) { console.log('film longer than', MAX_SECONDS, 's: stopping'); break; }
   }
 }
-await writeFile(join(OUT, 'meta.json'), JSON.stringify({ fps: FPS, frames: frame, every: EVERY, size: [W, H], dsf: DSF, lang: LANG, query: QUERY, script: SCRIPT, shots: SHOTS, stills: STILLS?.map(s => s.name), gpu, info, steps, holds, taaResetsKept, errors }, null, 1));
+await writeFile(join(OUT, 'meta.json'), JSON.stringify({ fps: FPS, frames: frame, every: EVERY, size: [W, H], dsf: DSF, lang: LANG, query: QUERY, script: SCRIPT, shutter: SHUTTER ? { steps: SHUTTER, angle: ANGLE } : null, shots: SHOTS, stills: STILLS?.map(s => s.name), gpu, info, steps, holds, taaResetsKept, errors }, null, 1));
 if (taaResetsKept.length) console.log('TAA history reset on kept frames', taaResetsKept.slice(0, 40).join(' '), taaResetsKept.length > 40 ? '...' : '');
 console.log('done', frame, 'frames', (frame / FPS).toFixed(1), 's of film in', ((Date.now() - tStart) / 1000).toFixed(0), 's; errors', errors.length);
 await browser.close(); server.close();

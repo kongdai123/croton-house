@@ -1,6 +1,8 @@
-// Temporal flicker check (TAA shimmer): shots of the Twitter cut (twitter.js) stepped on the frame clock as record.mjs
+// Temporal flicker check (shimmer and pops): shots of the Twitter cut (twitter.js) stepped on the frame clock as record.mjs
 // steps them (60 fps, renderAt, the page's own loop stopped, performance.now() on the frame clock), each kept frame read
 // back in the page and measured there; no screenshots, so a variant costs about its page load plus one draw per frame.
+// Deterministic: two runs of a build agree exactly. (Variants whose frames take different wall-clock time can still see
+// the pets take other paths: work the page does in idle time lands on other frames.)
 // The metric is scratch flicker.py's on the film: per pixel of a 480 x 270 luma image (area mean of the canvas, 8-bit
 // levels, rounded), the alternating change sqrt(max(0, -d_t * d_t+1)) between consecutive frames (up then down, or down
 // then up; smooth camera motion does not alternate), changes under 2 levels ignored; per frame its mean and 99.5th
@@ -9,12 +11,13 @@
 //   node flicker_check.mjs --site <dir> --out <dir> [--shots aerial,enter,dog] [--variants 'base=;nosharp=taaset=sharpen:0']
 //        [--size 1920x1080] [--query 'tier=hq&lmres=full'] [--limit aerial=0.5,dog=0.6] [--png dog:60,aerial:120]
 // --variants: name=extra query, ';'-separated; each variant gets a fresh page (the same seed, the same steps).
-// --limit: the largest mean flicker allowed per shot (any variant); exit 1 above it. The regression check (gate e in
-//   bake/validate/RENDER_GATE.md): --shots aerial,enter,dog --limit with the numbers there.
+// --limit shot=mean,...: the largest mean flicker allowed per shot (any variant); exit 1 above it, or on a TAA reset
+//   inside a shot. The regression check: bake/validate/RENDER_GATE.md (the flicker check) has the shots and limits.
 // --png shot:frame: that kept frame of the shot as a lossless PNG, for crops.
 // Pops (a region that changes for one frame and changes back: a shadow that drops out, a mesh that blinks): per frame the
 // largest mean of the alternating change over a 30 x 30 block of the 480 x 270 image; a frame above --pop levels (default
-// 12; camera-motion shimmer stays under ~6) is listed with its block. --pops-limit n: exit 1 with more than n pop frames.
+// 12) is listed with its block. --pops-limit shot=n,...: exit 1 with more than n pop frames in the shot (a bare n: every
+// shot). Fine detail strobing under a fast camera reaches it too (the aerial's ferns): a limit is for shots without that.
 // --shutter n: a 180-degree shutter: each 1/60 s frame drawn as 2n steps of the clock, the second n averaged (motion blur
 //   as a film camera records it; what the strobing of fine detail under camera motion owes to the frame rate).
 //   --angle 360: the shutter open the whole frame (n steps, all averaged).
@@ -54,7 +57,8 @@ const VARIANTS = opt('--variants', 'base=').split(';').filter(Boolean).map(v => 
 const LIMIT = Object.fromEntries((opt('--limit') || '').split(',').filter(Boolean).map(kv => kv.split('=')).map(([k, v]) => [k, +v]));
 // --trace shadow: the sun-shadow cache's map version and counters, and the sun's position
 const TRACES = { shadow: 'JSON.stringify((({ sunShadow: c }, sun) => [c.version, c.stats.refreshes, c.stats.staticRenders, c.stats.partialRenders, c.stats.hot, c.stats.tracked, sun.position.toArray().map(v => +v.toFixed(3))])(__app.baked, __app.lighting.sun))' };
-const POP = +opt('--pop', 12), POPS_LIMIT = opt('--pops-limit') === null ? null : +opt('--pops-limit'), TRACE = TRACES[opt('--trace')] ?? opt('--trace');
+const POP = +opt('--pop', 12), TRACE = TRACES[opt('--trace')] ?? opt('--trace');
+const POPS_LIMIT = (opt('--pops-limit') ?? '').split(',').filter(Boolean).reduce((m, kv) => { const [k, v] = kv.includes('=') ? kv.split('=') : ['*', kv]; m[k] = +v; return m; }, {});
 const PNGS = (opt('--png') || '').split(',').filter(Boolean).map(s => s.split(':')).map(([shot, f]) => `${shot}:${+f}`);
 if (!ROOT || !OUT) { console.log('usage: node flicker_check.mjs --site <dir> --out <dir> [--shots a,b] [--variants name=query;...] [--limit shot=mean,...]'); process.exit(1); }
 await mkdir(OUT, { recursive: true });
@@ -267,13 +271,14 @@ for (const v of VARIANTS) {
     }
   }
   await collect();
-  for (const [shot, limit] of Object.entries(LIMIT)) {
-    const r = shots[shot]; if (!r) continue;
-    if (r.mean > limit) { failed = true; console.log(`FAIL [${v.name}] ${shot}: mean flicker ${r.mean.toFixed(3)} > ${limit}`); }
-    if (POPS_LIMIT !== null && r.pops.length > POPS_LIMIT) { failed = true; console.log(`FAIL [${v.name}] ${shot}: ${r.pops.length} pop frames (${r.pops.map(p => p.frame).join(' ')})`); }
-    if (r.taaResetsKept.length) { failed = true; console.log(`FAIL [${v.name}] ${shot}: TAA history reset inside the shot (kept frames ${r.taaResetsKept.join(' ')})`); }
+  const checking = Object.keys(LIMIT).length + Object.keys(POPS_LIMIT).length > 0;
+  for (const [shot, r] of Object.entries(shots)) {
+    const limit = LIMIT[shot], popsLimit = POPS_LIMIT[shot] ?? POPS_LIMIT['*'];
+    if (limit !== undefined && r.mean > limit) { failed = true; console.log(`FAIL [${v.name}] ${shot}: mean flicker ${r.mean.toFixed(3)} > ${limit}`); }
+    if (popsLimit !== undefined && r.pops.length > popsLimit) { failed = true; console.log(`FAIL [${v.name}] ${shot}: ${r.pops.length} pop frames (${r.pops.map(p => p.frame).join(' ')})`); }
+    if (checking && r.taaResetsKept.length) { failed = true; console.log(`FAIL [${v.name}] ${shot}: TAA history reset inside the shot (kept frames ${r.taaResetsKept.join(' ')})`); }
   }
-  if (errors.length) { failed = failed || Object.keys(LIMIT).length > 0; console.log(`[${v.name}] errors`, errors.slice(0, 6)); }
+  if (errors.length) { failed ||= checking; console.log(`[${v.name}] errors`, errors.slice(0, 6)); }
   results.variants[v.name] = { query: v.query, info, shots, errors };
   await ctx.close();
 }

@@ -8,6 +8,7 @@ import { WebGLPathTracer, PhysicalCamera, FogVolumeMaterial } from 'three-gpu-pa
 import { MeshBVH, SAH, acceleratedRaycast } from 'three-mesh-bvh';
 import { GenerateMeshBVHWorker } from 'three-mesh-bvh/src/workers/GenerateMeshBVHWorker.js';
 import { photoSize } from './photo_budget.js';
+import { lensShift, setLensShift } from './lens_shift.js';
 import { makeSky, photoSupport, photoExposurePolicy, parseMood, kelvin, DEFAULT_MOOD } from './sky.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { OVERLAY_LAYER } from './viewpoints.js';
@@ -448,6 +449,8 @@ export class PhotoMode {
       // a wider frame than the screen keeps the screen's vertical field; a taller one keeps its horizontal field
       if (c.aspect < s.aspect) c.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(s.fov) / 2) * s.aspect / c.aspect));
     }
+    // the walkthrough camera's lens shift (lens_shift.js), so the photo frames what the screen shows
+    const shift = lensShift(s); setLensShift(c, shift.y, shift.x);
     c.updateProjectionMatrix(); c.updateMatrixWorld();
   }
 

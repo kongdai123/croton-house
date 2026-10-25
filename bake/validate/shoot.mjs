@@ -10,11 +10,11 @@
 //   quarter atlas); dusk_allon is the dusk page again after every switch is turned on (<slot>_alloff: every switch off). Writes
 //   <runDir>/<tier>/<state>/<camera>.png and <runDir>/<tier>/<state>/report.json (load and shot times, page errors,
 //   shader errors, link failures, sampler maximum, baked stats).
-//   Two sets: fixed exposure (default; ?capture, the slot's exposure, what Cycles renders) and --visitor (what a visitor
-//   sees: auto exposure and local adaptation on, written to <tier>-visitor/). The visitor page is loaded without
-//   ?capture, then its own frame loop is stopped so the clock still moves only through renderAt; each camera arrives by
-//   teleport (the adaptation's fast path) and is shot once the exposure has settled (at least 2 s of simulated time,
-//   then until it moves less than 0.01 EV per 1/3 s, at most 8 s).
+//   Two sets: fixed exposure (default; ?capture and ?lens=0, the slot's exposure through a pinhole, what Cycles renders)
+//   and --visitor (what a visitor sees: auto exposure, local adaptation and the cinematic lens on, written to
+//   <tier>-visitor/). The visitor page is loaded without ?capture, then its own frame loop is stopped so the clock still
+//   moves only through renderAt; each camera arrives by teleport (the adaptation's fast path) and is shot once the
+//   exposure has settled (at least 2 s of simulated time, then until it moves less than 0.01 EV per 1/3 s, at most 8 s).
 import { chromium } from 'playwright';
 import { createServer } from 'http';
 import { readFile, writeFile, mkdir } from 'fs/promises';
@@ -33,7 +33,7 @@ const HIDE = '#hud, #title, #minimap, #topbar, #crosshair, #label, #toast, #warm
 // Blender's camera: lens mm on a 36 mm-wide sensor, 16:9
 const vfov = lens => 2 * Math.atan(18 / lens * 9 / 16) * 180 / Math.PI;
 
-async function open(query, viewport, log, base = 'capture&pins=0&pets=0&autoexp=0') {
+async function open(query, viewport, log, base = 'capture&pins=0&pets=0&autoexp=0&lens=0') {
   const page = await browser.newPage({ viewport });
   page.on('pageerror', e => { log.pageerrors.push(e.message); console.log('[pageerror]', e.message); });
   page.on('console', m => {

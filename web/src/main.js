@@ -38,6 +38,9 @@ import { createFrameRate } from './frame_rate.js';
 import { createStartQuality } from './start_quality.js';
 import { advanceFrameClock } from './frame_clock.js';
 import { slotSwitch } from './slot_dependents.js';
+import { createLens } from './lens.js';
+import { lensWanted, lensParts } from './lens_policy.js';
+import { setLensShift } from './lens_shift.js';
 
 // ---- Device tier first: it sets MSAA, pixel ratio, shadow map size, post passes and texture limits before any of them exist.
 const Q = new URLSearchParams(location.search);
@@ -231,7 +234,30 @@ minimap.setPlan(house); minimap.markers = markers; minimap.targets = viewpoints.
 minimap.setExtra(rednote.blips());
 function goTo(target) { const pin = markers.pins.find(p => p.kind === target.kind && p.target.id === target.id); if (pin) markers.activate({ pin }); else viewpoints.goTo(target); }
 canvas.addEventListener('webglcontextrestored', () => soft('pets relight', () => pets?.relight()));   // after lighting rebuilt its environments (its own listener ran first)
-ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality });
+// ---- The cinematic lens (lens.js): depth of field with autofocus, bloom, vignetting, lateral chromatic aberration, after
+// TAA's resolve. On by default where the tier says (hq); Y and the legend row toggle it and the choice is remembered;
+// ?lens=0 / ?lens=1 force it, ?dof=0 / ?bloom=0 drop a part, ?capture leaves it off (lens_policy.js lensWanted).
+const lensStored = () => { try { return localStorage.getItem('croton-lens'); } catch { return null; } };
+const lensForward = new THREE.Vector3();
+// autofocus on what the visitor aims at (a piece, a door, a pet; not a pin or a photo card), as a distance along the view axis
+const lensAim = () => {
+  const h = interact.aimed; if (!h || h.pin || h.card || !(h.dist > 0)) return null;
+  camera.getWorldDirection(lensForward);
+  return { distance: h.dist * Math.max(0.1, lensForward.dot(interact.aimDir)) };
+};
+const lens = lighting.renderConfig.hdr && Q.get('lens') !== '0' ? soft('lens', () => createLens({ lighting, renderer, camera, aim: lensAim, parts: lensParts(location.search) })) : null;
+state.lensAvailable = !!lens;
+function applyLens(p = activePreset) {
+  if (!lens) { state.lens = false; return; }
+  lens.enabled = state.lens = lensWanted(location.search, p, lensStored());
+}
+function toggleLens() {
+  if (!lens) return;
+  try { localStorage.setItem('croton-lens', lens.enabled ? '0' : '1'); } catch { /* private mode: this visit only */ }
+  lens.enabled = state.lens = !lens.enabled; ui.syncLegends();
+}
+applyLens(preset);
+ui.bind({ player, viewpoints, rednote, markers, tour: tourCtl, minimap, pets, toggleDusk, toggleQuality, toggleLens });
 
 // ---- Post-processing: GTAO (contact shadows/ambient occlusion) + SMAA, per tier preset. J toggles quality.
 // Toggling dusk needs the other sky now, so it opens the background preparation's quiet-moment gate (see below).
@@ -287,6 +313,7 @@ function setQuality(name) {
   applyFeatures(p);
   const switching = baked?.setQuality(name).catch(fallbackLegacy);
   activePreset = p; setFoliageAA(!lighting.taa && lighting.renderConfig.samples > 0); fitView();
+  applyLens(p);
   if (mirrorsOn() && !mirrorsReady && state.ready) { layout.prepareMirrors(); mirrorsReady = true; }
   ui.syncLegends();
   return switching ?? Promise.resolve();
@@ -477,7 +504,7 @@ addEventListener('keydown', (e) => { if (e.code === 'Backquote' && !e.repeat && 
 if (Q.has('stats')) stats.toggle(true);
 window.simTime = () => simT;   // read-only clock for deterministic tools: step with renderAt(simTime() + dt)
 window.renderAt = (t) => { const step = Math.max(0, t - simT), dt = Math.min(0.1, step); frame(dt || 1 / 60, step); };
-window.__app = { baked, batch2, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
+window.__app = { baked, batch2, photo, photoUI, demo, stats, tier: state.tier, scene, camera, player, layout, garden, viewpoints, tourCtl, rednote, state, applyTime, setQuality, toggleQuality, toggleDusk, toggleLens, lens, setLensShift: (y, x) => setLensShift(camera, y, x), setBakedSlot, renderer, lighting, goTo, minimap, interact, THREE, nav: { buildGrid }, getDoors, markers, pets, roles, culling };
 // Frame pacing (frame_rate.js): the display's refresh rate when frames fit, else an even fraction of it (60, 40, 30 ... on a
 // 120 Hz screen), stepping down rather than stuttering. ?fps=N caps at N, ?fps=0 draws every animation frame; phones keep
 // the old 30 fps cap. Skipped display refreshes cost nothing.

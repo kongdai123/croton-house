@@ -1,4 +1,4 @@
-// The Twitter/X cut: a 46 s film of the house, run in the page by tools/video/record.mjs --script twitter.js.
+// The Twitter/X cut: a 45 s film of the house, run in the page by tools/video/record.mjs --script twitter.js.
 // Unlike choreography.js (one continuous walk through the site's demonstration), this is a list of shots joined by cuts:
 // each shot sets up its own state (time of day, doors, pets, exposure, lens), the recorder renders a few seconds of
 // "pre-roll" that are not kept (auto exposure and TAA settle, a slot crossfade finishes), then the shot's move is kept.
@@ -11,9 +11,10 @@
 // (a pedestal, a dolly push or pull), no rotation, no easing, the move already running on the first kept frame and still
 // running on the last (the pre-roll runs into it). Long holds (6-11 s); at a cut the move reverses or changes axis; the
 // end card dissolves in over the last second of the day. Deep focus everywhere but the dog, which gets the film's one
-// focus pull. The variant of the plan at 46 s: the hook, the front, the living room, the dog, the dining room at golden
-// hour, the day in one shot, the card (the kitchen and the bedroom of the 59 s plan dropped: the kitchen only continues
-// the living room's rise, the bedroom repeats the golden interior; 46 s keeps every hold long and the film near 45 s).
+// focus pull. It opens on light, what the renderer does best: sunrise rays through the garden's canopy and mist, the
+// same sun's beams across the office, the garden backlit at golden hour (the light scout ranked every sun-facing view by
+// how much its volumetric light reads; the three media overrides below are within what air does), then the dog, the
+// dining room at golden hour, the day in one shot ending in the blue hour, the card.
 // Fine detail under a fast camera strobes at 60 fps (temporal aliasing, not TAA): these speeds keep it calm.
 //
 // No interface: the recorder hides the site's HUD (--clean); the only text is this file's title and end card (Liter, the
@@ -95,11 +96,38 @@
   //             it; a number or a function of shot time) }
   // lens: the lens's control (lens.js: { fStop, focus, hold, track, time }) or a function (t, dt) returning it; by default
   //       autofocus during the pre-roll, then held. lensSettings: lens_policy.js LENS values for the shot.
+  // volume: the volumetric pass's medium for the shot (volumetric_slots.js MEDIA keys: haze, mist, mistHeight, dust, and
+  //         volumetric.js VOLUME values), over the slot's; shafts: false draws the shot without it (a still's twin)
   const AE = () => A.lighting.autoExposure;
-  let lensDefaults = null;
+  let lensDefaults = null, volumeDefaults = null;
   function applyLook(s) {
     if (AE()?.settings) AE().settings.key = s.exposure?.key ?? undefined;
     if (A.lens) { lensDefaults ??= { ...A.lens.settings }; Object.assign(A.lens.settings, lensDefaults, s.lensSettings ?? {}); A.lens.control = null; A.lens.enabled = true; }
+    const vol = A.baked?.shafts;
+    if (vol) {
+      volumeDefaults ??= { ...vol.params };
+      for (const k of Object.keys(vol.params)) if (!(k in volumeDefaults)) delete vol.params[k];
+      Object.assign(vol.params, volumeDefaults, s.volume ?? {}); vol.enabled = s.shafts !== false;
+    }
+  }
+  // tools (--opt shafts=1 with stills): how much the volumetric in-scattering shows in the frame just drawn, read from the
+  // pass's own half-resolution result (linear, before it is added to the picture) and exposed as the output will be:
+  // percentiles of its luminance, the mean of its high-pass (beams against the gaps between them, 6-texel box) and the
+  // share of the frame where it is over twice its median. Ranked against the picture's own median (lens probe p50).
+  function shaftStats() {
+    const P = A.baked?.shafts; if (!P?.enabled) return null;
+    const t = P.history, w = t.width, h = t.height, buf = new Uint16Array(w * h * 4), f = A.THREE.DataUtils.fromHalfFloat;
+    A.renderer.readRenderTargetPixels(t, 0, 0, w, h, buf, undefined, 0);
+    const gain = A.lens?.exposureGain?.() ?? 1, L = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) L[i] = (0.2126 * f(buf[4 * i]) + 0.7152 * f(buf[4 * i + 1]) + 0.0722 * f(buf[4 * i + 2])) * gain;
+    const r = 6, row = new Float32Array(w * h), blur = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) { let acc = 0; for (let x = -r; x < w + r; x++) { const xi = Math.min(w - 1, Math.max(0, x)); acc += L[y * w + xi]; const xo = x - 2 * r - 1; if (xo >= -r) acc -= L[y * w + Math.min(w - 1, Math.max(0, xo))]; if (x - r >= 0 && x - r < w) row[y * w + x - r] = acc / (2 * r + 1); } }
+    for (let x = 0; x < w; x++) { let acc = 0; for (let y = -r; y < h + r; y++) { const yi = Math.min(h - 1, Math.max(0, y)); acc += row[yi * w + x]; const yo = y - 2 * r - 1; if (yo >= -r) acc -= row[Math.min(h - 1, Math.max(0, yo)) * w + x]; if (y - r >= 0 && y - r < h) blur[(y - r) * w + x] = acc / (2 * r + 1); } }
+    let hp = 0; for (let i = 0; i < w * h; i++) hp += Math.abs(L[i] - blur[i]);
+    const sorted = L.slice().sort(), q = p => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+    const med = q(0.5); let beam = 0; for (let i = 0; i < w * h; i++) if (L[i] > 2 * med && L[i] > 0.02) beam++;
+    const k = v => +v.toPrecision(3);
+    return { gain: k(gain), p10: k(q(0.1)), p50: k(med), p90: k(q(0.9)), p99: k(q(0.99)), hp: k(hp / (w * h)), beam: k(beam / (w * h)) };
   }
   function lookAt(s, t, dt, rolling) {
     const ev = s.exposure?.ev;
@@ -165,33 +193,38 @@
   // heights a second, a push or pull of about 1.8% magnification a second over the whole frame (the near furniture of a
   // room magnifies faster than its far wall: the dining room's 0.10 m/s read 3.1%/s, so 0.06 m/s).
   const TOUR = OPT.tourSlot || 'noon';   // the time of day of the rooms (record.mjs --tour-slot)
-  const DUSK_EV = -0.8;                  // the hook's low key, and the day's dusk end (exposure.ev)
+  const DUSK_EV = -0.8;                  // the day's dusk end, low key as the reference's blue hour (exposure.ev)
   const ROOM_KEY = 0.4;                  // day interiors a little lower than the walkthrough's (mean luma ~0.6, windows held)
   const SHOTS = [
     {
-      // 1. The hook (X autoplays muted; the first frame decides): blue hour in the back garden, facing the house's garden
-      // front, the fire lit on the right third, the dog asleep by it. A slow push in; the address over it from frame 0.
-      name: 'hook', dur: beats(12), pre: 2.0, slot: 'dusk', fov: 40,
-      setup() { stash(); door(-0.06, -4.66, false); stage('dog', 2.25, 11.75, 'lie', 1.6, 12.3); },
-      keys: [[0, 2.90, 15.60, 1.20, 190, 0, 0], [1, 2.75, 14.75, 1.20, 190, 0, 0]],
-      exposure: { ev: DUSK_EV },
+      // 1. Light first (X autoplays muted; the first frame decides): sunrise in the back garden, looking ENE into the low sun
+      // (az 58, el 8) through the tree canopy over the east fence; the morning mist after rain turns the gaps in the leaves
+      // into rays fanning down over the beds, the bird of paradise backlit in front. A slow push toward the light; the
+      // address over it from frame 0. (The light scout: the strongest rays the garden throws, at 0.016 / m of ground mist,
+      // visibility ~240 m, against the slot's 0.011; 64 march steps for clean shafts.)
+      name: 'rays', dur: beats(12), pre: 2.0, slot: 'sunrise', fov: 40,
+      setup() { stash(); door(-0.06, -4.66, false); },
+      keys: [[0, 3.98, 9.03, 1.30, 52, 0, 0], [1, 4.42, 9.37, 1.30, 52, 0, 0]],
+      volume: { mist: 0.016, steps: 64 },
       overlay(t) { addr.style.opacity = clamp01((6.0 - t) / 0.6).toFixed(3); },
     },
     {
-      // 2. The street front on the door's axis, a frontal elevation from inside the front garden (from the street the
-      // fern bed hides the house below the eaves at any height a level camera can take): the camera sinks from the eaves
-      // to eye level and arrives at the open door and its number, between the palm and the banana leaves. 5.2 m from the
-      // door: 0.6 m farther, the camera sank through a leaf that swept the frame (the flicker check's pops).
-      name: 'facade', dur: beats(11), pre: 1.5, slot: TOUR, fov: 37,
-      setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, -0.06, -9.9, 2.25, 0, 0, 0], [1, -0.06, -9.9, 1.50, 0, 0, 0]],
+      // 2. The same sunrise indoors: the low sun through the office's garden doors, beams of lifted dust crossing the room
+      // onto the dining table. A pedestal up. (Dust 0.035 / m against the slot's 0.016: a lived-in room's dust lifted into
+      // the sun; the room held a little low so the beams read.)
+      name: 'sunbeam', dur: beats(10), pre: 1.5, slot: 'sunrise', fov: 44, exposure: { key: ROOM_KEY },
+      setup() { stash(); },
+      keys: [[0, -1.90, 3.00, 0.92, 55, 0, 0], [1, -1.90, 3.00, 1.37, 55, 0, 0]],
+      volume: { dust: 0.035, steps: 64 },
     },
     {
-      // 3. The living room from behind the sofa: the camera rises over its back and the window seat, the kitchen and the
-      // light on the floor open up.
-      name: 'living', dur: beats(11), pre: 1.5, slot: TOUR, fov: 40, exposure: { key: ROOM_KEY },
-      setup() { stash(); },
-      keys: [[0, 3.40, 0.60, 0.85, 212, 0, 0], [1, 3.40, 0.60, 1.30, 212, 0, 0]],
+      // 3. Golden hour in the garden, looking WSW into the sun: rays out of the west canopy, the fan palms and bananas lit
+      // from behind, the fire pit's lounge. A slow push toward the light, out from under a fan palm's fronds (pulling back
+      // ran into them). (Evening haze 0.004 / m, ~1 km, against the slot's 0.0015.)
+      name: 'garden', dur: beats(10), pre: 1.5, slot: 'golden', fov: 40,
+      setup() { stash(); door(-0.06, -4.66, false); },
+      keys: [[0, 6.00, 15.00, 1.40, 262, 0, 0], [1, 5.555, 14.937, 1.40, 262, 0, 0]],
+      volume: { mist: 0.004, steps: 64 },
     },
     {
       // 4. The dog at its own eye height, 50 mm: called, it walks in from the right and sits for its portrait; the cat
@@ -244,7 +277,7 @@
   if (OPT.stills) {
     SHOTS.length = 0;
     for (const s of OPT.stills) SHOTS.push({ name: s.name, dur: 1 / (OPT.fps || 30), pre: s.pre ?? 1.0, slot: s.slot ?? 'sunrise', fov: s.fov ?? 62, keys: [[0, s.x, s.y, s.eye ?? 1.6, s.h, s.pitch ?? 0, s.shift ?? 0]],
-      lensSettings: s.lensSettings, lens: s.lens || undefined, exposure: s.exposure,
+      lensSettings: s.lensSettings, lens: s.lens || undefined, exposure: s.exposure, volume: s.volume, shafts: s.shafts,
       setup() {
         stash(); A.markers.closeCard(); for (const [x, y, open] of s.doors ?? []) door(x, y, open); for (const [n, x, y, mode, lx, ly] of s.pets ?? []) stage(n, x, y, mode, lx, ly);
         if (A.lens && s.lens === false) A.lens.enabled = false;
@@ -273,6 +306,7 @@
             const lf = still && A.lens?.enabled ? A.lens.focusDistance?.() : null;
             if (lf) V.log.push(`${only[V.i].name}: focus ${lf.focus.toFixed(2)} m (lock ${lf.lock.toFixed(2)} m) f/${lf.fStop.toFixed(1)}`);
             if (OPT.probe && V.i >= 0 && A.lens?.probed) { V.log.push(`${only[V.i].name}: probe ${JSON.stringify(A.lens.probed)}`); A.lens.probed = null; }
+            if (OPT.shafts && still) { const st = shaftStats(); if (st) V.log.push(`${only[V.i].name}: shafts ${JSON.stringify(st)}`); }
             if (++V.i >= only.length) { V.done = true; return { done: true }; }
             const s = only[V.i];
             V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set();

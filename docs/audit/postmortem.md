@@ -34,6 +34,8 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
 | 27 | The fire pit lit, and the sheer curtains closed, only after the dusk crossfade had ended (on camera: dusk arrives, then the fire starts) | main.js setBakedSlot ran the objects' onTime hooks once `baked.setSlot` resolved, which is after the 1.5 s fade | D, G: state that follows the time of day owned by the end of the switch rather than by its crossfade. Fix: `slot_dependents.js` starts them at the fade's 'transition' report and settles them on the slot shown however the switch ends; `test_slot_dependents.mjs` drives it through the real request queue (a failed load, N pressed again mid-fade, a request superseded while loading, the bake disposed mid-fade) |
 | 28 | Morning mist hung over a slot change, longer the lower the frame rate (a grey veil over the garden for the first second of a dusk view after sunrise) | The volumetric light's reprojected history used fixed weights per frame (0.9 moving, 0.96 held still), so how fast it followed the media's crossfade was counted in frames: 0.8 s at 30 fps, 0.17 s at 144 | L: time in the render path not taken from the frame clock. Fix: `historyWeight` (volumetric_slots.js), time constants in seconds from the frame clock's dt, a crossfade followed at the moving rate; `test_frame_clock.mjs` (the same residual after 1 s at 30, 60 and 144 Hz, the pass on a stub renderer) |
 | 29 | A recording stepped with renderAt lost TAA's history on every frame (aliased, shimmering foliage) and ran the puddles' ripples at the recorder's pace | taa.js dropped its history after 200 ms of wall clock between frames; puddles.js and the minimap animated by `performance.now()`; the recorder spends 100-300 ms of wall clock per frame on its screenshot | L. Fix: `frame_clock.js`, the one clock main.js advances per frame (`gap`, the interval before the 0.1 s clamp, so a real hitch still resets TAA; renderAt hands over its whole step); the composer gets the frame's dt; `test_frame_clock.mjs` lists every wall-clock read left in src/ with its reason |
+| 30 | Shimmer in the Twitter cut, put down to TAA: fine detail flickering while the camera moves (the aerial's ferns and palm fronds, the kitchen's oven front, island slats and stools, the living room's rug, book spines and fridge edge, the dog's fur) | Measured on the film's own moves (`flicker_check.mjs`, the film's metric): with the camera held still the same shots barely flicker (aerial 0.018 against 1.26, the entrance 0.017 against 0.42); without TAA they flicker more (aerial 1.60), and no TAA setting moves it more than 3% (feedback, motion feedback, sharpen 0, mip bias 0, a tighter clip, no reactivity, no depth test), nor do local adaptation, volumetric light or the wind. It is the detail's own temporal aliasing at 60 fps: a pattern that moves about half its period a frame alternates (a film shutter takes off 4-10% at 180 degrees, 18-27% at 360). What TAA did get wrong was everything that moves on its own: it reprojected every pixel as if only the camera moved, so the pets, a swinging door and a carried chair lost their history every frame | E, M: the suspected cause taken for the cause; a render-path assumption (only the camera moves) that nothing checked. Fix: per-object motion vectors (`motion.js`), checked against the CPU on a GPU (`motion_check.mjs`) and in node (`test_motion.mjs`); `flicker_check.mjs` measures the film's moves (RENDER_GATE.md, the flicker check); the strobing is the camera moves' to change (slower moves across fine detail, or `record.mjs --shutter`) |
+| 31 | One-frame sun-shadow pops in the film's time-lapse (27.6 s: a sunlit gravel patch for one frame; 31.0 s) | The slot crossfade swept the live sun from one slot's direction to the other's (blendSlot's az/el): sunrise to noon is 122 degrees of azimuth in 1.5 s, up to 2 degrees a frame at 60 fps, so the trees' long low-sun shadows moved up to a metre a frame and their dappled pattern changed beyond recognition between frames. Every frame was right for its own sun (the moving frame and a still of the same state agree; the sun-shadow cache redrew every caster on every frame of the fade) | N: motion faster than the frame rate can carry. Fix: `sun_crossfade.js`, the sun dissolves (dims out at one direction, comes up at the other, turns once without direct light; its shadow map redrawn once per fade); `test_sun_crossfade.mjs` (every slot pair at 20-144 fps: the sun never turns while lit); `flicker_check.mjs --pops-limit timelapse=0` (22 pop frames, now 0) |
 
 ## Classes
 
@@ -64,6 +66,12 @@ Each row gives the root cause and the class it belongs to; the classes, not the 
   the wall clock or counted frames, so the same frames drew differently at another frame rate or when a tool stepped them
   (renderAt, ?simdt). → `frame_clock.js` for every per-frame consumer, time constants in seconds; the wall-clock reads that
   remain (measurements, real-time pacing) are listed with their reasons in `test_frame_clock.mjs`.
+- **M. Render-path assumptions that nothing checks.** TAA took every pixel's motion to be the camera's; the pets, doors and
+  carried furniture broke it silently. → motion vectors for what moves on its own, checked against the CPU on a GPU
+  (`motion_check.mjs`) and in node (`test_motion.mjs`).
+- **N. Motion faster than the frame rate can carry.** A crossfade swept the sun two degrees a frame, so shadows strobed even
+  though every frame was right. → a crossfade dissolves between two states and never sweeps through ones that do not exist;
+  `flicker_check.mjs` counts one-frame pops on the film's moves.
 
 ## Row 19 in detail (2026-10-18)
 
@@ -124,6 +132,43 @@ lookup), the leaf closed, 100 points over its inside face (plan y -4.638) seen f
   queued, a throwing PMREM, no HDR path, a restore that finds the context lost again. It fails on the old `lighting.js` with the
   exact TypeError. The `context-loss` UI smoke test (`web/tools/smoke/tests.mjs`) does it in a browser with
   `WEBGL_lose_context` during the build, the shader warm-up and inside the house.
+
+## Rows 30 and 31 in detail (2026-10-24)
+
+Measured with `web/tools/video/flicker_check.mjs` on the film's own shots (twitter.js), 1920 x 1080, hq, on an RTX 2080 Ti and
+an RTX A4000 (each table row from one job; two runs of a build agree exactly). The number is the film's metric: the mean per
+frame of the alternating change of a 480 x 270 luma image (8-bit levels; changes under 2 ignored).
+
+| Variant | aerial | entrance | dog | |
+|---|---|---|---|---|
+| TAA before this change (f4f81eb) | 1.26 | 0.42 | 0.59 | living 0.10, dining 0.04 |
+| no TAA (`?taa=0`: MSAA 4 + SMAA) | 1.60 | 0.48 | 0.65 | |
+| TAA, motion feedback off / sharpen 0 / mip bias 0 / gamma 1 / reactive 0 / no depth test | 1.22-1.25 | 0.40-0.42 | 0.57-0.59 | each within 3% |
+| camera held at the shot's middle pose (time, wind and pets go on) | 0.018 | 0.017 | 0.18 | the dog still walks |
+| no plant sway or wind, camera as in the film | 1.29 | 0.42 | 0.59 | |
+| local adaptation off / volumetric light off | 1.27 / 1.34 | 0.41 / 0.42 | | |
+| 180-degree shutter (2 or 4 steps a frame averaged) | 1.20 | 0.37-0.39 | 0.53-0.55 | |
+| 360-degree shutter (4 steps) | 1.03 | 0.31 | 0.43 | |
+| motion vectors on (`?taamv=0` off) | 1.26 (1.26) | 0.42 (0.42) | 0.60 (0.59) | the dog takes another path |
+
+- **Where it comes from.** The dog shot's flicker follows the camera's turn toward the dog (0.01 a frame with the camera still,
+  2.8 at its fastest, 0.01 again once it settles); in the aerial it follows the descent. The hot spots are periodic or thin
+  detail: the ferns' leaflets, palm fronds against the sky, the oven's front, the island's slats, the stools' weave, the rug.
+  A pattern of period P moving about P/2 a frame alternates frame to frame whatever the anti-aliasing (the wagon wheel); TAA
+  takes a fifth off by resolving the detail, and its settings cannot take more without blurring (sharpen 0: detail 9% down for
+  3% less flicker).
+- **Motion vectors.** Their effect on these shots' flicker is nil (nothing in them moves on its own except the dog); what they
+  fix is the history of what does move: a door's leaf in its swing is reprojected to within 0.1 px (99.9% of its texels within
+  0.06 px; `motion_check.mjs`), still surfaces carry none, the pets' skinned meshes and the grass wind near the camera use their
+  previous bones and time. Cost (RTX A4000, 2560 x 1440, hq, the median of three interleaved rounds): the back garden 38.6
+  to 37.3 fps (the velocity draw: 26 draws, 0.22 ms of GPU, 0.4 ms of CPU with the pass's bookkeeping; tall grass near the
+  camera is most of it), the front yard 45.4 to 44.1, the patio 43.9 to 42.9, the living room and the walk within 1%.
+- **The time-lapse pops.** The crossfade moved the sun 1.3-2 degrees a frame; a still of frame 73 (the film's frame 1657) with
+  the crossfade held matches the moving frame (1.2% of pixels differ by more than 32 levels, TAA's settling; no region), so no
+  caster was missing. With the dissolve the time-lapse has no pop frame (22 before) and its mean flicker halves (0.108 to 0.053).
+  What the dissolve costs: around the fade's middle the garden has less direct sun for about half a second and none for a few
+  frames, as when a cloud passes (`tools/ab_check.mjs`'s crossfade-halfway shot is the one frame that differs from before);
+  `?sunsweep=1` gives the sweep back to compare.
 
 ## Rules from here
 

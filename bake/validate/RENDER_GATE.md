@@ -98,3 +98,21 @@ lowered wall: house.js `LOW_WALLS`) makes it hide what is visible. `node web/too
 --out <dir> --slots sunrise,dusk` draws every gate camera, a door shut / opening / open, a carried chair, a called pet and
 the visitor's walk with culling on and off, and checks the sun-shadow cache's partial redraws against a full one: every
 pair must be pixel-identical (about 10 minutes on an RTX 2080 Ti; differing frames are written as PNGs).
+
+## After a TAA, motion or crossfade change: the flicker check and the motion-vector check on a GPU
+
+Gate (c) shoots stills; flicker and one-frame pops only show in motion. `node web/tools/video/flicker_check.mjs --site <site>
+--out <dir> --shots aerial,enter,dog,timelapse --limit aerial=1.4,enter=0.47,dog=0.68,timelapse=0.08 --pops-limit timelapse=0`
+steps the Twitter cut's shots on the frame clock as the film recorder does (`web/tools/video/twitter.js`, 60 fps, 1920 x 1080,
+hq) and measures each kept frame in the page: the film's flicker metric per shot (the alternating frame-to-frame change of a
+480 x 270 luma image), one-frame regional pops, TAA resets inside a shot. Two runs of a build agree exactly; about 4 minutes on
+an RTX A4000. The limits are the measured values at the motion-vector commit plus ~10% (aerial 1.26, entrance 0.42, dog 0.60,
+time-lapse 0.05 with no pop frame); the aerial's ferns pop under its fast descent (fine detail strobing at 60 fps), so pops are
+limited in the time-lapse only, where a slot crossfade's sun used to make them. Heat maps per shot
+(`<variant>_<shot>_heat.png`) show where it flickers, and each pop frame is listed with its region. For diagnosis a variant can hold the camera (`still=1`), stop the wind (`calm=1`),
+open a film shutter (`shutter=4&angle=360`) or freeze a frame's state to compare it with the moving frame
+(`freeze=timelapse:73`); see the tool's header.
+
+`node web/tools/motion_check.mjs --site <site> --out <dir>`: TAA's motion vectors against the CPU (a bedroom door swinging, the
+dog walking on the spot): the door's texels reprojected through its previous world matrix and camera to within 0.25 px (more
+than 99.5% within 0.05 px), no velocity on still surfaces, velocity on the dog. About a minute.

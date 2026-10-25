@@ -101,6 +101,8 @@ Paths in this section are relative to `web/src/`.
   `setQuality`, `setFeatures`, `register`, `updateMovables` and `dispose`.
 - `lightmap_slots.js`: slot changes on the GPU (`createSlotRuntime`): fetch and validate the next slot, then crossfade;
   the shared reflection array (`reflArray`).
+- `sun_crossfade.js`: the live sun through a crossfade, a dissolve between the two slots' suns (it dims out at one
+  direction and comes up at the other; never a sweep), so the sun-shadow map is redrawn once per crossfade.
 - `lighting_slots.js`: pure slot policy: `SLOTS` (sun, sky colour, display EV, auto-exposure key and range (the key: the listing photos' brightness by day), wetness, lamp share),
   `discoverSlots`, `nextSlot`, `blendSlot`, `slotRequests`.
 - `lightmap_assets.js`: resolves bake file names through `web/assets/lightmaps/manifest.json` in a packaged build.
@@ -139,6 +141,9 @@ Paths in this section are relative to `web/src/`.
 - `white_balance.js`, `white_balance_policy.js`: the camera's white balance from the probe volume
   ([white-balance.md](white-balance.md)).
 - `taa.js`: `createTAA`: the jittered linear chain and its temporal resolve; it takes over every pass before the OutputPass.
+- `motion.js`: TAA's per-object motion vectors: what moves on its own (pets, a swinging door, a carried chair, the garden
+  wind near the camera) draws its screen-space velocity after the scene, its own vertex shader run for this frame and the
+  previous one; everything else reprojects through depth and the camera.
 - `volumetric.js`, `volumetric_slots.js`: sunbeams, mist and haze through the PCSS sun depth; the media per slot and
   `featureWanted`.
 
@@ -367,6 +372,11 @@ CI runs both on every push and pull request.
   rebake. See "Door and toggle states" in [REBAKE.md](../bake/REBAKE.md#door-and-toggle-states-of-the-bake-exportmjs).
 - Checks: `test_still_parts.mjs` and `test_batch_baked.mjs` cover the pattern on the real toggles; for a new kind of
   motion add it to them. On a GPU node: `tools/ab_check.mjs` with `?restmerge=0` against the default.
+- **TAA** (`motion.js`): anything that moves by its world matrix or its skeleton gets motion vectors without more work. A
+  material that moves its vertices in its own shader hook from a uniform (the grass wind's `uTime`, the dog's `uLag`) lists
+  those uniforms in `material.userData.motion = { uniforms: { name: 'glsl type' }, speed }` (speed: m/s of its fastest
+  vertex, or the mesh's `userData.motionSpeed`), so the velocity shader can run the hook as the previous frame;
+  `test_motion.mjs` checks every such material, `tools/motion_check.mjs` the velocities on a GPU.
 
 ### Add a light fixture or a lamp group
 
@@ -433,7 +443,9 @@ CI runs both on every push and pull request.
   uses the slot's EV, so expect a baseline change.
 - **Sun and sky** (`az`, `el`, `strength`, `color`): the live sun moves at once, but its bounce, the probes and the
   reflections were baked with `slots.py`'s values; change both and rebake the slot. The sunrise values are pinned in
-  `test_lighting_slots.mjs`.
+  `test_lighting_slots.mjs`. Through a crossfade the sun dissolves between the two slots' suns (`sun_crossfade.js`) rather
+  than sweeping between them; `tools/video/flicker_check.mjs --shots timelapse` counts one-frame pops
+  ([RENDER_GATE.md](../bake/validate/RENDER_GATE.md)).
 
 ### Add a quality tier flag
 
@@ -461,7 +473,7 @@ Flags in use:
 | Position and start | `?x`, `?y` (plan metres), `?h` (heading, degrees), `?p` (pitch, radians), `?eye`, `?auto`, `?dusk` (legacy) |
 | Mode and quality | `?legacy`, `?lightmap=<slot>` or `0`, `?tier=hq`/`laptop`/`mobile`, `?fast`, `?adapt=0`, `?tex`, `?lmres`, `?lmgroups` |
 | Performance switches | `?cull=0`, `?batch=0`, `?batch2=0`, `?plantmerge=0`, `?restmerge=0`, `?stow=0`, `?taascan=1`, `?pcssregion=0`, `?fps` |
-| Look | `?taa` (`0`, or the internal scale), `?shafts`, `?wb=0`, `?wbd`, `?localadapt=0`, `?autoexp=0`, `?fixedexposure`, `?rawtone`, `?agx=three`, `?sunoff`, `?refllamps`, `?foliagebake=0` |
+| Look | `?taa` (`0`, or the internal scale), `?taamv=0`, `?taaset=key:value,...`, `?sunsweep=1`, `?shafts`, `?wb=0`, `?wbd`, `?localadapt=0`, `?autoexp=0`, `?fixedexposure`, `?rawtone`, `?agx=three`, `?sunoff`, `?refllamps`, `?foliagebake=0` |
 | Tools | `?capture`, `?simdt`, `?stats`, `?pets=0`, `?petseed`, `?pins=0`, `?daylight=live`, `?serif=1`, `?webgpu` |
 
 ### Add a test

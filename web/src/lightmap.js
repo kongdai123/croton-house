@@ -24,6 +24,7 @@ import { bakeFoliage, loadFoliage, FOLIAGE_UNIFORMS, shaderPatchCount, assertSha
 import { lightmapAssets, lightmapBitmap } from './lightmap_assets.js';
 import { SLOTS, discoverSlots, initialSlot, nextSlot, validEncoding } from './lighting_slots.js';
 import { createSlotRuntime } from './lightmap_slots.js';
+import { crossfadeSun } from './sun_crossfade.js';
 import { createLampGroups, lampGroupsWanted, loadGroupProbes, validGroupEncoding } from './lamp_groups.js';
 import { createSlotProgress } from './slot_progress.js';
 import { TIERS } from './tier.js';
@@ -973,12 +974,18 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       const w = THREE.MathUtils.clamp(lighting.indoorWeight(lighting.camera.position), 0, 1);
       return [0, ((b.ev + (b.autoExposure.outdoor ?? 0)) - (a.ev + (a.autoExposure.outdoor ?? 0))) * (1 - w)];
     };
+    // the sun through a crossfade: a dissolve between the two slots' suns, not a sweep (sun_crossfade.js; ?sunsweep=1: the
+    // sweep, for comparison). Its depth map is redrawn when its direction changes, once per crossfade.
+    const sweep = new URLSearchParams(location.search).has('sunsweep');
+    let sunAt = null;
     slots = createSlotRuntime({ scene, renderer, available: availableSlots, load: stageSlot, disposeAtlas, foliage, exposureBases,
       initial: { name: slot, enc, layers, volume, sky: skyBg, refl, foliage: foliageData, resolution,
         remip: () => linearMips(renderer, initialLayers, initialK) },
       setParams(mood) {
-        const raw = new URLSearchParams(location.search).has('rawtone');
-        applyBakedSun(lighting, renderer, raw ? { ...mood, ev: 0 } : mood, shadowSize); pcss.invalidate();
+        const raw = new URLSearchParams(location.search).has('rawtone'), f = slots?.fading;
+        const sun = f && !sweep ? crossfadeSun(mood, SLOTS[slots.name], SLOTS[f.name], f.t) : mood;
+        applyBakedSun(lighting, renderer, raw ? { ...sun, ev: 0 } : sun, shadowSize);
+        if (!f || sun.az !== sunAt?.az || sun.el !== sunAt?.el) { sunAt = { az: sun.az, el: sun.el }; pcss.invalidate(); }
         if (raw) renderer.toneMapping = THREE.NoToneMapping;
         if (new URLSearchParams(location.search).has('sunoff')) lighting.sun.intensity = 0;
         const exposure = raw ? 1 : 2 ** mood.ev; Object.assign(lighting.tune, { dayOutdoor: exposure, dayIndoor: exposure });

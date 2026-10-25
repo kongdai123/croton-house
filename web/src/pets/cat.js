@@ -561,6 +561,7 @@ function furMaterial(map, uStrand) {
         }`);
   };
   m.customProgramCacheKey = () => 'croton-cat-fur-1';
+  m.userData.motion = { uniforms: {} };   // TAA motion vectors (motion.js): the shells grown in the vertex shader, as drawn
   return m;
 }
 function blobTexture() {

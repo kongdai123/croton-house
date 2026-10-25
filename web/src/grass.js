@@ -200,6 +200,17 @@ const VERT = /* glsl */`#include <begin_vertex>
 #endif
 `;
 const f5 = (v) => v.toFixed(5);
+// The wind offset above in JS (a blade's top, gH = 1): tools/test_motion.mjs checks the motion vectors' speed bound on it.
+export function windOffset(t, wind, ox, oz, phase, sway, flutter, tall) {
+  const gust = 0.5 + 0.5 * Math.sin((ox * wind.x + oz * wind.y) * 0.45 - t * 1.35);
+  const sw = (0.25 + 0.75 * gust * gust) * (0.8 + 0.2 * Math.sin(t * 2.3 + phase));
+  const fl = Math.sin(t * 6.3 + phase * 3 + ox * 1.7 + oz * 1.3) * flutter;
+  return [(wind.x * sw * sway - wind.y * fl) * tall, (wind.y * sw * sway + wind.x * fl) * tall];
+}
+// The fastest a blade's top moves per metre of blade (|uWind| = 1): d(sway term)/dt <= 1.5 * 0.675 + 0.2 * 2.3 = 1.4725 per
+// unit sway, d(flutter)/dt <= 6.3 per unit flutter. Motion vectors (motion.js) draw a tile once its tallest blade can move
+// more than a fraction of a pixel in a frame at the tile's distance.
+export const windRate = (sway, flutter) => 1.4725 * sway + 6.3 * flutter;
 function patch(m, U, density, opts, depthOnly) {
   m.defines = { ...(m.defines || {}), G_SWAY: f5(opts.sway), G_FLUTTER: f5(opts.flutter), G_HEIGHT: f5(opts.height), G_COMP: f5(opts.comp ?? 0) };
   if (opts.lod) Object.assign(m.defines, { G_LOD: '', G_NEAR: f5(opts.lod[0]), G_FAR: f5(opts.lod[1]) });
@@ -219,6 +230,8 @@ function patch(m, U, density, opts, depthOnly) {
     s.fragmentShader = 'uniform float uNormalPass;\n' + s.fragmentShader.replace(/}\s*$/, '  if (uNormalPass > 0.5) gl_FragColor = vec4(normalize(normal) * 0.5 + 0.5, 1.0);\n}\n');
   };
   m.customProgramCacheKey = () => 'garden|' + (depthOnly ? 'depth' : 'std');
+  // motion vectors (motion.js): the wind's previous frame from these uniforms' previous values; speed per tile (buildLayer)
+  if (!depthOnly) m.userData.motion = { uniforms: { uTime: 'float', uWind: 'vec2' }, rate: windRate(opts.sway, opts.flutter) };
   return m;
 }
 function vegMat(U, density, opts) {
@@ -244,7 +257,7 @@ function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, ca
     for (const k in geo.attributes) tg.setAttribute(k, geo.attributes[k]);
     tg.setIndex(geo.index); tg.boundingBox = geo.boundingBox; tg.boundingSphere = geo.boundingSphere;
     const mesh = new THREE.InstancedMesh(tg, mat, m), E = mesh.instanceMatrix.array, C = new Float32Array(m * 3), seed = new Float32Array(m * 2);
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, hMin = Infinity, hMax = -Infinity;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, hMin = Infinity, hMax = -Infinity, tallest = 0;
     for (let j = 0; j < m; j++) {
       const o = idx[j] * STRIDE, x = a[o], h = a[o + 1], z = a[o + 2], yaw = a[o + 3], tilt = a[o + 4], sx = a[o + 5], sy = a[o + 6], sz = a[o + 7];
       const c = Math.cos(yaw), s = Math.sin(yaw), ct = Math.cos(tilt), st = Math.sin(tilt), e = j * 16;
@@ -254,12 +267,13 @@ function buildLayer(group, tiles, bag, geo, mat, { tile, lod = null, density, ca
       E[e + 12] = x; E[e + 13] = h; E[e + 14] = z; E[e + 15] = 1;
       C[j * 3] = a[o + 8]; C[j * 3 + 1] = a[o + 9]; C[j * 3 + 2] = a[o + 10];
       seed[j * 2] = (j + 0.5) / m; seed[j * 2 + 1] = rnd();
-      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); hMin = Math.min(hMin, h); hMax = Math.max(hMax, h + sy * geoH);
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); hMin = Math.min(hMin, h); hMax = Math.max(hMax, h + sy * geoH); tallest = Math.max(tallest, sy * geoH);
     }
     mesh.instanceColor = new THREE.InstancedBufferAttribute(C, 3);
     tg.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seed, 2));
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, (hMin + hMax) / 2, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0, hMax - hMin) / 2 + 0.7);
     mesh.receiveShadow = true; mesh.castShadow = cast; if (depthMat) mesh.customDepthMaterial = depthMat;
+    if (mat.userData.motion) mesh.userData.motionSpeed = mat.userData.motion.rate * tallest;   // m/s at the tallest blade's top
     mesh.matrixAutoUpdate = false; mesh.name = 'garden-' + name;
     if (!puddleMirror) declare(mesh, { role: 'ground', puddleMirror: false });   // the lawn: ground, out of the puddle reflection
     group.add(mesh);

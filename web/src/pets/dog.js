@@ -377,6 +377,7 @@ if (vFur.y > 1.5) roughnessFactor = mix(0.6, 0.14, vFur.z);`);
   };
   m.customProgramCacheKey = () => 'pet-dog-fur-1';
   m.userData.uniforms = U;
+  m.userData.motion = { uniforms: { uLag: 'vec3' } };   // TAA motion vectors (motion.js): the fur's spring lag of the previous frame
   return m;
 }
 

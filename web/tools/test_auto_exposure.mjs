@@ -196,10 +196,15 @@ try {
   };
   assert.ok(Math.abs(agxLuma(0.18) - 120) < 4, `AgX mid grey ${agxLuma(0.18)}`);   // Blender AgX MHC: 18% grey ~ 47%
   const photos = JSON.parse(readFileSync(join(WEBDIR, 'tools/golden/listing_brightness.json'), 'utf8')).interior;
-  for (const name of ['sunrise', 'noon', 'golden']) {
+  for (const name of ['noon', 'golden']) {
     const shown = agxLuma(SLOTS[name].autoExposure.key);
     assert.ok(Math.abs(shown - photos.median) <= 4, `${name}: the key ${SLOTS[name].autoExposure.key} reads ${shown.toFixed(1)}, the listing photos ${photos.median}`);
   }
+  // sunrise: not the midday photos' level (at noon's key a morning room read as noon, 188 against 187), about half a stop
+  // under it and above the lamp-lit dusk
+  const sunrise = agxLuma(SLOTS.sunrise.autoExposure.key);
+  near(Math.log2(SLOTS.noon.autoExposure.key / SLOTS.sunrise.autoExposure.key), 0.5, 0.05);
+  assert.ok(sunrise < photos.median - 10 && sunrise > agxLuma(SLOTS.dusk.autoExposure.key) + 8, `sunrise: the key reads ${sunrise.toFixed(1)}`);
   const dusk = agxLuma(SLOTS.dusk.autoExposure.key);
   assert.ok(dusk > 145 && dusk < photos.p10 - 10, `dusk: the lamp-lit rooms below the daylight photos, still bright (${dusk.toFixed(1)})`);
   assert.ok(agxLuma(0.15) < 110, 'the first key read as a mid-grey room');
@@ -213,17 +218,19 @@ try {
   // gate (c)'s brightness band (bake/validate/thresholds.json) brackets the photos: the set band holds their median, the
   // frame band their spread; dusk below daylight
   const band = JSON.parse(readFileSync(join(WEBDIR, '../bake/validate/thresholds.json'), 'utf8')).brightness;
-  for (const name of ['sunrise', 'noon', 'golden']) {
+  for (const name of ['noon', 'golden']) {
     const [lo, hi] = band.set[name], [flo, fhi] = band.frame[name];
     assert.ok(lo < photos.median && photos.median < hi && hi - lo <= 25 && flo < photos.p10 && fhi > photos.p90, `${name} band ${band.set[name]} / ${band.frame[name]}`);
   }
+  { const [lo, hi] = band.set.sunrise; assert.ok(lo < sunrise && sunrise < hi && hi - lo <= 25 && hi < photos.median && lo > band.set.dusk[0], `sunrise band ${band.set.sunrise} around ${sunrise.toFixed(0)}`); }
   assert.ok(band.set.dusk[1] < band.set.noon[0] + 5 && band.set.dusk[0] < dusk && dusk < band.set.dusk[1], `dusk band ${band.set.dusk} around ${dusk.toFixed(0)}`);
   // and the rooms' contrast: the shadow band holds the photos' darker tenth (local_adapt.js lifts no shadow)
-  for (const name of ['sunrise', 'noon', 'golden']) {
+  for (const name of ['noon', 'golden']) {
     const [slo, shi] = band.shadows[name];
     assert.ok(slo < photos.p10Luma && photos.p10Luma < shi && shi < band.set[name][0], `${name} shadows band ${band.shadows[name]} around the photos' ${photos.p10Luma}`);
   }
-  console.log('auto exposure: the key against the listing photos (AgX), the bounds with it and the gate band OK');
+  assert.ok(band.shadows.sunrise[1] < band.set.sunrise[0] && band.shadows.sunrise[0] < band.shadows.noon[0], `sunrise shadows band ${band.shadows.sunrise}`);
+  console.log('auto exposure: the key against the listing photos (AgX; sunrise half a stop under them), the bounds with it and the gate band OK');
 
   // ---- a slot crossfade (lighting_slots.js fadeExposure, lightmap_slots.js, lightmap.js exposureBases, auto_exposure.js uFade).
   // A view's radiance per slot (one number: the scene's log mean), 45 frames of 1/30 s (a 1.5 s smoothstep fade), then 3 s.

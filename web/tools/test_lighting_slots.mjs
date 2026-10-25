@@ -57,7 +57,7 @@ for (const name of SLOT_ORDER) {
   for (const k of ['ev', 'wet', 'lamps']) assert.equal(cfg[k], SLOTS[name][k]);
   assert.deepEqual(cfg.autoExposure, SLOTS[name].autoExposure);
 }
-assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1, outdoor: 0 }, wet: 1, lamps: 1 });
+assert.deepEqual(SLOTS.sunrise, { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.47, minEV: -0.5, maxEV: 6.65, outdoor: 0 }, wet: 1, lamps: 1 });
 const dir = await mkdtemp(join(tmpdir(), 'croton-slots-'));
 try {
   const built = await build({ stdin: { contents: "export { createSlotRuntime } from './src/lightmap_slots.js'; export { bakeFoliage } from './src/foliage_bake.js'; export * as THREE from 'three';", resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });

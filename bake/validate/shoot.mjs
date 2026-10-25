@@ -7,7 +7,7 @@
 //   node shoot.mjs --cameras cameras.json --out <runDir> --tier hq|mobile [--states sunrise,noon,golden,dusk,dusk_allon]
 //                  [--only id,id] [--size 960x540] [--frames 30] [--query 'k=v&...' (extra site parameters)]
 //   One fresh page per slot (?lightmap=<slot>, the slot's default switches; hq adds &lmres=full, mobile takes its own
-//   quarter atlas); dusk_allon is the dusk page again after every switch is turned on. Writes
+//   quarter atlas); dusk_allon is the dusk page again after every switch is turned on (<slot>_alloff: every switch off). Writes
 //   <runDir>/<tier>/<state>/<camera>.png and <runDir>/<tier>/<state>/report.json (load and shot times, page errors,
 //   shader errors, link failures, sampler maximum, baked stats).
 //   Two sets: fixed exposure (default; ?capture, the slot's exposure, what Cycles renders) and --visitor (what a visitor
@@ -97,10 +97,10 @@ if (!argv.includes('--cameras')) {
     for (const state of states.filter(s => s.split('_')[0] === slot)) {
       const dir = join(out, set, state); await mkdir(dir, { recursive: true });
       const t1 = Date.now(), shots = {};
-      if (state.endsWith('_allon')) await page.evaluate(n => {   // every switch on, then let the lamp levels fade in
-        const G = window.__app.baked.lampGroups; for (const r of G.records) if (!r.toggle.on) r.toggle.set(true);
+      if (state.endsWith('_allon') || state.endsWith('_alloff')) await page.evaluate(([n, on]) => {   // every switch on (off), then let the lamp levels fade
+        const G = window.__app.baked.lampGroups; for (const r of G.records) if (r.toggle.on !== on) r.toggle.set(on);
         for (let i = 0; i < n; i++) window.renderAt(window.simTime() + 1 / 30);
-      }, 45);
+      }, [45, state.endsWith('_allon')]);
       for (const c of list) {
         const t2 = Date.now();
         const r = await page.evaluate(([c, fov, n, visitor]) => {

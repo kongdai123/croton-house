@@ -10,11 +10,12 @@ import sys
 # groups; with them, every switch is on or off at its fixture's physical output: fixture_lights.py, lighting_roles.js
 # defaultSlots). ev: the display exposure (never baked); autoExposure: the visitor's metering indoors (the site's
 # lighting_slots.js holds the reasons; test_lighting_slots.mjs keeps the two equal): key, the scene-linear level the meter's
-# log mean is shown at (daylight 0.66: the listing photos' interior median through AgX; dusk 0.35), and the range around ev.
+# log mean is shown at (noon and golden 0.66: the listing photos' interior median through AgX; sunrise 0.47, half a stop
+# under it; dusk 0.35), and the range around ev.
 SLOTS = {
     'sunrise': dict(sun=dict(az=58, el=8, strength=20.0, color=[1.0, 0.68, 0.45]),
                     sky=0.45, dust=0.8, clouds=[0.5, 0.68], lampK=3000,
-                    lamps=1.0, ev=-0.7, autoExposure=dict(key=0.66, minEV=-0.5, maxEV=7.1, outdoor=0), wet=1),
+                    lamps=1.0, ev=-0.7, autoExposure=dict(key=0.47, minEV=-0.5, maxEV=6.65, outdoor=0), wet=1),
     'noon': dict(sun=dict(az=180, el=57, strength=36.0, color=[1.0, 0.95, 0.88]),
                  sky=0.55, dust=1.0, clouds=[0.62, 0.82], lampK=3000,
                  lamps=0.0, ev=-0.7, autoExposure=dict(key=0.66, minEV=-0.5, maxEV=6.6, outdoor=0), wet=0),

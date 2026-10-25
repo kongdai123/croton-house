@@ -88,6 +88,19 @@ try {
     b.undo(); poses[0]();
     same(before[0], drawn(scene), `${name} undone`);
     let merged = 0; scene.traverse(o => { if (o.userData.batch2) merged++; }); assert.equal(merged, 0, `${name}: undo removes the merged meshes`);
+    // rest clusters over the same poses, for the walkthrough camera: a toggled part draws in its new pose at once, whether
+    // it moved by a transform or by its vertices edited in place (the umbrella's canopy: the merged copy kept the furled
+    // canopy under the opened ribs), and after REST_FRAMES frames the re-copied merged mesh holds that pose
+    const main = new T.PerspectiveCamera(), group = new T.Group(); scene.add(group, main); scene.updateMatrixWorld(true);
+    const rc = createRestClusters({ roots: [root], camera: main, parent: group });
+    poses.forEach((p, i) => {
+      p(); scene.updateMatrixWorld(true); rc.update();
+      same(before[i], drawn(scene, main.layers), `${name} pose ${i}: rest clusters, the frame it changes`);
+      for (let k = 0; k < 25; k++) rc.update();
+      same(before[i], drawn(scene, main.layers), `${name} pose ${i}: rest clusters, at rest again`);
+    });
+    if (name === 'umbrella') assert.ok(rc.stats.clusters > 0 && rc.stats.recaptures > 0, `${name}: the canopy is merged and re-copied (${JSON.stringify(rc.stats)})`);
+    rc.dispose(); group.removeFromParent(); main.removeFromParent();
   }
 
   // multi-material meshes (a shelf of books: six faces, three materials each) split per material and merged; no tint

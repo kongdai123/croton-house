@@ -4,8 +4,9 @@
 // door's sections. Here every such mesh is also copied, in its world pose, into a mesh per material and CELL x CELL m
 // square that the walkthrough camera draws instead (mainOnly / mainOff, as plant_clusters.js: every other view, the sun's
 // shadow above all, keeps drawing the meshes themselves). A member drops out of its merged mesh, and its own mesh draws
-// again, from the frame it moves, hides or changes material (the hover tint), and returns once it has held still for
-// REST_FRAMES frames, re-copied in its new pose. update() runs after the frame's motion and the sun-shadow cache's scan
+// again, from the frame it moves, hides, changes material (the hover tint) or changes shape (its vertices edited in place:
+// the umbrella's canopy unfolds that way; its position attribute's version says so), and returns once it has held still
+// for REST_FRAMES frames, re-copied in its new pose and shape. A member whose geometry is replaced draws itself for good. update() runs after the frame's motion and the sun-shadow cache's scan
 // (which brings the tracked roots' world matrices up to date: main.js).
 import { THREE } from './kit.js';
 import { inheritLighting } from './lighting_roles.js';
@@ -22,6 +23,7 @@ const signature = g => {
   return parts.sort().join(',');
 };
 const shownChain = o => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+const shapeOf = m => m.geometry.attributes.position.version;
 // a root whose animation moves something with the toggle held (the sheer curtains' billow): never at rest
 function continuous(root) {
   const animate = root.userData.animate; if (!animate) return false;
@@ -73,7 +75,7 @@ export function createRestClusters({ roots, camera, parent }) {
       place(arrays, m, base);
       const idx = src.index, seg = new Uint32Array(idx ? idx.count : n);
       for (let i = 0; i < seg.length; i++) seg[i] = base + (idx ? idx.getX(i) : i);
-      members.push({ mesh: m, base, count: n, seg, matrix: m.matrixWorld.clone(), material: m.material, rest: true, still: 0, last: m.matrixWorld.clone() });
+      members.push({ mesh: m, base, count: n, seg, matrix: m.matrixWorld.clone(), material: m.material, geometry: src, shape: shapeOf(m), lastShape: shapeOf(m), rest: true, still: 0, last: m.matrixWorld.clone() });
       base += n;
     }
     const geometry = new THREE.BufferGeometry();
@@ -104,26 +106,27 @@ export function createRestClusters({ roots, camera, parent }) {
     index.clearUpdateRanges?.(); if (at) index.addUpdateRange(0, at); index.needsUpdate = true; cl.dirty = false;
   };
   const stats = { clusters: clusters.length, members: clusters.reduce((n, cl) => n + cl.members.length, 0), vertices: clusters.reduce((n, cl) => n + cl.mesh.geometry.attributes.position.count, 0), live: 0, recaptures: 0, ms: 0 };
-  // per frame: a member that moved, hid or took another material draws itself; one that held still REST_FRAMES frames
-  // (in a new pose: re-copied) comes back
+  // per frame: a member that moved, hid, took another material or changed shape draws itself; one that held still
+  // REST_FRAMES frames (in a new pose or shape: re-copied) comes back
   const update = () => {
     let live = 0;
     for (const cl of clusters) {
       for (const mb of cl.members) {
-        const m = mb.mesh, w = m.matrixWorld, posed = w.equals(mb.matrix), same = m.material === mb.material && shownChain(m);
+        const m = mb.mesh, w = m.matrixWorld, shape = shapeOf(m), posed = w.equals(mb.matrix) && shape === mb.shape;
+        const same = m.material === mb.material && m.geometry === mb.geometry && shownChain(m);
         if (mb.rest) {
           if (posed && same) continue;
-          mb.rest = false; mb.still = 0; mb.last.copy(w); m.layers.mainOff = false; cl.dirty = true; live++;
+          mb.rest = false; mb.still = 0; mb.last.copy(w); mb.lastShape = shape; m.layers.mainOff = false; cl.dirty = true; live++;
           continue;
         }
         live++;
         if (!same) { mb.still = 0; continue; }
-        if (!w.equals(mb.last)) { mb.last.copy(w); mb.still = 0; continue; }
+        if (!w.equals(mb.last) || shape !== mb.lastShape) { mb.last.copy(w); mb.lastShape = shape; mb.still = 0; continue; }
         if (++mb.still < REST_FRAMES) continue;
-        if (!posed) {   // at rest in a new pose: its world copy follows, if it stays within the merged mesh's bounds
-          if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+        if (!posed) {   // at rest in a new pose or shape: its world copy follows, if it stays within the merged mesh's bounds
+          if (!m.geometry.boundingBox || shape !== mb.shape) m.geometry.computeBoundingBox();
           if (!cl.bounds.containsBox(box.copy(m.geometry.boundingBox).applyMatrix4(w))) { mb.still = -Infinity; continue; }   // carried away: draws itself until it moves again
-          place(cl.arrays, m, mb.base); mb.matrix.copy(w); stats.recaptures++;
+          place(cl.arrays, m, mb.base); mb.matrix.copy(w); mb.shape = shape; stats.recaptures++;
           for (const name of ['position', 'normal']) { const a = cl.mesh.geometry.attributes[name]; if (!a) continue; a.addUpdateRange(mb.base * 3, mb.count * 3); a.needsUpdate = true; }
         }
         mb.rest = true; m.layers.mainOff = true; cl.dirty = true; live--;

@@ -11,10 +11,11 @@
 // (a pedestal, a dolly push or pull), no rotation, no easing, the move already running on the first kept frame and still
 // running on the last (the pre-roll runs into it). Long holds (6-11 s); at a cut the move reverses or changes axis; the
 // end card dissolves in over the last second of the day. Deep focus everywhere but the dog, which gets the film's one
-// focus pull. It opens on light, what the renderer does best: sunrise rays through the garden's canopy and mist, the
-// same sun's beams across the office, the garden backlit at golden hour (the light scout ranked every sun-facing view by
-// how much its volumetric light reads; the three media overrides below are within what air does), then the dog, the
-// dining room at golden hour, the day in one shot ending in the blue hour, the card.
+// focus pull. It opens on the house in light, what the renderer does best: the street front at sunrise with rays over the
+// roof, the same sun's beams across the office, the house and its garden backlit at golden hour (a light scout measured
+// every sun-facing view for its volumetric light and for how much of the frame the house fills; the three media overrides
+// below are within what air does), then the dog, the dining room at golden hour, the day in one shot ending in the blue
+// hour, the card.
 // Fine detail under a fast camera strobes at 60 fps (temporal aliasing, not TAA): these speeds keep it calm.
 //
 // No interface: the recorder hides the site's HUD (--clean); the only text is this file's title and end card (Liter, the
@@ -129,6 +130,29 @@
     const k = v => +v.toPrecision(3);
     return { gain: k(gain), p10: k(q(0.1)), p50: k(med), p90: k(q(0.9)), p99: k(q(0.99)), hp: k(hp / (w * h)), beam: k(beam / (w * h)) };
   }
+  // tools (--opt shafts=1 with stills): how much of the frame just drawn is the house. Each pixel's visible surface, from
+  // the volumetric pass's half-resolution view depth (its guide, the depth it marched to), back in the world, counted as
+  // house when it lies in the building's box: the plan's outline (x -8.02..8.03, y -5.85..5.47 m) widened by the roof's
+  // 0.77 m overhang, from the ground to the hip roof's ridge (4.17 m) plus a margin. What a plant or a chair in front
+  // hides is not house; what the walls, glass, doors, fascia and roof show is.
+  const HOUSE_BOX = { x0: -8.85, x1: 8.85, y0: -6.7, y1: 6.3, top: 4.3 };
+  function houseFraction() {
+    const P = A.baked?.shafts; if (!P?.enabled) return null;
+    const t = P.history, w = t.width, h = t.height, buf = new Uint16Array(w * h * 4), f = A.THREE.DataUtils.fromHalfFloat;
+    A.renderer.readRenderTargetPixels(t, 0, 0, w, h, buf, undefined, 1);
+    const T = A.THREE, v = new T.Vector3(), b = HOUSE_BOX;
+    let house = 0, upper = 0, sky = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const z = f(buf[4 * (y * w + x)]);
+      if (!(z > 0) || z >= cam.far * 0.99) { sky++; continue; }
+      v.set((x + 0.5) / w * 2 - 1, (y + 0.5) / h * 2 - 1, -1).applyMatrix4(cam.projectionMatrixInverse);
+      v.multiplyScalar(z / Math.max(1e-6, -v.z)).applyMatrix4(cam.matrixWorld);   // world: x east, y up, z = -plan y
+      const px = v.x, py = -v.z;
+      if (px > b.x0 && px < b.x1 && py > b.y0 && py < b.y1 && v.y > -0.2 && v.y < b.top) { house++; if (y >= h / 2) upper++; }
+    }
+    const n = w * h, k = q => +q.toFixed(3);
+    return { house: k(house / n), upperHalf: k(upper / (n / 2)), sky: k(sky / n) };
+  }
   function lookAt(s, t, dt, rolling) {
     const ev = s.exposure?.ev;
     if (A.lens) A.lens.settings.exposure = typeof ev === 'function' ? ev(t) : ev ?? 0;
@@ -197,15 +221,18 @@
   const ROOM_KEY = 0.4;                  // day interiors a little lower than the walkthrough's (mean luma ~0.6, windows held)
   const SHOTS = [
     {
-      // 1. Light first (X autoplays muted; the first frame decides): sunrise in the back garden, looking ENE into the low sun
-      // (az 58, el 8) through the tree canopy over the east fence; the morning mist after rain turns the gaps in the leaves
-      // into rays fanning down over the beds, the bird of paradise backlit in front. A slow push toward the light; the
-      // address over it from frame 0. (The light scout: the strongest rays the garden throws, at 0.016 / m of ground mist,
-      // visibility ~240 m, against the slot's 0.011; 64 march steps for clean shafts.)
-      name: 'rays', dur: beats(12), pre: 2.0, slot: 'sunrise', fov: 40,
+      // 1. The house in the first light (X autoplays muted; the first frame decides): the street front at sunrise from the
+      // front garden's south-west, at crane height over the beds, looking NE over the roof into the low sun (az 58, el 8);
+      // the morning mist after rain turns the street palm and the ridge into rays streaming over the front wall and its
+      // number. Level with the frame shifted down (verticals parallel), a slow push toward the light; the address over it
+      // from frame 0. (The light scout: the only views where the sunrise's rays and the house share the frame, the house a
+      // measured 31-33%; turned 10 degrees right of the first pick to keep the garage's open bay, modelled without a door,
+      // out of the frame (no pixel under 10 of 255); ground mist 0.016 / m, visibility ~240 m, against the slot's 0.011;
+      // 64 march steps for clean shafts.)
+      name: 'front', dur: beats(12), pre: 2.0, slot: 'sunrise', fov: 40,
       setup() { stash(); door(-0.06, -4.66, false); },
-      keys: [[0, 3.98, 9.03, 1.30, 52, 0, 0], [1, 4.42, 9.37, 1.30, 52, 0, 0]],
-      volume: { mist: 0.016, steps: 64 },
+      keys: [[0, -5.50, -13.00, 3.80, 40, 0, -0.15], [1, -5.146, -12.579, 3.80, 40, 0, -0.15]],
+      volume: { mist: 0.016, steps: 64 }, exposure: { ev: -0.3 },   // held a little under the glare: 3.7% clipped at 0
       overlay(t) { addr.style.opacity = clamp01((6.0 - t) / 0.6).toFixed(3); },
     },
     {
@@ -218,12 +245,13 @@
       volume: { dust: 0.035, steps: 64 },
     },
     {
-      // 3. Golden hour in the garden, looking WSW into the sun: rays out of the west canopy, the fan palms and bananas lit
-      // from behind, the fire pit's lounge. A slow push toward the light, out from under a fan palm's fronds (pulling back
-      // ran into them). (Evening haze 0.004 / m, ~1 km, against the slot's 0.0015.)
+      // 3. Golden hour, the house and its garden: from the back garden's north-east at crane height, looking WSW into the sun
+      // along the roof, the glass doors and the patio; rays out of the west canopy cross the garden, banana leaves lit from
+      // behind frame the lounge and the fire pit. Level, the frame shifted down; a slow push toward the light. (The house a
+      // measured 31%; evening haze 0.004 / m, ~1 km, against the slot's 0.0015.)
       name: 'garden', dur: beats(10), pre: 1.5, slot: 'golden', fov: 40,
       setup() { stash(); door(-0.06, -4.66, false); },
-      keys: [[0, 6.00, 15.00, 1.40, 262, 0, 0], [1, 5.555, 14.937, 1.40, 262, 0, 0]],
+      keys: [[0, 12.00, 10.00, 3.50, 252, 0, -0.12], [1, 11.57, 9.86, 3.50, 252, 0, -0.12]],
       volume: { mist: 0.004, steps: 64 },
     },
     {
@@ -306,7 +334,10 @@
             const lf = still && A.lens?.enabled ? A.lens.focusDistance?.() : null;
             if (lf) V.log.push(`${only[V.i].name}: focus ${lf.focus.toFixed(2)} m (lock ${lf.lock.toFixed(2)} m) f/${lf.fStop.toFixed(1)}`);
             if (OPT.probe && V.i >= 0 && A.lens?.probed) { V.log.push(`${only[V.i].name}: probe ${JSON.stringify(A.lens.probed)}`); A.lens.probed = null; }
-            if (OPT.shafts && still) { const st = shaftStats(); if (st) V.log.push(`${only[V.i].name}: shafts ${JSON.stringify(st)}`); }
+            if (OPT.shafts && still) {
+              const st = shaftStats(); if (st) V.log.push(`${only[V.i].name}: shafts ${JSON.stringify(st)}`);
+              const hf = houseFraction(); if (hf) V.log.push(`${only[V.i].name}: house ${JSON.stringify(hf)}`);
+            }
             if (++V.i >= only.length) { V.done = true; return { done: true }; }
             const s = only[V.i];
             V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set();

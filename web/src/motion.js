@@ -15,7 +15,10 @@
 // hidden, merged into a rest cluster, off screen) draws as still for one frame.
 import * as THREE from 'three';
 
-export const MIN_PIXELS = 0.25;
+// below these a mesh is left to the depth reprojection: a rigid mover's error, and the vertex animation's (the grass
+// wind: thin blades a pixel or less out of place are what the clip box absorbs; drawing every tile in reach of the
+// quarter pixel cost ~1 ms of CPU and 35 draws in a garden view)
+export const MIN_PIXELS = 0.25, MIN_SHADER_PIXELS = 1;
 const PREV = { modelViewMatrix: 'mvPrevModelView', modelMatrix: 'mvPrevModel', viewMatrix: 'mvPrevView', projectionMatrix: 'mvPrevProjection', cameraPosition: 'mvPrevCamera', getBoneMatrix: 'mvPrevBone', gl_Position: 'mvPrevClip' };
 const DECLARATIONS = `
 uniform mat4 mvPrevModelView, mvPrevModel, mvPrevView, mvPrevProjection; uniform vec3 mvPrevCamera; uniform vec2 uMotionJitter;
@@ -60,31 +63,33 @@ export function doubleVertex(vertexShader, previous = {}) {
 // the vertex shader a material's own hook expects to edit
 const LIB = { MeshStandardMaterial: 'standard', MeshPhysicalMaterial: 'physical', MeshBasicMaterial: 'basic', MeshLambertMaterial: 'lambert', MeshPhongMaterial: 'phong', MeshToonMaterial: 'toon', MeshMatcapMaterial: 'matcap', MeshDepthMaterial: 'depth', MeshNormalMaterial: 'normal' };
 
-// How far a world matrix change moves a mesh on screen, in pixels: the largest displacement of its bounding sphere's centre
-// and three points on it, over the distance to the sphere. pixelsPerRadian: the target's height / (2 tan(fov / 2)).
-const pa = new THREE.Vector3(), pb = new THREE.Vector3(), pc = new THREE.Vector3(), ma = new THREE.Matrix4(), mb = new THREE.Matrix4();
+// The distance from the eye to a mesh's bounding sphere (world matrix m, column-major elements), at least 5 cm.
+function sphereDistance(sphere, m, eye) {
+  const c = sphere.center, r = sphere.radius;
+  const x = m[0] * c.x + m[4] * c.y + m[8] * c.z + m[12] - eye.x, y = m[1] * c.x + m[5] * c.y + m[9] * c.z + m[13] - eye.y, z = m[2] * c.x + m[6] * c.y + m[10] * c.z + m[14] - eye.z;
+  const s = Math.sqrt(Math.max(m[0] * m[0] + m[1] * m[1] + m[2] * m[2], m[4] * m[4] + m[5] * m[5] + m[6] * m[6], m[8] * m[8] + m[9] * m[9] + m[10] * m[10]));
+  return Math.max(0.05, Math.sqrt(x * x + y * y + z * z) - r * s);
+}
+// How far a world matrix change (now, before: elements) moves a mesh on screen, in pixels, at most: for D = now - before,
+// a point c + r u of its bounding sphere moves |D (c + r u)| <= |D c| + r |D|_F; over the distance to the sphere.
+// pixelsPerRadian: the target's height / (2 tan(fov / 2)). Plain arithmetic: it runs for every drawn mesh that moved.
 export function screenMotion(sphere, now, before, eye, pixelsPerRadian) {
-  ma.fromArray(now); mb.fromArray(before);
-  let d = 0;
-  for (let k = 0; k < 4; k++) {
-    pa.copy(sphere.center); if (k) pa.setComponent(k - 1, pa.getComponent(k - 1) + sphere.radius);
-    pb.copy(pa).applyMatrix4(mb); pa.applyMatrix4(ma); d = Math.max(d, pa.distanceTo(pb));
-  }
-  pc.copy(sphere.center).applyMatrix4(ma);
-  const scale = Math.cbrt(Math.abs(ma.determinant())) || 1;
-  return d / Math.max(0.05, pc.distanceTo(eye) - sphere.radius * scale) * pixelsPerRadian;
+  const c = sphere.center;
+  const d0 = now[0] - before[0], d1 = now[1] - before[1], d2 = now[2] - before[2], d4 = now[4] - before[4], d5 = now[5] - before[5], d6 = now[6] - before[6];
+  const d8 = now[8] - before[8], d9 = now[9] - before[9], d10 = now[10] - before[10];
+  const x = d0 * c.x + d4 * c.y + d8 * c.z + now[12] - before[12], y = d1 * c.x + d5 * c.y + d9 * c.z + now[13] - before[13], z = d2 * c.x + d6 * c.y + d10 * c.z + now[14] - before[14];
+  const f = Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2 + d4 * d4 + d5 * d5 + d6 * d6 + d8 * d8 + d9 * d9 + d10 * d10);
+  return (Math.sqrt(x * x + y * y + z * z) + sphere.radius * f) / sphereDistance(sphere, now, eye) * pixelsPerRadian;
 }
 // the same for shader animation: a vertex at most `speed` m/s, over one frame of dt
 export function shaderMotion(sphere, matrix, speed, dt, eye, pixelsPerRadian) {
-  ma.fromArray(matrix); pc.copy(sphere.center).applyMatrix4(ma);
-  const scale = Math.cbrt(Math.abs(ma.determinant())) || 1;
-  return speed * dt / Math.max(0.05, pc.distanceTo(eye) - sphere.radius * scale) * pixelsPerRadian;
+  return speed * dt / sphereDistance(sphere, matrix, eye) * pixelsPerRadian;
 }
 const equal = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
 const snapshot = v => (v?.clone ? v.clone() : v);
 const assign = (u, v) => { if (u.value?.copy && v?.copy) u.value.copy(v); else u.value = snapshot(v); };
 
-export function createMotion({ minPixels = MIN_PIXELS } = {}) {
+export function createMotion({ minPixels = MIN_PIXELS, minShaderPixels = MIN_SHADER_PIXELS } = {}) {
   const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false });
   target.texture.name = 'TAA motion';
   const scene = new THREE.Scene(); scene.name = 'TAA motion'; scene.matrixWorldAutoUpdate = false;
@@ -94,7 +99,7 @@ export function createMotion({ minPixels = MIN_PIXELS } = {}) {
   const records = new WeakMap(), skeletons = new WeakMap(), variants = new WeakMap(), proxies = new Map();
   let frame = 0, drawn = [], generic = null;
   const clearColor = new THREE.Color();
-  const stats = { drawn: 0, movers: 0, skinned: 0, shader: 0, rigid: 0, variants: 0 };
+  const stats = { candidates: 0, movers: 0, skinned: 0, shader: 0, rigid: 0, variants: 0 };
   const own = () => ({ mvPrevModel: { value: new THREE.Matrix4() }, mvPrevModelView: { value: new THREE.Matrix4() }, mvPrevBones: { value: null } });
   const material = (vertexShader, uniforms, defines) => {
     const m = new THREE.ShaderMaterial({ vertexShader, fragmentShader: FRAGMENT, uniforms: { ...uniforms, ...shared, ...own() }, defines: { ...defines }, side: THREE.DoubleSide, depthTest: false, depthWrite: false, blending: THREE.NoBlending, toneMapped: false });
@@ -117,20 +122,25 @@ export function createMotion({ minPixels = MIN_PIXELS } = {}) {
     }
     return v;
   };
-  // the renderer's draws of the scene for the main camera (taa.js): each drawn mesh once per frame
-  const seen = object => {
-    if (!object.isMesh) return;
-    let r = records.get(object);
-    if (!r) records.set(object, r = { last: new Float32Array(16), lastFrame: -2, frame: -1 });
+  // the renderer's draws of the scene for the main camera (taa.js): each drawn mesh once per frame. A mesh drawn in the
+  // previous frame too, at the same world matrix, neither skinned nor shader-animated, is still: nothing more to do for
+  // it (its record already holds this matrix). The rest are this frame's candidates.
+  const seen = o => {
+    if (!o.isMesh) return;
+    let r = records.get(o);
+    if (!r) records.set(o, r = { last: new Float32Array(16), lastFrame: -2, frame: -1, known: false, material: null, spec: false });
     if (r.frame === frame) return;
-    r.frame = frame; drawn.push(object);
+    r.frame = frame; r.known = r.lastFrame === frame - 1; r.lastFrame = frame;
+    if (r.material !== o.material) { r.material = o.material; r.spec = Array.isArray(o.material) ? o.material.some(m => m?.userData?.motion) : !!o.material?.userData?.motion; }
+    if (r.known && !r.spec && !o.isSkinnedMesh && equal(r.last, o.matrixWorld.elements)) return;
+    drawn.push(o);
   };
   const proxyOf = src => {
     let p = proxies.get(src);
     if (!p) {
       p = src.isSkinnedMesh ? new THREE.SkinnedMesh(src.geometry) : src.isInstancedMesh ? new THREE.InstancedMesh(src.geometry, undefined, 0) : new THREE.Mesh(src.geometry);
       p.matrixAutoUpdate = false; p.matrixWorldAutoUpdate = false; p.frustumCulled = false; p.name = 'TAA motion proxy';
-      p.onBeforeRender = proxyUniforms; scene.add(p); proxies.set(src, p);
+      p.onBeforeRender = proxyUniforms; p.userData.source = src; scene.add(p); proxies.set(src, p);
     }
     return p;
   };
@@ -166,12 +176,12 @@ export function createMotion({ minPixels = MIN_PIXELS } = {}) {
   const classify = (camera, pixelsPerRadian, dt) => {
     for (const p of proxies.values()) p.visible = false;
     const eye = camera.position; let n = 0;
-    stats.drawn = drawn.length; stats.skinned = stats.shader = stats.rigid = 0;
+    stats.candidates = drawn.length; stats.skinned = stats.shader = stats.rigid = 0;
     for (const o of drawn) {
-      const r = records.get(o), known = r.lastFrame === frame - 1, now = o.matrixWorld.elements;
+      const r = records.get(o), known = r.known, now = o.matrixWorld.elements;
       let move = null;
       if (o.isSkinnedMesh) move = 'skinned';
-      else if (animated(o, eye, pixelsPerRadian, dt) > minPixels) move = 'shader';
+      else if (r.spec && animated(o, eye, pixelsPerRadian, dt) > minShaderPixels) move = 'shader';
       else if (known && !equal(r.last, now) && screenMotion(sphereOf(o), now, r.last, eye, pixelsPerRadian) > minPixels) move = 'rigid';
       if (!move) continue;
       const ms = materials(o);
@@ -213,12 +223,12 @@ export function createMotion({ minPixels = MIN_PIXELS } = {}) {
       } finally { renderer.autoClear = auto; renderer.setClearColor(color, alpha); renderer.setRenderTarget(saved); }
       return n;
     },
-    // the frame is done: what was drawn becomes the previous state
+    // the frame is done: what was drawn becomes the previous state (the still meshes' records hold it already)
     advance() {
       for (const o of drawn) {
-        const r = records.get(o); r.last.set(o.matrixWorld.elements); r.lastFrame = frame;
+        const r = records.get(o); r.last.set(o.matrixWorld.elements);
         if (o.isSkinnedMesh && o.skeleton) { const b = bonesOf(o.skeleton, frame); b.last.set(o.skeleton.boneMatrices); b.lastFrame = frame; }
-        const ms = o.material; if (!(Array.isArray(ms) ? ms.some(m => m?.userData?.motion) : ms?.userData?.motion)) continue;
+        if (!r.spec) continue;
         for (const m of materials(o)) {
           const spec = m?.userData?.motion; if (!spec) continue;
           const v = variantOf(m); if (v.lastFrame === frame) continue;   // (one material, many meshes: once a frame)

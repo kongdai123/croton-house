@@ -137,5 +137,22 @@ const proxyOf = (motion, o) => motion.scene.children.find(p => p.visible && p.ge
     assert.ok(fastest <= W.windRate(sway, flutter) && fastest > 0.5 * W.windRate(sway, flutter), `wind speed ${fastest.toFixed(3)} within its bound ${W.windRate(sway, flutter).toFixed(3)}`);
   }
 }
+{
+  // screenMotion is an upper bound of the true motion of every point of the bounding sphere (it decides who is still)
+  let seed = 7; const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  const eye = new T.Vector3(0.3, 1.5, 2), sphere = new T.Sphere(new T.Vector3(0.1, 0.4, -0.2), 0.6);
+  for (let k = 0; k < 200; k++) {
+    const pose = () => new T.Matrix4().compose(new T.Vector3(rnd() * 4 - 2, rnd(), -2 - rnd() * 4), new T.Quaternion().setFromEuler(new T.Euler(rnd() * 3, rnd() * 3, rnd() * 3)), new T.Vector3(1, 1, 1).multiplyScalar(0.5 + rnd()));
+    const a = pose(), b = a.clone().multiply(new T.Matrix4().makeRotationY((rnd() - 0.5) * 0.1)).setPosition(new T.Vector3().setFromMatrixPosition(a).add(new T.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(0.05)));
+    const bound = W.screenMotion(sphere, a.elements, b.elements, eye, PX);
+    let worst = 0;
+    for (let i = 0; i < 64; i++) {
+      const u = new T.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize().multiplyScalar(sphere.radius * rnd()).add(sphere.center);
+      const pa = u.clone().applyMatrix4(a), pb = u.clone().applyMatrix4(b);
+      worst = Math.max(worst, pa.distanceTo(pb) / Math.max(0.05, pa.distanceTo(eye)) * PX);
+    }
+    assert.ok(bound >= worst - 1e-9, `screen motion bound ${bound.toFixed(4)} under a point's ${worst.toFixed(4)} px`);
+  }
+}
 function THREE_DEG(d) { return d * Math.PI / 180; }
 console.log(`motion vectors: double vertex shader (${specs.size} animated materials: ${[...kinds].slice(0, 6).join(', ')}), jitter and sign, previous matrices, bones, wind time and fur lag, movers OK`);

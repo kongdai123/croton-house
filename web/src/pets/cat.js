@@ -719,7 +719,7 @@ class CatRig {
     const sc = Math.sin((ph - 0.27) * TAU);
     set(P, I.chest, 0, -0.05 * sc * g, -0.025 * sc * g);
     const br = Math.sin(t * TAU * 0.33) * (1 - 0.7 * g); add(P, I.spine2, 0.012 * br, 0, 0); add(P, I.chest, -0.01 * br, 0, 0);
-    const tb = clamp(s.turn || 0, -2.5, 2.5);
+    const tb = clamp(this.turnEased, -2.5, 2.5);   // update(): eased, so the end of a turn does not snap the head
     add(P, I.spine1, 0, tb * 0.05, 0); add(P, I.spine2, 0, tb * 0.06, 0); add(P, I.chest, 0, tb * 0.06, 0); add(P, I.neck, 0, tb * 0.08, 0); add(P, I.head, 0, tb * 0.1, -tb * 0.03);
     add(P, I.neck, 0.13 * g + 0.02, 0, 0); add(P, I.head, -0.08 * g + 0.025 * c2 * g, 0, 0);
     this.headLook(P, 1 - 0.65 * g);
@@ -850,6 +850,8 @@ class CatRig {
   update(dt, s) {
     this.time = s.t ?? (this.time + dt);
     const mode = s.mode || 'idle', speed = Math.max(0, s.speed || 0), turn = s.turn || 0;
+    // the stand pose leans the spine, neck and head into a turn by its rate, which steps to 0 when a turn ends: eased
+    this.turnEased = (this.turnEased ?? 0) + (turn - (this.turnEased ?? 0)) * (1 - Math.exp(-4 * dt));
     // gait
     const v = Math.max(speed, Math.abs(turn) * 0.07);
     this.stride = clamp(0.12 + 0.48 * v, 0.12, 0.42);

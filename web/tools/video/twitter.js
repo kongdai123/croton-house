@@ -177,10 +177,11 @@
     {
       // 2. The street front on the door's axis, a frontal elevation from inside the front garden (from the street the
       // fern bed hides the house below the eaves at any height a level camera can take): the camera sinks from the eaves
-      // to eye level and arrives at the open door and its number, between the palm and the banana leaves.
+      // to eye level and arrives at the open door and its number, between the palm and the banana leaves. 5.2 m from the
+      // door: 0.6 m farther, the camera sank through a leaf that swept the frame (the flicker check's pops).
       name: 'facade', dur: beats(11), pre: 1.5, slot: TOUR, fov: 37,
       setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, -0.06, -10.5, 2.50, 0, 0, 0], [1, -0.06, -10.5, 1.50, 0, 0, 0]],
+      keys: [[0, -0.06, -9.9, 2.40, 0, 0, 0], [1, -0.06, -9.9, 1.50, 0, 0, 0]],
     },
     {
       // 3. The living room from behind the sofa: the camera rises over its back and the window seat, the kitchen and the
@@ -191,10 +192,12 @@
     },
     {
       // 4. The dog at its own eye height, 50 mm: called, it walks in from the right and sits for its portrait; the cat
-      // watches from the window seat. Focus on the cat, then the film's one pull to the dog. The lens creeps 2 cm.
+      // watches from the window seat. Focus on the cat, then the film's one pull to the dog. The lens creeps 2 cm. At
+      // 0.36 m, with the frame shifted down a little, the sitting dog (0.4 m tall, 1.2 m away) fills the lower two
+      // thirds; at the spec's 0.5 m only the top of its head reached the frame.
       name: 'dog', dur: beats(10), pre: 1.0, slot: TOUR, fov: 23, ahead: 0.4, exposure: { key: ROOM_KEY },
       setup() { stash(); stage('dog', 0.7, -2.9, 'lie', 1.9, -1.7); stage('cat', 1.2, -3.85, 'sit', 1.9, -1.7); },
-      keys: [[0, 1.90, -1.70, 0.50, 207, 0, 0], [1, 1.88, -1.74, 0.50, 207, 0, 0]],
+      keys: [[0, 1.90, -1.70, 0.36, 207, 0, -0.08], [1, 1.88, -1.74, 0.36, 207, 0, -0.08]],
       lensSettings: { maxCoc: 0.016 }, lens: dogFocus(),
       // call at once; pet when it has sat down in front of the lens (or at the latest beat), never mid-walk
       at: [[0.15, () => { free('dog'); pets.call('dog'); }], [beats(5), () => pets.pet('dog'), () => pets.get('dog')?.state === 'attend', beats(7)]],

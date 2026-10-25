@@ -612,7 +612,9 @@ export function createPet(opts = {}) {
       }
       // the walk pose keeps easing its stride down while it blends out, so a stop that drops s.speed to 0 does not pop
       const v = Math.max(0, +s.speed || 0);
-      ctx.speed = mode === 'walk' ? v : ctx.speed * Math.exp(-5 * dt); ctx.turn = +s.turn || 0; ctx.jumpDy = +s.jumpDy || 0;
+      // the turn rate eases too: the walk pose leans the spine, chest and head into a turn by it, and a turn ends with the
+      // rate stepping to 0 (a called dog turning to the player and sitting snapped its head 41 degrees in one frame)
+      ctx.speed = mode === 'walk' ? v : ctx.speed * Math.exp(-5 * dt); ctx.turn += ((+s.turn || 0) - ctx.turn) * (1 - Math.exp(-4 * dt)); ctx.jumpDy = +s.jumpDy || 0;
       ctx.petT = Number.isFinite(s.petT) ? s.petT : clk.pet; ctx.petLeft = Number.isFinite(s.petLeft) ? s.petLeft : Math.max(0, 5 - ctx.petT);
       ctx.freq = 1.6 + 3.0 * Math.max(ctx.speed, 0.05); phase = frac(phase + dt * ctx.freq);
       ctx.excite = clamp(+s.excite || 0, 0, 1); ctx.attend += ((s.attend ? 1 : 0) - ctx.attend) * (1 - Math.exp(-4 * dt));

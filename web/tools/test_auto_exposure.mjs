@@ -9,12 +9,12 @@ const dir = await mkdtemp(join(tmpdir(), 'croton-exposure-'));
 try {
   const built = await build({ stdin: { contents: `
     export * from './src/auto_exposure_policy.js'; export * from './src/auto_exposure.js';
-    export { SLOTS, blendSlot } from './src/lighting_slots.js'; export { blenderAgX } from './src/agx.js';
+    export { SLOTS, blendSlot, fadeExposure } from './src/lighting_slots.js'; export { blenderAgX } from './src/agx.js';
     export { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'; export * as THREE from 'three';
   `, resolveDir: fileURLToPath(new URL('../', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false, logLevel: 'silent' });
   const file = join(dir, 'fixture.mjs'); await writeFile(file, built.outputFiles[0].contents);
   const { METER, ADAPTATION, autoExposureEnabled, meterWeight, targetExposureEV, adaptExposureEV, glideExposureEV, filterMeterLog,
-    SLOTS, blendSlot, createBakedAutoExposure, blenderAgX, OutputPass, THREE: T } = await import(pathToFileURL(file));
+    SLOTS, blendSlot, fadeExposure, createBakedAutoExposure, blenderAgX, OutputPass, THREE: T } = await import(pathToFileURL(file));
   const near = (a, b, tolerance = 1e-10) => assert.ok(Math.abs(a - b) < tolerance, `${a} != ${b}`);
   // the maximum lift above each slot's ev before the key moved to the listing photos' level (key 0.15)
   const SLOT_NAMES = ['sunrise', 'noon', 'golden', 'dusk'], FIRST_MAX = { sunrise: 5, noon: 4.5, golden: 5, dusk: 3.5 };
@@ -114,7 +114,8 @@ try {
     assert.equal(createBakedAutoExposure({ renderer, lighting, getSlot: () => mood, query: query(s) }), null);
     assert.equal(outputPass.render, agxRender); assert.equal(outputPass.material.fragmentShader, originalShader);
   }
-  const adaptation = createBakedAutoExposure({ renderer, lighting, getSlot: () => mood, query: query('localadapt=0') });
+  let fade = false;
+  const adaptation = createBakedAutoExposure({ renderer, lighting, getSlot: () => mood, query: query('localadapt=0'), fading: () => fade });
   assert.equal((outputPass.material.fragmentShader.match(/precision highp sampler2D;/g) ?? []).length, 1);
   assert.equal(lighting.autoExposure, adaptation);
   const read = new T.WebGLRenderTarget(1280, 720), write = read.clone();
@@ -135,6 +136,10 @@ try {
   assert.deepEqual(draws[0].uniforms.uSlot.toArray().map(v => +v.toFixed(6)), [(SLOTS.noon.ev + SLOTS.dusk.ev) / 2, -0.5, (SLOTS.noon.autoExposure.maxEV + SLOTS.dusk.autoExposure.maxEV) / 2].map(v => +v.toFixed(6)));
   near(draws[0].uniforms.uKey, Math.sqrt(SLOTS.noon.autoExposure.key * SLOTS.dusk.autoExposure.key), 1e-12);   // the key fades in stops
   near(draws[0].uniforms.uOutdoor, SLOTS.dusk.autoExposure.outdoor / 2, 1e-12);
+  // through a slot fade the meter reads every frame, unfiltered, and the exposure is its target (uFade); then every third again
+  fade = true;
+  for (let i = 0; i < 4; i++) { draw(); assert.equal(draws.length, 5); assert.equal(draws[2].uniforms.uFade, 1); assert.equal(draws[3].uniforms.uFade, 1); }
+  fade = false; draw(); assert.equal(draws.at(-2).uniforms.uFade, 0);
   camera.rotation.y += Math.PI / 2; draw();
   assert.equal(draws.length, 5); assert.equal(draws[3].uniforms.uValid, 1); assert.equal(draws[3].uniforms.uFast, 1); assert.equal(draws[2].uniforms.uValid, 0);
   renderer.domElement.dispatchEvent({ type: 'webglcontextrestored' });
@@ -219,5 +224,58 @@ try {
     assert.ok(slo < photos.p10Luma && photos.p10Luma < shi && shi < band.set[name][0], `${name} shadows band ${band.shadows[name]} around the photos' ${photos.p10Luma}`);
   }
   console.log('auto exposure: the key against the listing photos (AgX), the bounds with it and the gate band OK');
+
+  // ---- a slot crossfade (lighting_slots.js fadeExposure, lightmap_slots.js, lightmap.js exposureBases, auto_exposure.js uFade).
+  // A view's radiance per slot (one number: the scene's log mean), 45 frames of 1/30 s (a 1.5 s smoothstep fade), then 3 s.
+  // Through the fade the visitor's exposure is its target every frame (the meter reads the frame it exposes); then it glides
+  // (glideExposureEV). Brightness (radiance x 2^exposure) must move monotonically from one end to the other, never past
+  // either by > 0.1 EV. The first version blended the exposure in stops while the radiance blended linearly and let the
+  // glide chase it: the garden ran 75 -> 22 -> 90 (luma) from golden hour to dusk, the living room 175 -> 130 -> 155.
+  const smoothT = i => { const t = Math.min(1, i / 45); return t * t * (3 - 2 * t); };
+  // fade: the shipped fade; 'stops': the first version (exposure in stops, radiance linear, the glide throughout); 'glide': the
+  // exposed-space fade with the glide throughout (no uFade)
+  const run = (a, b, view, mode = 'fade') => {
+    // the exposure bases as lightmap.js gives them: the garden's lock outdoors; in a room only the difference matters (0:
+    // the meter sets the exposure, the radiance blends linearly)
+    const lock = s => s.ev + s.autoExposure.outdoor, bases = [0, (lock(b) - lock(a)) * (1 - view.indoor)];
+    let state = null; const out = [];
+    for (let i = 0; i <= 45 + 90; i++) {
+      const t = smoothT(i), fading = i > 0 && i <= 45;   // the frame the fade ends in included (lightmap_slots.js stepping)
+      let w = 1, mood = b;
+      if (i < 45 && mode === 'stops') { w = t; mood = blendSlot(a, b, t); }
+      else if (i < 45) { const f = fadeExposure(a, b, t, ...bases); w = f.weight; mood = f.mood; }
+      const lum = (1 - w) * view.A + w * view.B, goal = targetExposureEV(lum, mood, view.indoor);
+      state = !state || (fading && mode === 'fade') ? { ev: goal, drive: goal } : glideExposureEV(state, goal, 1 / 30);
+      out.push(Math.log2(lum) + state.ev);   // the picture's brightness, in stops
+    }
+    return out;
+  };
+  const ends = (a, b, view) => [a, b].map((s, k) => Math.log2(view[k ? 'B' : 'A']) + targetExposureEV(view[k ? 'B' : 'A'], s, view.indoor));
+  const excursion = (curve, [b0, b1]) => {
+    let back = 0; for (let i = 1; i < curve.length; i++) back = Math.max(back, Math.sign(b1 - b0) * (curve[i - 1] - curve[i]));
+    return { below: Math.min(b0, b1) - Math.min(...curve), above: Math.max(...curve) - Math.max(b0, b1), back };
+  };
+  const check = (a, b, view, label) => {
+    const curve = run(a, b, view), e = excursion(curve, ends(a, b, view));
+    assert.ok(e.below < 0.1 && e.above < 0.1 && e.back < 0.1, `${label}: ${curve.map(x => x.toFixed(2)).join(' ')} (${JSON.stringify(e)})`);
+  };
+  // every value finite through every fade, its ends included (a NaN sun at the end of golden hour -> dusk left the
+  // exposure NaN: the picture black for good)
+  const finite = (o, path = '') => { for (const [k, v] of Object.entries(o)) { if (typeof v === 'object') finite(v, `${path}${k}.`); else assert.ok(Number.isFinite(v), `${path}${k} = ${v}`); } };
+  for (const x of SLOT_NAMES) for (const y of SLOT_NAMES) for (const t of [0, 0.5, 1]) for (const bases of [[SLOTS[x].ev, SLOTS[y].ev], [0, 7.15], [0, 0]]) finite(fadeExposure(SLOTS[x], SLOTS[y], t, ...bases));
+  // the garden from golden hour to dusk: dusk's garden radiance ~7 stops under golden hour's (its sky 0.35, no sun)
+  const garden = { indoor: 0, A: 0.4, B: 0.4 / 2 ** 7 }, room = { indoor: 1, A: 0.02, B: 0.005 };
+  check(SLOTS.golden, SLOTS.dusk, garden, 'garden golden -> dusk'); check(SLOTS.dusk, SLOTS.sunrise, { ...garden, A: garden.B, B: 0.3 }, 'garden dusk -> sunrise');
+  // the regressions this guards: the stops-linear fade in the garden; in a room, any glide behind the fade
+  const g = excursion(run(SLOTS.golden, SLOTS.dusk, garden, 'stops'), ends(SLOTS.golden, SLOTS.dusk, garden));
+  assert.ok(g.below > 1.5, `the stops-linear garden fade dipped ${g.below.toFixed(1)} EV`);
+  const r = excursion(run(SLOTS.golden, SLOTS.dusk, room, 'glide'), ends(SLOTS.golden, SLOTS.dusk, room));
+  assert.ok(r.below > 0.3, `a room fade with the glide behind it dipped ${r.below.toFixed(2)} EV`);
+  // a room: golden hour's daylight, dusk's lamps ~2 stops under it; a doorway; every slot to its neighbour, both ways
+  check(SLOTS.golden, SLOTS.dusk, room, 'room golden -> dusk');
+  const order = ['sunrise', 'noon', 'golden', 'dusk'], level = { sunrise: [0.3, 0.015], noon: [1.5, 0.04], golden: [0.4, 0.02], dusk: [0.4 / 128, 0.005] };
+  for (let i = 0; i < 4; i++) for (const [x, y] of [[order[i], order[(i + 1) % 4]], [order[(i + 1) % 4], order[i]]]) for (const indoor of [0, 1])
+    check(SLOTS[x], SLOTS[y], { indoor, A: level[x][indoor], B: level[y][indoor] }, `${indoor ? 'room' : 'garden'} ${x} -> ${y}`);
+  console.log('auto exposure: slot crossfades monotonic in exposed space, garden and room, every slot change both ways OK');
   console.log('auto exposure: weighted meter, median/temporal/dead band, eased per-frame glide, 15–144 fps invariance, asymmetry, no meter-tick step/kink, slot blending, garden lock, teleport, output transforms, capture toggles and lifecycle OK');
 } finally { await rm(dir, { recursive: true, force: true }); }

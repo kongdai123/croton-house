@@ -34,7 +34,7 @@ uniform vec4 uOut;    // outdoor haze (1/m), ground mist (1/m), mist falloff (1/
 uniform vec4 uDust;   // indoor dust (1/m), dust albedo, mist albedo
 uniform vec3 uPhaseMist, uPhaseDust;   // forward lobe g, broad lobe g, forward weight
 uniform vec2 uLowSize;
-uniform float uNear, uFar, uMaxDistance, uFrame, uSunTexel, uBias, uHistory, uDepthSigma;
+uniform float uNear, uFar, uMaxDistance, uFrame, uSunTexel, uBias, uHistory, uHistoryScale, uDepthSigma;
 uniform int uSteps, uDebug;
 ${insideGLSL('outsideHouse')}
 float hg(float mu, float g) { float gg = g * g; return (1.0 - gg) / (12.5663706 * pow(max(1.0 + gg - 2.0 * g * mu, 0.0001), 1.5)); }
@@ -98,7 +98,7 @@ void main() {
       }
       if (weights > 0.05) {
         vec4 old = sum / weights; float a = uHistory * clamp(weights * 2.0, 0.0, 1.0);
-        scatter = mix(scatter, old.rgb, a); T = mix(T, old.a, a);
+        scatter = mix(scatter, old.rgb * uHistoryScale, a); T = mix(T, old.a, a);
       }
     }
   }
@@ -159,14 +159,15 @@ export function installVolume(composer, pass) {
 }
 
 const ambientCache = new WeakMap();
-// state(): { current, next, t, sky, nextSky }: the slot names, the crossfade fraction (0 without a fade) and the two
-// slots' skies (equirectangular textures with their CPU data, HDRLoader layout).
+// state(): { current, next, t, progress, sky, nextSky, exposureShift }: the slot names, the crossfade's radiance weight and
+// its progress (0 without a fade; lightmap_slots.js fading), the two slots' skies (equirectangular textures with their CPU
+// data, HDRLoader layout) and the slot fades' exposure shift so far (EV, lightmap_slots.js exposureShift).
 export class VolumetricPass extends Pass {
   constructor({ camera, sun, shadow, state = () => ({ current: 'sunrise' }), renderer = null, parameters = {} }) {
     super(); this.camera = camera; this.sun = sun; this.shadow = shadow; this.state = state;
     this.params = { ...VOLUME, ...parameters };
     this.tap = new SceneDepthTap(); this.medium = mediumFor('sunrise');
-    this.frame = 0; this.stillTime = 0; this.fading = false; this.lastT = null; this.valid = false; this.paramKey = '';
+    this.frame = 0; this.stillTime = 0; this.fading = false; this.lastT = null; this.valid = false; this.paramKey = ''; this.exposureShift = 0; this.lastShift = 0;
     this.lastEye = new THREE.Vector3(); this.lastQuat = new THREE.Quaternion(); this.quat = new THREE.Quaternion();
     this.sunTarget = new THREE.Vector3(); this.sky = new THREE.Vector3();
     const uniforms = { tDepth: { value: null }, tSun: shadow.uniforms.uSunDepth, tHistory: { value: null }, tGuide: { value: null },
@@ -176,7 +177,7 @@ export class VolumetricPass extends Pass {
       uOut: { value: new THREE.Vector4() }, uDust: { value: new THREE.Vector4() },
       uPhaseMist: { value: new THREE.Vector3(...PHASE.mist) }, uPhaseDust: { value: new THREE.Vector3(...PHASE.dust) },
       uLowSize: { value: new THREE.Vector2(1, 1) }, uNear: { value: 0.05 }, uFar: { value: 300 }, uMaxDistance: { value: 48 },
-      uFrame: { value: 0 }, uSunTexel: shadow.uniforms.uSunTexel, uBias: { value: 0 }, uHistory: { value: 0 }, uDepthSigma: { value: 0.025 }, uSteps: { value: 32 }, uDebug: { value: 0 } };
+      uFrame: { value: 0 }, uSunTexel: shadow.uniforms.uSunTexel, uBias: { value: 0 }, uHistory: { value: 0 }, uHistoryScale: { value: 1 }, uDepthSigma: { value: 0.025 }, uSteps: { value: 32 }, uDebug: { value: 0 } };
     this.march = new THREE.ShaderMaterial({ name: 'Volumetric march', uniforms, vertexShader: vertex, fragmentShader: march, glslVersion: THREE.GLSL3,
       depthTest: false, depthWrite: false, toneMapped: false, blending: THREE.NoBlending });
     this.composite = new THREE.ShaderMaterial({ name: 'Volumetric upsample', uniforms: { tColor: { value: null }, tDepth: { value: null }, tFog: { value: null }, tGuide: { value: null },
@@ -204,8 +205,14 @@ export class VolumetricPass extends Pass {
   // the medium (slot crossfade, then any explicit parameter: ?shafts tuning, shoot_vol.mjs) and the sky's ambient light
   update() {
     const p = this.params, s = this.state() ?? {}, t = s.next ? s.t ?? 0 : 0;
-    const m = mediumFor(s.current, s.next, t);
+    // A slot fade blends the light (sun, sky) at its radiance weight t and the exposure in gain (lighting_slots.js
+    // fadeExposure): the exposed light moves with the fade's progress. The air's density blends with that progress too,
+    // so the exposed in-scattering (density x light) moves with it as the rest of the picture does. Blended at t, into
+    // sunrise (t ~0 until the last frames) the dense dawn mist met dusk's light, then dusk's thin air the dawn's: the
+    // product ran under both (the garden 82 -> 74 -> 82).
+    const progress = s.next ? s.progress ?? t : 0, m = mediumFor(s.current, s.next, progress);
     this.fading = !!s.next;   // the medium changes every frame of a crossfade: the history follows at its moving rate
+    this.exposureShift = s.exposureShift ?? 0;
     for (const key of MEDIA_KEYS) if (Number.isFinite(p[key])) m[key] = p[key];
     this.medium = m;
     // per sky texture (its slot's sun lights the ground under the mist), computed once from the CPU copy
@@ -242,6 +249,10 @@ export class VolumetricPass extends Pass {
     if (key !== this.paramKey || jump || staleSince(this.lastT)) this.valid = false;
     const still = this.valid && u.uEye.value.distanceToSquared(this.lastEye) < 1e-8 && Math.abs(this.quat.dot(this.lastQuat)) > 1 - 1e-9, dt = frameClock.dt;
     u.uHistory.value = historyWeight({ valid: this.valid, dt, still, stillTime: this.stillTime, changing: this.fading }, p);
+    // A slot fade blends in exposed space (lighting_slots.js fadeExposure): its radiance falls by as many stops as the exposure
+    // rises (7 at golden hour -> dusk in the garden). The history is last frame's light, rescaled by that change, so it
+    // lags the picture, not the radiance (unscaled, its golden-hour light showed at the dusk exposure: the garden flashed).
+    u.uHistoryScale.value = 2 ** (this.lastShift - this.exposureShift); this.lastShift = this.exposureShift;
     this.stillTime = still && !this.fading ? this.stillTime + dt : 0;
     u.uFrame.value = (this.frame = (this.frame + 1) % 64);
     const auto = renderer.autoClear; renderer.autoClear = false;

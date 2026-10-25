@@ -861,7 +861,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   let removeShafts = null;
   const shaftsState = () => {
     const f = slots?.fading;
-    return { current: slots?.name ?? slot, next: f?.name ?? null, t: f?.t ?? 0, sky: skyBg, nextSky: f?.sky ?? null };
+    return { current: slots?.name ?? slot, next: f?.name ?? null, t: f?.t ?? 0, progress: f?.progress ?? 0, sky: skyBg, nextSky: f?.sky ?? null, exposureShift: slots?.exposureShift ?? 0 };
   };
   const setShafts = name => {
     const want = featureWanted(location.search, 'shafts', TIERS[name]) && !!lighting.renderConfig?.hdr;
@@ -874,7 +874,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     if (api.shafts) api.shafts.enabled = want;
   };
   if (agxLuts) await blenderAgX(lighting.outputPass, undefined, agxLuts);
-  const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier });
+  const autoExposure = createBakedAutoExposure({ renderer, lighting, getSlot: () => slots?.params ?? SLOTS[slot], getTier: () => tier, fading: () => !!slots?.stepping });
   // the camera's white balance, from the probe volume's light on the surfaces in view (white_balance.js); with the auto
   // exposure only (a fixed exposure, ?capture, stays comparable with Cycles)
   const whiteBalance = autoExposure && createWhiteBalance({ lighting, renderer, volume: volume.uniforms, walls });
@@ -954,7 +954,16 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       } catch (err) { cleanup(); env?.dispose(); for (const u of Object.values(nextVolume?.uniforms ?? {})) if (u.value?.isTexture) u.value.dispose(); throw err; }
     };
     const initialLayers = layers.slice(), initialK = [enc.K.slot, enc.K.lamps];
-    slots = createSlotRuntime({ scene, renderer, available: availableSlots, load: stageSlot, disposeAtlas, foliage,
+    // A slot fade blends in exposed space (lighting_slots.js fadeExposure): the two slots' exposures for this view, of which
+    // only the difference counts. The fixed exposure (?capture): the slots' ev. The visitor outdoors: the garden's (ev +
+    // outdoor offset), which its exposure holds. In a room the visitor's exposure is the meter's, every frame of the fade
+    // (auto_exposure.js uFade), so the radiance blends linearly there; in a doorway the two mix as the exposure target does.
+    const exposureBases = (a, b) => {
+      if (!autoExposure) return [a.ev, b.ev];
+      const w = THREE.MathUtils.clamp(lighting.indoorWeight(lighting.camera.position), 0, 1);
+      return [0, ((b.ev + (b.autoExposure.outdoor ?? 0)) - (a.ev + (a.autoExposure.outdoor ?? 0))) * (1 - w)];
+    };
+    slots = createSlotRuntime({ scene, renderer, available: availableSlots, load: stageSlot, disposeAtlas, foliage, exposureBases,
       initial: { name: slot, enc, layers, volume, sky: skyBg, refl, foliage: foliageData, resolution,
         remip: () => linearMips(renderer, initialLayers, initialK) },
       setParams(mood) {
@@ -981,6 +990,7 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
       },
     });
     volume.slots = slots; Object.assign(lmUniforms, slots.uniforms);
+    api.slots = slots;   // read-only for validation (tools/fade_check.mjs --trace: the fade's weight, progress and exposure bases)
   }
   // Optional callback: (fraction, { name, loaded, total, phase }); transition marks the start of the fade.
   api.setSlot = (name, onProgress) => slots ? slots.request(name, onProgress) : Promise.resolve(name === slot);

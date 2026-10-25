@@ -36,13 +36,36 @@ export const nextSlot = (current, available) => {
 };
 export function blendSlot(a, b, t) {
   const mix = (x, y) => x + (y - x) * t;
+  // One live sun: its light (strength x colour) blends linearly, and it shines from where that light comes from, u being the
+  // share of it that is b's. A slot without sun (dusk) lends it no direction: from or to dusk the sun keeps the sunny slot's
+  // place and only fades. It used to swing through dusk's -4 degrees with the fade: below the horizon it lit nothing (the
+  // garden dipped 82 -> 69 into sunrise), then it rose over the eaves near the end (a flash, 101 between 87 and 89).
+  const sun = (1 - t) * a.strength + t * b.strength, u = sun > 0 ? t * b.strength / sun : t, along = (x, y) => x + (y - x) * u;
   const azDelta = ((b.az - a.az + 540) % 360) - 180;
-  return { az: a.az + azDelta * t, el: mix(a.el, b.el), strength: mix(a.strength, b.strength),
-    color: a.color.map((x, i) => mix(x, b.color[i])), ev: mix(a.ev, b.ev),
+  return { az: ((a.az + azDelta * u) % 360 + 360) % 360, el: along(a.el, b.el), strength: mix(a.strength, b.strength),
+    color: a.color.map((x, i) => along(x, b.color[i])), ev: mix(a.ev, b.ev),
     autoExposure: { key: 2 ** mix(Math.log2(a.autoExposure.key), Math.log2(b.autoExposure.key)),   // in stops, as the EVs
       minEV: mix(a.autoExposure.minEV, b.autoExposure.minEV), maxEV: mix(a.autoExposure.maxEV, b.autoExposure.maxEV),
       outdoor: mix(a.autoExposure.outdoor ?? 0, b.autoExposure.outdoor ?? 0) },
     wet: mix(a.wet, b.wet), lamps: mix(a.lamps, b.lamps) };
+}
+// A slot crossfade in exposed space. The lightmaps, probes, reflections and sky blend linearly in radiance, so the exposure
+// must blend in linear gain, not in stops, or the picture pumps: golden hour -> dusk outdoors spans 7.15 EV (-0.55 to
+// 3.1 + 3.5), the stops-linear exposure ran 2.6 EV over both ends mid-fade, and the visitor's exposure glide (0.8 s), chasing
+// it, ended the fade 2.5 EV dark (garden luma 75 -> 22 -> 90, the film agent's frame checker, 2026-10-24).
+// baseA / baseB: each slot's exposure for this view (its ev; for the visitor outdoors plus its outdoor offset). With t the
+// fade's progress, the exposed picture is (1 - t) A 2^baseA + t B 2^baseB exactly when the radiance weight of B is `weight`
+// and the exposure is baseA + `shift`. The mood blends radiance terms (sun, lamps) at `weight`, geometry and wetness too,
+// and the exposures in gain at t (ev, the garden's ev + outdoor, the key in stops, the range linearly).
+export function fadeExposure(a, b, t, baseA = a.ev, baseB = b.ev) {
+  const r = 2 ** (baseB - baseA), weight = t * r / ((1 - t) + t * r), shift = Math.log2((1 - t) + t * r);
+  const gain = (x, y) => Math.log2((1 - t) * 2 ** x + t * 2 ** y), mix = (x, y) => x + (y - x) * t;
+  const A = a.autoExposure, B = b.autoExposure, ev = gain(a.ev, b.ev);
+  const mood = blendSlot(a, b, weight);
+  mood.ev = ev;
+  mood.autoExposure = { key: 2 ** mix(Math.log2(A.key), Math.log2(B.key)), minEV: mix(A.minEV, B.minEV), maxEV: mix(A.maxEV, B.maxEV),
+    outdoor: gain(a.ev + (A.outdoor ?? 0), b.ev + (B.outdoor ?? 0)) - ev };
+  return { weight, shift, mood };
 }
 // Latest request wins during loading. Once a fade starts it finishes before the next one starts.
 // load() owns rollback; begin() resolves only when its complete transition is visible.

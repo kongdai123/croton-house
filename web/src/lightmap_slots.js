@@ -1,6 +1,6 @@
 // GPU-facing slot transitions. Fetch/decode/validate every destination before changing shared uniforms.
 import * as THREE from 'three';
-import { SLOTS, blendSlot, slotRequests } from './lighting_slots.js';
+import { SLOTS, fadeExposure, slotRequests } from './lighting_slots.js';
 
 const copyUniforms = uniforms => Object.fromEntries(Object.entries(uniforms).map(([k, u]) => [k, { value: u.value }]));
 // Reflection probes of the current and the next slot share ONE array texture (one sampler instead of two: Apple GPUs
@@ -19,8 +19,15 @@ export function reflArray(src, count, lamps = null) {
   t.needsUpdate = true;
   return t;
 }
-export function createSlotRuntime({ scene, renderer, initial, available, load, disposeAtlas, setParams, commit, foliage }) {
+// exposureBases(a, b): the two slots' exposures for the current view, [a's, b's] (only their difference counts; lightmap.js:
+// the fixed exposure's ev, the visitor's garden or metered room). The fade blends radiance in exposed space with them
+// (lighting_slots.js fadeExposure); the exposure moves by `shift`. exposureShift sums every fade's shift so far (EV): a
+// history that carries radiance from frame to frame (the volumetric light's) rescales it by the change since it last
+// looked, so a fade that drops the radiance 7 stops in a second is not shown 7 stops too bright through it. The visitor's
+// exposure needs no history through a fade: it is its target in every frame `stepping` (auto_exposure.js uFade).
+export function createSlotRuntime({ scene, renderer, initial, available, load, disposeAtlas, setParams, commit, foliage, exposureBases = (a, b) => [a.ev, b.ev] }) {
   const blend = { value: 0 }, wet = { value: SLOTS[initial.name].wet };
+  let exposureShift = 0, stepped = false;
   const lampA = { value: SLOTS[initial.name].lamps }, lampB = { value: lampA.value };
   // Snapshots own their textures; the scene's shared uniform objects only point into these snapshots.
   let current = { ...initial, layers: initial.layers.slice(), volume: { ...initial.volume, uniforms: copyUniforms(initial.volume.uniforms) } };
@@ -106,7 +113,7 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
       // All resources (including foliage matching and PMREM) are staged. Only now publish uniform pointers.
       data.foliageStage ??= foliage?.stage(data.foliage);
       data.foliageStage?.begin(); bind(current, data); blend.value = 0;
-      fading = { data, elapsed: 0, resolve };
+      fading = { data, elapsed: 0, resolve, shift: 0 };
       report(data.name, 1, { phase: 'transition' });
     }),
   });
@@ -114,22 +121,30 @@ export function createSlotRuntime({ scene, renderer, initial, available, load, d
     uniforms, wet, available, resolution: initial.resolution,
     get params() { return params; }, get desired() { return queue.desired; }, get name() { return current.name; },
     // the fade in progress, read-only (the volumetric pass blends its media and sky light with it), or null
-    get fading() { return fading ? { name: fading.data.name, sky: fading.data.sky, t: blend.value } : null; },
+    get fading() { return fading ? { name: fading.data.name, sky: fading.data.sky, t: blend.value, progress: fading.progress ?? 0, shift: fading.shift, bases: fading.bases ?? null } : null; },
     request(name, onProgress) {
       if (onProgress) progressListeners.add(onProgress);
       return queue.request(name).finally(() => progressListeners.delete(onProgress));
     },
     setEnvironment(env) { current.env = env; },
+    get exposureShift() { return exposureShift; },
     setQuality(resolution) { if (resolution === runtime.resolution && resolution === current.resolution) return Promise.resolve(true); runtime.resolution = resolution; return queue.request(queue.desired, true); },
     combine(level) {
       current.lamps = level; params = { ...params, lamps: level }; lampA.value = level; current.volume.fill(level);
       if (!fading) lampB.value = level;
     },
+    // true from the frame a fade begins through the frame it ends in (the visitor's exposure follows its target in them)
+    get stepping() { return stepped; },
     update(dt) {
+      stepped = false;
       if (disposed || !fading) return;
+      stepped = true;
       const f = fading; f.elapsed = Math.min(1.5, f.elapsed + Math.max(0, dt));
-      const t = f.elapsed / 1.5; blend.value = t * t * (3 - 2 * t);
-      params = blendSlot({ ...SLOTS[current.name], lamps: lampA.value }, SLOTS[f.data.name], blend.value);
+      const t = f.elapsed / 1.5, s = t * t * (3 - 2 * t);
+      const a = { ...SLOTS[current.name], lamps: lampA.value }, b = SLOTS[f.data.name], bases = exposureBases(a, b), fade = fadeExposure(a, b, s, ...bases);
+      f.progress = s; f.bases = bases;
+      blend.value = fade.weight; params = fade.mood;   // every radiance blend reads blend (lightmaps, probes, reflections, sky, lamps, media)
+      exposureShift += fade.shift - f.shift; f.shift = fade.shift;
       wet.value = params.wet; setParams(params);
       skyBox.visible = true; scene.background = null;
       if (t === 1) {

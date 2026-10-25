@@ -35,7 +35,7 @@ import { RGBM_DECODE, TONE_DECODE, lmSampleGLSL } from './shaders/lightmap.glsl.
 import { reflGLSL } from './shaders/reflection.glsl.js';
 import { bakedFeatures } from './shaders/features.js';
 import { installBaked, uninstallBaked, ownShader, copyOwnShader, materialOptions, sunDepthShader, dryCompile } from './shaders/baked_material.js';
-import { bakedEmission, glowLevel, lightingOf, meshLighting } from './lighting_roles.js';
+import { bakedEmission, glowLevel, lightingOf, meshLighting, bakedLiveLevel, LM_PER_BAKE_UNIT } from './lighting_roles.js';
 import { VolumetricPass, installVolume } from './volumetric.js';
 import { featureWanted } from './volumetric_slots.js';
 
@@ -691,6 +691,14 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
   // the live lights the bake now carries
   for (const l of [...lighting.windowLights, ...lighting.fixtures.children]) if (l.isLight) { lightVisibility.set(l, l.visible); l.visible = false; }
   scene.traverse(o => { if (o.isHemisphereLight) { lightVisibility.set(o, o.visible); o.visible = false; } });
+  // Light in the raster look's units over the bake: the stand-in sprites (a sconce's wash, the fire's glow on the gravel) are
+  // hidden, the bake carries that light; a live light outside the bake (the fire's) takes its lumens in the bake's units
+  // (lighting_roles.js sprite, bakedLiveLevel). Here and only here.
+  const standIns = new Map(), liveLights = [], lmPerW = groupMeta?.lmPerW ?? LM_PER_BAKE_UNIT;
+  scene.traverse(o => {
+    if (o.isLight) { const v = bakedLiveLevel(o, lmPerW); if (v !== null) { o.userData.bakedLevel = v; liveLights.push(o); } return; }
+    for (const m of [].concat(o.material ?? [])) if (m && !standIns.has(m) && lightingOf(m)?.sprite === 'standIn') { standIns.set(m, m.visible); m.visible = false; }
+  });
   // every lit surface that did not get a lightmap takes the probe volume (and the soft sun)
   let probeLitCount = 0, foliage = null, envTarget = null, windows = null, stats = null;
   const hooks = new Map(), envs = new Map(), sided = new Set();
@@ -915,6 +923,8 @@ export async function applyLightmaps({ scene, renderer, lighting, movables = [],
     for (const c of faceCopies.values()) c.dispose();
     for (const [o, v] of shadowCasters) if (!originalMeshes.has(o)) o.castShadow = v;
     for (const [l, v] of lightVisibility) l.visible = v;
+    for (const [m, v] of standIns) m.visible = v;
+    for (const l of liveLights) delete l.userData.bakedLevel;
     for (const m of mats.values()) m.dispose();
     if (!slots) layers.forEach(disposeAtlas);
   };

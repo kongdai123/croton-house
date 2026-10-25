@@ -13,6 +13,10 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 // with the sun's direction, colour and strength of one end. Without a fade (from or to missing): mood unchanged.
 export function crossfadeSun(mood, from, to, t) {
   if (!from || !to) return mood;
+  // a fade from or to a slot without sun (dusk) needs no dissolve: blendSlot keeps the lit slot's direction and fades its
+  // light by its share, so the sun never turns while lit; holding it dark as well only darkened the fade (patio_1 dusk ->
+  // sunrise dipped 8 levels below both ends, tools/fade_check.mjs)
+  if (!(from.strength > 0 && to.strength > 0)) return mood;
   const end = t < 0.5 ? from : to, d = Math.abs(t - 0.5) - DARK / 2;
   return { ...mood, az: end.az, el: end.el, color: end.color, strength: end.strength * smooth(0, RAMP, d) };
 }

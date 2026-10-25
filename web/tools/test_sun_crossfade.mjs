@@ -21,8 +21,10 @@ for (const a of names) for (const b of names) {
       if (elapsed >= FADE) break;
     }
     const first = frames[0].sun, last = frames.at(-1).sun;
-    assert.deepEqual([first.az, first.el, first.strength, first.color], [from.az, from.el, from.strength, from.color], `${a}->${b} starts at ${a}'s sun`);
-    assert.deepEqual([last.az, last.el, last.strength, last.color], [to.az, to.el, to.strength, to.color], `${a}->${b} ends at ${b}'s sun`);
+    // (to float rounding: the fades with an unlit end take the blend's sun, whose colour is mixed)
+    const same = (s, e) => [s.az, s.el, s.strength, ...s.color].every((x, k) => Math.abs(x - [e.az, e.el, e.strength, ...e.color][k]) < 1e-9);
+    assert.ok(same(first, from), `${a}->${b} starts at ${a}'s sun`);
+    assert.ok(same(last, to), `${a}->${b} ends at ${b}'s sun`);
     let turns = 0, dark = 0;
     for (let i = 1; i < frames.length; i++) {
       const p = frames[i - 1].sun, q = frames[i].sun;
@@ -33,6 +35,8 @@ for (const a of names) for (const b of names) {
         assert.ok(Math.min(p.strength, q.strength) <= 0.01 * peak, `${a}->${b} at ${fps} fps: the sun turns between frames at ${(p.strength / peak * 100).toFixed(1)} % and ${(q.strength / peak * 100).toFixed(1)} % of its light`);
       }
       if (q.strength === 0 && peak > 0) dark += 1 / fps;
+      // to or from a slot without sun: the blend's own sun (the lit slot's direction, faded by its share), never held darker
+      if (!(from.strength > 0 && to.strength > 0)) assert.equal(q.strength, blendSlot({ ...from }, to, frames[i].t).strength, `${a}->${b}: the sun follows the blend`);
     }
     assert.ok(turns <= 1, `${a}->${b} at ${fps} fps: the sun turns ${turns} times`);
     // the dark moment is the same length in seconds at every frame rate (about DARK of the blend, ~0.05 s): a blink

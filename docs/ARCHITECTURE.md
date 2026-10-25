@@ -141,6 +141,15 @@ Paths in this section are relative to `web/src/`.
 - `taa.js`: `createTAA`: the jittered linear chain and its temporal resolve; it takes over every pass before the OutputPass.
 - `volumetric.js`, `volumetric_slots.js`: sunbeams, mist and haze through the PCSS sun depth; the media per slot and
   `featureWanted`.
+- `lens.js`, `lens_policy.js`: the live cinematic lens after TAA's resolve: thin-lens depth of field (half-resolution
+  near/far gather over a six-bladed aperture; the aperture follows the focus, f/2 close, f/8 for a room, so rooms stay
+  in deep focus) with autofocus (a robust centre statistic or what the visitor aims at; it locks until the subject would
+  be soft, then a critically damped pull, all on the GPU; `lens.control` sets aperture and focus for the film), a minimal
+  bloom (small sources 2 EV over white, never a window), 0.1 EV of vignetting, a quarter pixel of lateral chromatic
+  aberration. On by default on hq, Y toggles it; `?lens=0`, `?dof=0`, `?bloom=0`; off under `?capture`. Photo mode keeps
+  its own path.
+- `lens_shift.js`: lens shift (an off-axis projection in the camera's view offset): a level camera frames a ceiling or a
+  roof with verticals parallel; photo mode copies it.
 
 ### Performance
 
@@ -307,9 +316,10 @@ The lightmap encoding (8-bit lossless WebP, `y = sqrt(x / (x + K))`) and the mea
 
 The composer chain (`lighting.js`, extended by `taa.js`, `contact.js`, `volumetric.js` and the baked lighting): the
 contact pass (the moving casters' depth) and the volumetric depth tap ahead of the RenderPass, then `ReflectionPass`
-(SSR, hq), GTAO and the volumetric pass in linear HDR, then the OutputPass (in baked mode Blender AgX, with the auto
-exposure, local adaptation and white balance folded in), the grade pass and SMAA. With TAA every pass before the
-OutputPass runs inside the TAA pass at the jittered projection, and SMAA is off.
+(SSR, hq), GTAO and the volumetric pass in linear HDR, then the lens (`lens.js`, linear HDR, after TAA's resolve, on
+TAA's depth), then the OutputPass (in baked mode Blender AgX, with the auto exposure, local adaptation and white balance
+folded in: they meter what the lens shows), the grade pass and SMAA. With TAA every pass before the lens runs inside the
+TAA pass at the jittered projection, and SMAA is off.
 
 `window.renderAt(t)` draws exactly time `t`; `window.simTime()` reads the clock. Use them for deterministic shots
 (`?capture` stops the page's own frames).

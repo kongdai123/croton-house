@@ -184,10 +184,17 @@
   ];
 
   // ---- stills (record.mjs --stills poses.json): one-frame shots for checking compositions and times of day ----
+  // A still may also set the lens (lens: lens.js control, e.g. { fStop, focus }, or false for none; lensSettings: lens_policy.js LENS values) and
+  // a lens shift (shift: frame heights, lens_shift.js); each still starts from the defaults.
   if (OPT.stills) {
     SHOTS.length = 0;
+    const lensDefaults = A.lens ? { ...A.lens.settings } : null;
     for (const s of OPT.stills) SHOTS.push({ name: s.name, dur: 1 / (OPT.fps || 30), pre: s.pre ?? 1.0, slot: s.slot ?? 'sunrise', fov: s.fov ?? 62, keys: [[0, s.x, s.y, s.eye ?? 1.6, s.h, s.pitch ?? 0]],
-      setup() { stash(); A.markers.closeCard(); for (const [x, y, open] of s.doors ?? []) door(x, y, open); for (const [n, x, y, mode, lx, ly] of s.pets ?? []) stage(n, x, y, mode, lx, ly); } });
+      setup() {
+        stash(); A.markers.closeCard(); for (const [x, y, open] of s.doors ?? []) door(x, y, open); for (const [n, x, y, mode, lx, ly] of s.pets ?? []) stage(n, x, y, mode, lx, ly);
+        if (A.lens) { Object.assign(A.lens.settings, lensDefaults, s.lensSettings ?? {}); A.lens.control = s.lens || null; A.lens.enabled = s.lens !== false; }
+        A.setLensShift?.(s.shift ?? 0);
+      } });
   }
   const only = OPT.shots?.length ? SHOTS.filter(s => OPT.shots.includes(s.name)) : SHOTS;
 
@@ -206,6 +213,11 @@
       try {
         for (;;) {
           if (V.phase === 'next') {
+            // stills: where the lens focused for the one just drawn (a readback; tools only)
+            const lf = OPT.stills && V.i >= 0 && A.lens?.enabled ? A.lens.focusDistance?.() : null;
+            if (lf) V.log.push(`${only[V.i].name}: focus ${lf.focus.toFixed(2)} m (lock ${lf.lock.toFixed(2)} m) f/${lf.fStop.toFixed(1)}`);
+            // and (--opt probe=1) how bright its highlights were as exposed, and how much of it glowed
+            if (OPT.probe && V.i >= 0 && A.lens?.probed) { V.log.push(`${only[V.i].name}: probe ${JSON.stringify(A.lens.probed)}`); A.lens.probed = null; }
             if (++V.i >= only.length) { V.done = true; return { done: true }; }
             const s = only[V.i];
             V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set(); aimState.yaw = aimState.pitch = null;
@@ -220,7 +232,7 @@
             V.pose(s, 0, dt);
             if (V.fading && !A.state.bakedSlotPending) { V.fading = false; A.baked?.shafts?.reset(); V.pre = Math.max(V.pre, SETTLE); }
             if (V.pre > 0 || A.state.bakedSlotPending) { V.pre -= dt; return { save: false, shot: s.name, t: 0, pre: true }; }
-            V.phase = 'roll';
+            V.phase = 'roll'; if (OPT.probe && OPT.stills && A.lens?.enabled) A.lens.probeNext = true;
           }
           if (V.t >= s.dur - 1e-6) { V.phase = 'next'; continue; }
           // events: [t, fn] fires at t; [t, fn, when, latest] fires from t on as soon as when() holds, at the latest at `latest`

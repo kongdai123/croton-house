@@ -33,6 +33,9 @@ export class Interact {
     this.scene = scene; this.camera = camera; this.player = player; this.layout = layout; this.ui = ui; this.human = human;
     this.ray = new THREE.Raycaster(); this.ray.far = 4.0;
     this.hover = null; this.grab = null; this.pointer = new THREE.Vector2(0, 0);
+    // what the visitor aims at this frame (pick(): a piece, a door, a pet, a pin or card) and the ray's direction, for the
+    // lens's autofocus (lens.js); null while the view is owned (tour, panorama), dragging or aiming at nothing
+    this.aimed = null; this.aimDir = new THREE.Vector3(0, 0, -1);
     this.floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.highlightMats = [];
     this.pending = null; this.returning = [];
@@ -88,6 +91,7 @@ export class Interact {
     if (pet) return pet;
     return best;
   }
+  aim() { const h = this.pick(); this.aimed = h ?? null; if (h && !h.pin && !h.card) this.aimDir.copy(this.ray.ray.direction); return h; }
   // Distance to the first wall, closet front or fixed glass panel along the ray: nothing behind them can be picked.
   // Walls under windows stop at the sill, so pieces seen through an open window stay reachable.
   wallDist(ray) {
@@ -241,6 +245,7 @@ export class Interact {
       r.root.position.lerpVectors(r.from, r.to, e); r.root.rotation.y = r.fromRy + (r.toRy - r.fromRy) * e; r.root.userData.onMove?.(r.root);
     }
     this.returning = this.returning.filter(r => r.t < 1);
+    this.aimed = null;
     // The tour or a panorama owns the view. No crosshair, label, or emissive hover, and a moving camera must not turn a click into a drag.
     if (viewOwned()) {
       this.pending = null; this.togglePress = null; this.grab = null;
@@ -269,8 +274,8 @@ export class Interact {
       }
       return;
     }
-    if (this.player.seat) { const h = this.pick(); this.ui.setLabel(h?.pet ? this.pets.label(h.pet) : ''); return; }
-    const h = this.pick();
+    if (this.player.seat) { const h = this.aim(); this.ui.setLabel(h?.pet ? this.pets.label(h.pet) : ''); return; }
+    const h = this.aim();
     const root = h?.root || null;
     if (root !== this.hover) { this.setHighlight(this.hover, false); this.hover = root; this.setHighlight(root, true); }
     if (this.markers) this.markers.hover = h?.pin || null;

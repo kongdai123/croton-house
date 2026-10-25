@@ -161,6 +161,9 @@
   // / f) for a full-frame lens of f mm: 40 deg is 28 mm). ahead: the player in front of the lens (place). at: [[t, fn]]
   // events at shot-local seconds ([t, fn, when, latest]: from t on as soon as when() holds). overlay(t): title, card.
   // exposure, lens, lensSettings: applyLook, lookAt. ends: the slot of the shot's last pose for --opt ends=1 (below).
+  // Speeds as the reference measures them (refs_blok7_tools/analyze.py on the take): a vertical scroll of 0.02-0.04 frame
+  // heights a second, a push or pull of about 1.8% magnification a second over the whole frame (the near furniture of a
+  // room magnifies faster than its far wall: the dining room's 0.10 m/s read 3.1%/s, so 0.06 m/s).
   const TOUR = OPT.tourSlot || 'noon';   // the time of day of the rooms (record.mjs --tour-slot)
   const DUSK_EV = -0.8;                  // the hook's low key, and the day's dusk end (exposure.ev)
   const ROOM_KEY = 0.4;                  // day interiors a little lower than the walkthrough's (mean luma ~0.6, windows held)
@@ -181,7 +184,7 @@
       // door: 0.6 m farther, the camera sank through a leaf that swept the frame (the flicker check's pops).
       name: 'facade', dur: beats(11), pre: 1.5, slot: TOUR, fov: 37,
       setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, -0.06, -9.9, 2.40, 0, 0, 0], [1, -0.06, -9.9, 1.50, 0, 0, 0]],
+      keys: [[0, -0.06, -9.9, 2.25, 0, 0, 0], [1, -0.06, -9.9, 1.50, 0, 0, 0]],
     },
     {
       // 3. The living room from behind the sofa: the camera rises over its back and the window seat, the kitchen and the
@@ -207,20 +210,20 @@
       // fig; a slow push in (after the dog's stillness, before the day's pull).
       name: 'dining', dur: beats(10), pre: 1.5, slot: 'golden', fov: 44, exposure: { key: ROOM_KEY },
       setup() { stash(); },
-      keys: [[0, -1.55, 2.31, 1.15, 62, 0, 0], [1, -1.00, 2.60, 1.15, 62, 0, 0]],
+      keys: [[0, -1.55, 2.31, 1.15, 62, 0, 0], [1, -1.23, 2.48, 1.15, 62, 0, 0]],
     },
     {
       // 6. The day in one shot, from the back garden facing the house: sunrise, noon, golden hour, blue hour (the lamps and
       // the fire come on) while the camera pulls slowly back; the end card dissolves in over the last second.
       name: 'day', dur: beats(18), pre: 2.0, slot: 'sunrise', fov: 40, ends: 'dusk',
       setup() { stash(); door(-0.06, -4.66, false); stage('dog', 3.0, 10.4, 'lie', 2.4, 15.0); },
-      keys: [[0, 2.45, 14.40, 1.25, 184, 0, 0], [1, 2.531, 15.57, 1.25, 184, 0, 0]],
+      keys: [[0, 2.45, 14.40, 1.25, 184, 0, 0], [1, 2.519, 15.395, 1.25, 184, 0, 0]],
       at: [[1.5, () => slot('noon')], [4.0, () => slot('golden')], [6.5, () => slot('dusk')]],
       // the dusk end in the hook's low key: the compensation comes in with the blue hour's crossfade (1.5 s)
       exposure: { ev: (t) => DUSK_EV * sine((t - 6.5) / 1.5) },
       overlay(t) { end.style.opacity = clamp01((t - (beats(18) - 1.0)) / 1.0).toFixed(3); },
     },
-    { name: 'card', dur: beats(5), pre: 0, slot: 'dusk', fov: 40, keys: [[0, 2.531, 15.57, 1.25, 184, 0, 0]], exposure: { ev: DUSK_EV }, overlay() { end.style.opacity = 1; } },
+    { name: 'card', dur: beats(5), pre: 0, slot: 'dusk', fov: 40, keys: [[0, 2.519, 15.395, 1.25, 184, 0, 0]], exposure: { ev: DUSK_EV }, overlay() { end.style.opacity = 1; } },
   ];
 
   // ---- checks before a take ----

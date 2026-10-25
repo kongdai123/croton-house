@@ -34,6 +34,9 @@ export const LENS = {
   glareMax: 32,                                     // the excess that glows is capped here (exposed): the sun's disc
   vignette: 0.1,                                    // EV darker in the corners, the shape of cos^4 natural vignetting
   ca: 0.00025,                                      // lateral chromatic aberration at the corner, image heights (0.27 px at 1080)
+  exposure: 0,                                      // EV of exposure compensation (the film's low-key dusk). Outdoors the auto
+                                                    // exposure holds the slot's art-directed exposure, so it shows as set;
+                                                    // indoors the meter reads the lens's output and glides back (use its key)
   focusTime: 0.6,                                   // a focus pull settles (95%) in this many seconds, critically damped
   lockCoc: 0.015,                                   // mm: autofocus holds while the centre's blur at the focus is within this
   lockTime: 0.12,                                   // s: and moves once it has been softer for about this long

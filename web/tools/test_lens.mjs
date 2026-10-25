@@ -254,6 +254,10 @@ try {
   lens.control = { hold: true }; u = frame(); assert.deepEqual([u.uHold.value, u.uDirect.value, u.uFStop.value], [1, 0, LENS.fStop], 'held');
   lens.control = { track: true, time: 1.2 }; u = frame(); assert.equal(u.uLockCoc.value, 0, 'tracking: no lock'); close(u.uOmega.value, 4.744 / 1.2, 1e-12, 'its pull time');
   lens.control = null; u = frame(); assert.deepEqual([u.uHold.value, u.uDirect.value, u.uLockCoc.value], [0, 0, LENS.lockCoc], 'back to the walkthrough');
+  // exposure compensation (the film's low-key dusk): the composite and the glow's threshold both see it
+  assert.equal(lens.out.uniforms.uGain.value, 1, 'none by default');
+  lens.settings.exposure = -1.5; frame(); close(lens.out.uniforms.uGain.value, 2 ** -1.5, 1e-12); close(lens.pre.uniforms.uGain.value, 2 ** -1.5, 1e-12);
+  lens.settings.exposure = 0;
   // a shifted lens moves the optical axis (vignetting's centre) with the frame
   L.setLensShift(camera, 0.08); frame(); close(lens.out.uniforms.uAxis.value.y, 0.42, 1e-12, 'the axis follows the shift'); L.setLensShift(camera, 0);
   frame(); close(lens.out.uniforms.uAxis.value.y, 0.5, 1e-12);

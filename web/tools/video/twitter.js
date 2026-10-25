@@ -1,64 +1,68 @@
-// The Twitter/X cut: a 40 s cinematic film of the walkthrough, run in the page by tools/video/record.mjs --script twitter.js.
+// The Twitter/X cut: a 46 s film of the house, run in the page by tools/video/record.mjs --script twitter.js.
 // Unlike choreography.js (one continuous walk through the site's demonstration), this is a list of shots joined by cuts:
-// each shot sets up its own state (time of day, doors, pets, cards), the recorder renders a few seconds of "pre-roll"
-// that are not kept (auto exposure and TAA settle, a slot crossfade finishes), then the shot's camera move is kept.
+// each shot sets up its own state (time of day, doors, pets, exposure, lens), the recorder renders a few seconds of
+// "pre-roll" that are not kept (auto exposure and TAA settle, a slot crossfade finishes), then the shot's move is kept.
 // Every move is a keyframed path on the frame clock (renderAt), so the film is smooth and repeatable, and a shot can be
 // recorded on its own (record.mjs --shots name,name) with the same result.
-// No interface: the recorder hides the site's HUD (--clean); the only text is this file's title cards (Liter, the landing
-// page's Swiss look). window.__video.hold() tells the recorder to wait in wall-clock time without stepping while a
-// lighting slot, a font or a picture loads, so nothing pops.
+//
+// The camera language is an architectural photographer's, as the reference channel's films are made from still
+// photographs moved in 2D: every shot is framed like a photograph (a level camera, verticals vertical, a lens shift when
+// the frame needs more ceiling or floor, 28-37 mm, chest height indoors) and moved along one axis at a constant speed
+// (a pedestal, a dolly push or pull), no rotation, no easing, the move already running on the first kept frame and still
+// running on the last (the pre-roll runs into it). Long holds (6-11 s); at a cut the move reverses or changes axis; the
+// end card dissolves in over the last second of the day. Deep focus everywhere but the dog, which gets the film's one
+// focus pull. The variant of the plan at 46 s: the hook, the front, the living room, the dog, the dining room at golden
+// hour, the day in one shot, the card (the kitchen and the bedroom of the 59 s plan dropped: the kitchen only continues
+// the living room's rise, the bedroom repeats the golden interior; 46 s keeps every hold long and the film near 45 s).
+// Fine detail under a fast camera strobes at 60 fps (temporal aliasing, not TAA): these speeds keep it calm.
+//
+// No interface: the recorder hides the site's HUD (--clean); the only text is this file's title and end card (Liter, the
+// landing page's Swiss look). window.__video.hold() tells the recorder to wait in wall-clock time without stepping while
+// a lighting slot, a font or a picture loads, so nothing pops.
 (() => {
   const A = window.__app, p = A.player, cam = A.camera, pets = A.pets;
   const OPT = window.__videoOptions || {};
   const clamp01 = (u) => Math.max(0, Math.min(1, u)), lerp = (a, b, u) => a + (b - a) * u, rad = (deg) => deg * Math.PI / 180;
-  const smooth = (u) => u * u * (3 - 2 * u), sine = (u) => 0.5 - 0.5 * Math.cos(Math.PI * u);
-  // time warps for a shot's progress: cut on motion ('linear', 'soft'), or settle ('inout', 'out', 'in')
-  const WARP = { linear: (u) => u, soft: (u) => lerp(u, sine(u), 0.45), inout: sine, out: (u) => Math.sin(u * Math.PI / 2), in: (u) => 1 - Math.cos(u * Math.PI / 2) };
+  const sine = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(u));
 
-  // ---- music grid: shot lengths are whole beats of "Tuscany" (Oak Studios, ~100 BPM, a fingerpicked note every 0.3 s from
-  // 0.43 s), so cuts fall on the music when encode.sh starts the track 0.4 s in (MUSIC_START=0.4). The guitar is played
-  // freely, so the grid drifts by up to ~0.1 s over the film.
+  // ---- music grid: shot lengths are whole beats of 0.6 s (100 BPM), so cuts fall on a track's beat if one is added
   const BEAT = 0.6;
   const beats = (n) => n * BEAT;
 
-  // ---- camera paths. keys: [u (0..1 of the shot), plan x, plan y, eye height, heading (deg, 0 = north, clockwise), pitch (deg)].
-  // Every channel is a cubic Hermite spline in u with tangents from the neighbouring keys (C1: no speed jumps at a key);
-  // headings are unwrapped so a turn takes the short way.
+  // ---- camera paths. keys: [u (0..1 of the shot), plan x, plan y, eye height, heading (deg, 0 = north, clockwise),
+  // pitch (deg), lens shift (frame heights, + frames more above; optional)]. Every channel is a cubic Hermite spline in u
+  // with tangents from the neighbouring keys (two keys: a straight line at constant speed); before the first key and after
+  // the last the path runs on along its end tangents, so a pre-roll can move into the shot at the shot's own speed.
   function path(keys) {
-    const k = keys.map(r => r.slice());
+    const k = keys.map(r => { const q = r.slice(); q[6] ??= 0; return q; });
     for (let i = 1; i < k.length; i++) k[i][4] = k[i - 1][4] + ((((k[i][4] - k[i - 1][4]) % 360) + 540) % 360 - 180);
     const n = k.length;
+    const pose = (f) => ({ x: f(1), y: f(2), eye: f(3), h: f(4), pitch: f(5), shift: f(6) });
     const tan = (i, c) => n < 2 ? 0 : i === 0 ? (k[1][c] - k[0][c]) / (k[1][0] - k[0][0]) : i === n - 1 ? (k[n - 1][c] - k[n - 2][c]) / (k[n - 1][0] - k[n - 2][0]) : (k[i + 1][c] - k[i - 1][c]) / (k[i + 1][0] - k[i - 1][0]);
     return (u) => {
-      if (n === 1) return { x: k[0][1], y: k[0][2], eye: k[0][3], h: k[0][4], pitch: k[0][5] };
+      if (n === 1) return pose(c => k[0][c]);
+      if (u < k[0][0]) return pose(c => k[0][c] + tan(0, c) * (u - k[0][0]));
+      if (u > k[n - 1][0]) return pose(c => k[n - 1][c] + tan(n - 1, c) * (u - k[n - 1][0]));
       let i = 0; while (i < n - 2 && u > k[i + 1][0]) i++;
       const u0 = k[i][0], u1 = k[i + 1][0], L = u1 - u0, s = clamp01((u - u0) / L), s2 = s * s, s3 = s2 * s;
       const h00 = 2 * s3 - 3 * s2 + 1, h10 = s3 - 2 * s2 + s, h01 = -2 * s3 + 3 * s2, h11 = s3 - s2;
-      const ch = (c) => h00 * k[i][c] + h10 * L * tan(i, c) + h01 * k[i + 1][c] + h11 * L * tan(i + 1, c);
-      return { x: ch(1), y: ch(2), eye: ch(3), h: ch(4), pitch: ch(5) };
+      return pose(c => h00 * k[i][c] + h10 * L * tan(i, c) + h01 * k[i + 1][c] + h11 * L * tan(i + 1, c));
     };
   }
   // put the eye at a pose: the player (driven, so its own update leaves the camera alone) and the camera agree, so
-  // everything that reads the player's position (pets, auto exposure's indoor weight, doors) sees the film's camera
-  function place(v, fov) {
+  // everything that reads the player's position (pets, auto exposure's indoor weight, doors) sees the film's camera.
+  // ahead: the player stands this far in front of the lens (a called pet sits ~0.8 m from the player: 1.2 m from a lens
+  // 0.4 m behind it, the distance of a portrait at 50 mm).
+  function place(v, fov, ahead = 0) {
     p.driven = true; p.enabled = false;
-    p.pos.set(v.x, 0, -v.y); p.eye = v.eye; p.yaw = rad(-v.h); p.pitch = rad(v.pitch);
+    p.pos.set(v.x + ahead * Math.sin(rad(v.h)), 0, -(v.y + ahead * Math.cos(rad(v.h)))); p.eye = v.eye; p.yaw = rad(-v.h); p.pitch = rad(v.pitch);
     cam.position.set(v.x, v.eye, -v.y); cam.rotation.set(0, 0, 0, 'YXZ'); cam.rotation.y = p.yaw; cam.rotation.x = p.pitch;
     if (fov && Math.abs(cam.fov - fov) > 1e-6) { cam.fov = fov; cam.updateProjectionMatrix(); }
+    if (A.setLensShift && Math.abs((A.camera.view?.enabled ? -A.camera.view.offsetY : 0) - (v.shift ?? 0)) > 1e-9) A.setLensShift(v.shift ?? 0);
   }
-  // blend a pose's aim toward a world point (weight w), smoothed across frames so a moving subject is followed, not snapped to
-  const aimState = { yaw: null, pitch: null };
-  function aimAt(v, target, w, dt) {
-    if (!target || w <= 0) { aimState.yaw = aimState.pitch = null; return v; }
-    const dx = target.x - v.x, dz = target.z + v.y, dist = Math.hypot(dx, dz);
-    const hAim = Math.atan2(dx, -dz) * 180 / Math.PI, pAim = Math.atan2(target.y - v.eye, Math.max(0.2, dist)) * 180 / Math.PI;
-    let dh = ((hAim - v.h) % 360 + 540) % 360 - 180;
-    const want = { h: v.h + dh * w, pitch: lerp(v.pitch, pAim, w) };
-    if (aimState.yaw === null) { aimState.yaw = want.h; aimState.pitch = want.pitch; }
-    const k = 1 - Math.exp(-dt / 0.25); let d = ((want.h - aimState.yaw) % 360 + 540) % 360 - 180;
-    aimState.yaw += d * k; aimState.pitch += (want.pitch - aimState.pitch) * k;
-    return { ...v, h: aimState.yaw, pitch: aimState.pitch };
-  }
+  // distance from the lens to a world point along the view axis (what a focus distance measures)
+  const forward = new (A.THREE.Vector3)();
+  function axisDistance(x, y, z) { cam.getWorldDirection(forward); return Math.max(0.1, (x - cam.position.x) * forward.x + (y - cam.position.y) * forward.y + (z - cam.position.z) * forward.z); }
 
   // ---- state helpers ----
   const doors = () => A.getDoors();
@@ -82,18 +86,55 @@
     V.slotBegun = false; A.setBakedSlot(name, { quiet: true }); return true;
   }
   // seconds of pre-roll kept after a slot crossfade at a cut: the volumetric light's history holds the old slot's mist
-  // (it follows a change of its media at its history rate, 4% a frame while the camera holds still), and auto exposure
-  // is still gliding to the new light: into dusk outdoors the target rises ~7 EV and the glide (0.8 s) takes ~2.5 s
+  // and auto exposure is still gliding to the new light (into dusk outdoors the target rises ~7 EV)
   const SETTLE = 3.0;
-  const cardPin = (slug) => A.markers.pins.find(q => q.kind === 'rn' && q.post.slug === slug);
 
-  // ---- title cards (film-only DOM, over the canvas) ----
+  // ---- exposure and lens per shot ----
+  // exposure: { key: the auto exposure's key indoors (the level a room's log mean is shown at; null: the slot's),
+  //             ev: the lens's exposure compensation (EV; outdoors the auto exposure holds the slot's exposure, so this sets
+  //             it; a number or a function of shot time) }
+  // lens: the lens's control (lens.js: { fStop, focus, hold, track, time }) or a function (t, dt) returning it; by default
+  //       autofocus during the pre-roll, then held. lensSettings: lens_policy.js LENS values for the shot.
+  const AE = () => A.lighting.autoExposure;
+  let lensDefaults = null;
+  function applyLook(s) {
+    if (AE()?.settings) AE().settings.key = s.exposure?.key ?? undefined;
+    if (A.lens) { lensDefaults ??= { ...A.lens.settings }; Object.assign(A.lens.settings, lensDefaults, s.lensSettings ?? {}); A.lens.control = null; A.lens.enabled = true; }
+  }
+  function lookAt(s, t, dt, rolling) {
+    const ev = s.exposure?.ev;
+    if (A.lens) A.lens.settings.exposure = typeof ev === 'function' ? ev(t) : ev ?? 0;
+    if (!A.lens) return;
+    if (typeof s.lens === 'function') A.lens.control = s.lens(t, dt, rolling);
+    else A.lens.control = s.lens ?? (rolling ? { hold: true } : null);
+  }
+
+  // ---- the dog's focus: on the cat until the dog has come close, then one pull to its eyes (1.2 s, sine), then
+  // following its head (critically damped, tau 0.25 s); f/2.8 ----
+  function dogFocus() {
+    const st = { pullAt: null, from: 0, x: 0, v: 0 };
+    const head = (name, h) => { const a = pets?.get(name); return a ? Math.log2(axisDistance(a.x, h, a.z)) : null; };
+    return (t, dt, rolling) => {
+      const cat = head('cat', 0.22) ?? Math.log2(2.3), dog = head('dog', 0.3) ?? Math.log2(1.2), d = pets?.get('dog');
+      if (!rolling) { st.pullAt = null; return { fStop: 2.8, focus: 2 ** cat }; }
+      if (st.pullAt === null && t >= 1.0 && ((2 ** dog < 1.6 && (d?.state === 'attend' || (d?.v ?? 0) < 0.25)) || t >= beats(5))) { st.pullAt = t; st.from = cat; }
+      if (st.pullAt === null) return { fStop: 2.8, focus: 2 ** cat };
+      const u = (t - st.pullAt) / 1.2;
+      if (u < 1) { st.x = lerp(st.from, dog, sine(u)); st.v = 0; return { fStop: 2.8, focus: 2 ** st.x }; }
+      const w = 1 / 0.25, c1 = st.x - dog, c2 = st.v + w * c1, e = Math.exp(-w * dt);
+      st.x = dog + (c1 + c2 * dt) * e; st.v = (c2 - w * (c1 + c2 * dt)) * e;
+      return { fStop: 2.8, focus: 2 ** st.x };
+    };
+  }
+
+  // ---- title and end card (film-only DOM, over the canvas) ----
+  // The address lower left, its cap height 6.5% of the frame (the reference's 6-7%), baseline at 82% of the height.
   const css = document.createElement('style');
   css.textContent = `
     #film { position:fixed; inset:0; z-index:400; pointer-events:none; font-family:Liter, "Helvetica Neue", Arial, sans-serif; font-synthesis:none; -webkit-font-smoothing:antialiased }
-    #film .addr { position:absolute; left:104px; bottom:96px; color:#fbf8f1; opacity:0; text-shadow:0 2px 24px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4) }
-    #film .addr h1 { margin:0 0 0 -6px; font-weight:400; font-size:140px; line-height:.9; letter-spacing:-.045em }
-    #film .addr .k { margin-top:26px; padding-top:20px; border-top:2px solid rgba(251,248,241,.92); font-size:46px; letter-spacing:-.01em }
+    #film .addr { position:absolute; left:134px; top:806px; color:#fbf8f1; opacity:0; text-shadow:0 2px 20px rgba(0,0,0,.45), 0 1px 3px rgba(0,0,0,.35) }
+    #film .addr h1 { margin:0 0 0 -4px; font-weight:400; font-size:100px; line-height:.9; letter-spacing:-.04em }
+    #film .addr .k { margin-top:18px; padding-top:14px; border-top:2px solid rgba(251,248,241,.92); font-size:38px; letter-spacing:-.01em }
     /* sizes for a phone: the timeline shows a 1920 px frame about 390 px wide, so 70 px here is 14 px there */
     #film .end { position:absolute; inset:0; background:#f2efe7; color:#1a1917; opacity:0; padding:0 140px; display:flex; flex-direction:column; justify-content:center }
     #film .end .head { display:flex; justify-content:space-between; padding-bottom:18px; border-bottom:2px solid #1a1917; font-size:28px; letter-spacing:.22em; text-transform:uppercase; color:#77716a }
@@ -115,85 +156,92 @@
   Promise.all([document.fonts.load('400 40px Liter'), document.fonts.ready]).then(() => { fontsReady = true; });
 
   // ---- the shots ----
-  // dur: kept seconds. pre: pre-roll seconds (not kept). slot: time of day during the shot. setup(): staged state before
-  // the pre-roll. keys/warp: the camera move. fov: vertical field of view (the site uses 62°). at: [[t, fn]] events at
-  // shot-local seconds. aim(t): optional world point the camera leans toward, with weight aimW(t). overlay(t): title cards.
-  const TOUR = OPT.tourSlot || 'noon';   // the time of day of the walk through the rooms (record.mjs --tour-slot)
+  // dur: kept seconds. pre: pre-roll seconds (not kept; its last half second moves into the shot). slot: time of day.
+  // setup(): staged state before the pre-roll. keys: the move (see path). fov: vertical field of view (vfov = 2 atan(10.125
+  // / f) for a full-frame lens of f mm: 40 deg is 28 mm). ahead: the player in front of the lens (place). at: [[t, fn]]
+  // events at shot-local seconds ([t, fn, when, latest]: from t on as soon as when() holds). overlay(t): title, card.
+  // exposure, lens, lensSettings: applyLook, lookAt. ends: the slot of the shot's last pose for --opt ends=1 (below).
+  const TOUR = OPT.tourSlot || 'noon';   // the time of day of the rooms (record.mjs --tour-slot)
+  const DUSK_EV = -0.8;                  // the hook's low key, and the day's dusk end (exposure.ev)
+  const ROOM_KEY = 0.4;                  // day interiors a little lower than the walkthrough's (mean luma ~0.6, windows held)
   const SHOTS = [
     {
-      // 1. The hook (Twitter autoplays muted; the first frame decides): blue hour in the back garden, the fire lit, the
-      // house glowing beyond it, the dog asleep by the fire. A slow sideways glide; the address over it from the first frame.
-      name: 'hook', dur: beats(6), pre: 2.0, slot: 'dusk', fov: 56, warp: 'linear',
+      // 1. The hook (X autoplays muted; the first frame decides): blue hour in the back garden, facing the house's garden
+      // front, the fire lit on the right third, the dog asleep by it. A slow push in; the address over it from frame 0.
+      name: 'hook', dur: beats(12), pre: 2.0, slot: 'dusk', fov: 40,
       setup() { stash(); door(-0.06, -4.66, false); stage('dog', 2.25, 11.75, 'lie', 1.6, 12.3); },
-      keys: [[0, 2.95, 13.55, 0.95, 199, -2], [1, 2.35, 13.75, 1.0, 192, -1.5]],
-      overlay(t) { addr.style.opacity = clamp01((beats(6) - 0.25 - t) / 0.45).toFixed(3); },
+      keys: [[0, 2.90, 15.60, 1.20, 190, 0, 0], [1, 2.75, 14.75, 1.20, 190, 0, 0]],
+      exposure: { ev: DUSK_EV },
+      overlay(t) { addr.style.opacity = clamp01((6.0 - t) / 0.6).toFixed(3); },
     },
     {
-      // 2. Day over the front garden: from above the street, straight down toward the house and tilting up, until the
-      // open door and its number sit between the palm and the banana leaves.
-      // (50° keeps the placeholder neighbours at the frame's edges out of it)
-      name: 'aerial', dur: beats(7), pre: 2.0, slot: TOUR, fov: 50, warp: 'soft',
+      // 2. The street front on the door's axis, a frontal elevation from inside the front garden (from the street the
+      // fern bed hides the house below the eaves at any height a level camera can take): the camera sinks from the eaves
+      // to eye level and arrives at the open door and its number, between the palm and the banana leaves.
+      name: 'facade', dur: beats(11), pre: 1.5, slot: TOUR, fov: 37,
       setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, 0.9, -18.2, 7.6, 1, -24], [1, 0.4, -13.6, 3.9, 1, -12]],
+      keys: [[0, -0.06, -10.5, 2.50, 0, 0, 0], [1, -0.06, -10.5, 1.50, 0, 0, 0]],
     },
     {
-      // 3. In through the door: the island, the living room and straight through the house to the garden beyond the glass.
-      name: 'enter', dur: beats(5), pre: 1.2, slot: TOUR, fov: 62, warp: 'soft',
-      setup() { stash(); door(-0.06, -4.66, true); },
-      keys: [[0, -0.06, -4.35, 1.6, 0, -2], [1, 0.2, -2.5, 1.6, 6, -3]],
-    },
-    {
-      // 4. A sideways dolly behind the sofa: the window seat, the kitchen, the light on the floor.
-      name: 'living', dur: beats(6), pre: 1.0, slot: TOUR, fov: 60, warp: 'soft',
+      // 3. The living room from behind the sofa: the camera rises over its back and the window seat, the kitchen and the
+      // light on the floor open up.
+      name: 'living', dur: beats(11), pre: 1.5, slot: TOUR, fov: 40, exposure: { key: ROOM_KEY },
       setup() { stash(); },
-      keys: [[0, 3.65, 0.55, 1.5, 218, -8], [1, 2.55, 0.35, 1.45, 206, -8]],
+      keys: [[0, 3.40, 0.60, 0.85, 212, 0, 0], [1, 3.40, 0.60, 1.30, 212, 0, 0]],
     },
     {
-      // 5. The dog: called, it walks up to the lens and sits; petted, close. The cat watches from the window seat.
-      // Crouched at the dog's height in front of the sofa, the coffee table just out of frame.
-      name: 'dog', dur: beats(7), pre: 1.0, slot: TOUR, fov: 48, warp: 'inout',
-      setup() { stash(); stage('dog', 1.0, -3.0, 'lie', 1.85, -1.75); stage('cat', 1.7, -3.75, 'sit', 1.85, -1.75); },
-      keys: [[0, 1.85, -1.75, 0.72, 207, -9], [1, 1.8, -1.82, 0.66, 209, -15]],
+      // 4. The dog at its own eye height, 50 mm: called, it walks in from the right and sits for its portrait; the cat
+      // watches from the window seat. Focus on the cat, then the film's one pull to the dog. The lens creeps 2 cm.
+      name: 'dog', dur: beats(10), pre: 1.0, slot: TOUR, fov: 23, ahead: 0.4, exposure: { key: ROOM_KEY },
+      setup() { stash(); stage('dog', 0.7, -2.9, 'lie', 1.9, -1.7); stage('cat', 1.2, -3.85, 'sit', 1.9, -1.7); },
+      keys: [[0, 1.90, -1.70, 0.50, 207, 0, 0], [1, 1.88, -1.74, 0.50, 207, 0, 0]],
+      lensSettings: { maxCoc: 0.016 }, lens: dogFocus(),
       // call at once; pet when it has sat down in front of the lens (or at the latest beat), never mid-walk
-      at: [[0.15, () => { free('dog'); pets.call('dog'); }], [beats(2.5), () => pets.pet('dog'), () => pets.get('dog')?.state === 'attend', beats(5)]],
-      aim: () => { const a = pets?.get('dog'); return a ? { x: a.x, y: 0.3, z: a.z } : null; }, aimW: (t) => 0.75 * smooth(clamp01((t - 0.3) / 1.0)),
+      at: [[0.15, () => { free('dog'); pets.call('dog'); }], [beats(5), () => pets.pet('dog'), () => pets.get('dog')?.state === 'attend', beats(7)]],
     },
     {
-      // 6. Then and now: the owner's RedNote photo of the garden doors floats beside the same view.
-      name: 'rednote', dur: beats(8), pre: 1.0, slot: TOUR, fov: 52, warp: 'soft',
-      setup() { stash(); A.markers.closeCard(); },
-      keys: [[0, 2.85, 2.75, 1.38, 4, -8], [1, 3.0, 2.95, 1.36, 8, -9]],
-      at: [[0.3, () => { const pin = cardPin('69fd344f00'); if (pin) A.markers.openCard(pin); }]],
+      // 5. The dining room at golden hour from the office: the lantern lit, the Wishbone chairs, the glass doors and the
+      // fig; a slow push in (after the dog's stillness, before the day's pull).
+      name: 'dining', dur: beats(10), pre: 1.5, slot: 'golden', fov: 44, exposure: { key: ROOM_KEY },
+      setup() { stash(); },
+      keys: [[0, -1.55, 2.31, 1.15, 62, 0, 0], [1, -1.00, 2.60, 1.15, 62, 0, 0]],
     },
     {
-      // 7. The dining room from the office: the lantern, the Wishbone chairs, the glass doors and the fig.
-      name: 'dining', dur: beats(5), pre: 1.0, slot: TOUR, fov: 60, warp: 'soft',
-      setup() { stash(); A.markers.closeCard(); },
-      keys: [[0, -1.45, 2.35, 1.5, 60, -6], [1, -1.15, 2.55, 1.48, 64, -6]],
+      // 6. The day in one shot, from the back garden facing the house: sunrise, noon, golden hour, blue hour (the lamps and
+      // the fire come on) while the camera pulls slowly back; the end card dissolves in over the last second.
+      name: 'day', dur: beats(18), pre: 2.0, slot: 'sunrise', fov: 40, ends: 'dusk',
+      setup() { stash(); door(-0.06, -4.66, false); stage('dog', 3.0, 10.4, 'lie', 2.4, 15.0); },
+      keys: [[0, 2.45, 14.40, 1.25, 184, 0, 0], [1, 2.531, 15.57, 1.25, 184, 0, 0]],
+      at: [[1.5, () => slot('noon')], [4.0, () => slot('golden')], [6.5, () => slot('dusk')]],
+      // the dusk end in the hook's low key: the compensation comes in with the blue hour's crossfade (1.5 s)
+      exposure: { ev: (t) => DUSK_EV * sine((t - 6.5) / 1.5) },
+      overlay(t) { end.style.opacity = clamp01((t - (beats(18) - 1.0)) / 1.0).toFixed(3); },
     },
-    {
-      // 8. The day in one shot, from the back garden facing the house: sunrise, noon, golden hour, blue hour (the lamps and
-      // the fire come on), then the camera rises and pulls back over the garden; the end card fades in over it.
-      name: 'timelapse', dur: beats(18), pre: 2.0, slot: 'sunrise', fov: 54, warp: 'linear',
-      setup() { stash(); A.markers.closeCard(); door(-0.06, -4.66, false); stage('dog', 3.0, 10.4, 'lie', 2.4, 15.0); },
-      keys: [[0, 2.4, 15.0, 1.45, 184, -3], [0.62, 2.3, 15.5, 1.55, 183, -4], [1, 1.7, 17.6, 3.4, 179, -9]],
-      at: [[beats(1.5), () => slot('noon')], [beats(5.5), () => slot('golden')], [beats(9.5), () => slot('dusk')]],
-      overlay(t) { end.style.opacity = clamp01((t - (beats(18) - 0.6)) / 0.6).toFixed(3); },
-    },
-    { name: 'card', dur: beats(6), pre: 0, slot: 'dusk', fov: 54, keys: [[0, 1.7, 17.6, 3.4, 179, -9]], overlay() { end.style.opacity = 1; } },
+    { name: 'card', dur: beats(5), pre: 0, slot: 'dusk', fov: 40, keys: [[0, 2.531, 15.57, 1.25, 184, 0, 0]], exposure: { ev: DUSK_EV }, overlay() { end.style.opacity = 1; } },
   ];
 
-  // ---- stills (record.mjs --stills poses.json): one-frame shots for checking compositions and times of day ----
-  // A still may also set the lens (lens: lens.js control, e.g. { fStop, focus }, or false for none; lensSettings: lens_policy.js LENS values) and
-  // a lens shift (shift: frame heights, lens_shift.js); each still starts from the defaults.
+  // ---- checks before a take ----
+  // --opt ends=1: each shot as two one-frame stills, its first and its last pose (its time of day at each), staged as the
+  // shot is, with its exposure and lens: every composition of the film in a minute.
+  if (OPT.ends) {
+    const all = SHOTS.splice(0, SHOTS.length);
+    for (const s of all) for (const [tag, u] of [['a', 0], ['b', 1]]) {
+      if (s.keys.length < 2 && u === 1) continue;
+      SHOTS.push({ ...s, name: `${s.name} ${tag}`, dur: 1 / (OPT.fps || 30), pre: Math.max(1.5, s.pre ?? 1), slot: u === 1 && s.ends ? s.ends : s.slot, at: [], still: { u, t: u * s.dur },
+        exposure: s.exposure && { ...s.exposure, ev: typeof s.exposure.ev === 'function' ? s.exposure.ev(u * s.dur) : s.exposure.ev },
+        overlay: u === 0 && s.overlay ? () => s.overlay(0) : null });
+    }
+  }
+  // record.mjs --stills poses.json: one-frame shots for checking compositions and times of day. A still may also set the
+  // lens (lens: lens.js control, e.g. { fStop, focus }, or false for none; lensSettings: lens_policy.js LENS values) and a
+  // lens shift (shift: frame heights, lens_shift.js); each still starts from the defaults.
   if (OPT.stills) {
     SHOTS.length = 0;
-    const lensDefaults = A.lens ? { ...A.lens.settings } : null;
-    for (const s of OPT.stills) SHOTS.push({ name: s.name, dur: 1 / (OPT.fps || 30), pre: s.pre ?? 1.0, slot: s.slot ?? 'sunrise', fov: s.fov ?? 62, keys: [[0, s.x, s.y, s.eye ?? 1.6, s.h, s.pitch ?? 0]],
+    for (const s of OPT.stills) SHOTS.push({ name: s.name, dur: 1 / (OPT.fps || 30), pre: s.pre ?? 1.0, slot: s.slot ?? 'sunrise', fov: s.fov ?? 62, keys: [[0, s.x, s.y, s.eye ?? 1.6, s.h, s.pitch ?? 0, s.shift ?? 0]],
+      lensSettings: s.lensSettings, lens: s.lens || undefined, exposure: s.exposure,
       setup() {
         stash(); A.markers.closeCard(); for (const [x, y, open] of s.doors ?? []) door(x, y, open); for (const [n, x, y, mode, lx, ly] of s.pets ?? []) stage(n, x, y, mode, lx, ly);
-        if (A.lens) { Object.assign(A.lens.settings, lensDefaults, s.lensSettings ?? {}); A.lens.control = s.lens || null; A.lens.enabled = s.lens !== false; }
-        A.setLensShift?.(s.shift ?? 0);
+        if (A.lens && s.lens === false) A.lens.enabled = false;
       } });
   }
   const only = OPT.shots?.length ? SHOTS.filter(s => OPT.shots.includes(s.name)) : SHOTS;
@@ -213,31 +261,32 @@
       try {
         for (;;) {
           if (V.phase === 'next') {
-            // stills: where the lens focused for the one just drawn (a readback; tools only)
-            const lf = OPT.stills && V.i >= 0 && A.lens?.enabled ? A.lens.focusDistance?.() : null;
+            // stills: where the lens focused for the one just drawn (a readback; tools only), and (--opt probe=1) how
+            // bright its highlights were as exposed, and how much of it glowed
+            const still = (OPT.stills || OPT.ends) && V.i >= 0;
+            const lf = still && A.lens?.enabled ? A.lens.focusDistance?.() : null;
             if (lf) V.log.push(`${only[V.i].name}: focus ${lf.focus.toFixed(2)} m (lock ${lf.lock.toFixed(2)} m) f/${lf.fStop.toFixed(1)}`);
-            // and (--opt probe=1) how bright its highlights were as exposed, and how much of it glowed
             if (OPT.probe && V.i >= 0 && A.lens?.probed) { V.log.push(`${only[V.i].name}: probe ${JSON.stringify(A.lens.probed)}`); A.lens.probed = null; }
             if (++V.i >= only.length) { V.done = true; return { done: true }; }
             const s = only[V.i];
-            V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set(); aimState.yaw = aimState.pitch = null;
+            V.t = 0; V.pre = s.pre ?? 1.0; V.fired = new Set();
             addr.style.opacity = 0; end.style.opacity = 0;
-            s.setup?.(); V.fading = !!s.slot && slot(s.slot);
+            A.markers.closeCard(); applyLook(s); s.setup?.(); V.fading = !!s.slot && slot(s.slot);
             s.path = path(s.keys); V.phase = V.pre > 0 ? 'pre' : 'roll';
           }
           const s = only[V.i];
           if (V.phase === 'pre') {
-            // hold the first pose; the pre-roll lasts until its time is up and any slot crossfade has finished, then SETTLE
-            // more seconds with the volumetric light started afresh on the new slot's media
-            V.pose(s, 0, dt);
+            // the pre-roll: its last half second runs into the shot's move at the shot's speed (the move is already
+            // running on the first kept frame); it lasts until its time is up and any slot crossfade has finished, then
+            // SETTLE more seconds with the volumetric light started afresh on the new slot's media
+            V.pose(s, -Math.min(Math.max(V.pre, 0), 0.5), dt, false);
             if (V.fading && !A.state.bakedSlotPending) { V.fading = false; A.baked?.shafts?.reset(); V.pre = Math.max(V.pre, SETTLE); }
             if (V.pre > 0 || A.state.bakedSlotPending) { V.pre -= dt; return { save: false, shot: s.name, t: 0, pre: true }; }
-            V.phase = 'roll'; if (OPT.probe && OPT.stills && A.lens?.enabled) A.lens.probeNext = true;
+            V.phase = 'roll'; if (OPT.probe && (OPT.stills || OPT.ends) && A.lens?.enabled) A.lens.probeNext = true;
           }
           if (V.t >= s.dur - 1e-6) { V.phase = 'next'; continue; }
-          // events: [t, fn] fires at t; [t, fn, when, latest] fires from t on as soon as when() holds, at the latest at `latest`
           for (const [i, [at, fn, when, latest]] of (s.at ?? []).entries()) if (!V.fired.has(i) && V.t >= at - 1e-6 && (!when || when() || V.t >= latest - 1e-6)) { V.fired.add(i); fn(); V.log.push(`${s.name} event ${i} at ${V.t.toFixed(2)} s`); }
-          V.pose(s, V.t, dt);
+          V.pose(s, V.t, dt, true);
           s.overlay?.(V.t);
           const out = { save: true, shot: s.name, t: +V.t.toFixed(4), filmT: +V.filmT.toFixed(4) };
           V.t += dt; V.filmT += dt;
@@ -245,11 +294,10 @@
         }
       } catch (e) { V.error = String(e?.stack || e); V.done = true; return { done: true, error: V.error }; }
     },
-    pose(s, t, dt) {
-      const u = (WARP[s.warp] ?? WARP.soft)(clamp01(t / s.dur));
-      let v = s.path(u);
-      if (s.aim) v = aimAt(v, s.aim(t), s.aimW ? s.aimW(t) : 1, dt);
-      place(v, s.fov ?? 62);
+    // the shot's pose at shot time t (a still: its fixed time); every shot moves linearly in time (no easing)
+    pose(s, t, dt, rolling) {
+      place(s.path(s.still ? s.still.u : t / s.dur), s.fov ?? 40, s.ahead ?? 0);
+      lookAt(s, s.still ? s.still.t : t, dt, rolling);
     },
     start() {
       // a slot's fade begins (and its hold ends) when the destination is fully staged: its 'transition' progress report
@@ -257,6 +305,8 @@
       b.setSlot = (name, cb) => setSlot(name, (f, info) => { if (info?.phase === 'transition') V.slotBegun = true; cb?.(f, info); });
       for (const k of ['rn', 'pano', 'photo']) A.markers.toggle(k, false);
       if (pets?.hearts && OPT.hearts === false) pets.hearts.spawn = () => {};
+      // no film grain (it costs the encode and the reference has none); the lens at its defaults otherwise
+      if (A.lighting.grade?.grain) A.lighting.grade.grain.value = 0;
     },
   };
 })();

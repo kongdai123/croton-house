@@ -89,6 +89,11 @@ const proxyOf = (motion, o) => motion.scene.children.find(p => p.visible && p.ge
   const frond = new T.Mesh(new T.BoxGeometry(0.05, 1, 0.3).translate(0, 0.5, 0), new T.MeshStandardMaterial()); frond.position.set(0.5, 0, -3);
   frame(motion, [frond]); motion.advance(); frond.rotation.z = 0.0003;
   assert.equal(frame(motion, [frond]), 0, `sway under ${MIN_PIXELS} px is left to the depth reprojection`); motion.advance();
+  // a mesh drawn again at the same world matrix is settled in the draw hook: not even a candidate (its record holds the
+  // matrix exactly: a single-precision copy made every mesh at an unrepresentable position look moved)
+  const shelf = new T.Mesh(new T.BoxGeometry(1, 2, 0.4), new T.MeshStandardMaterial()); shelf.position.set(0.1, 0.3, -2.7); shelf.rotation.y = 0.7;
+  frame(motion, [shelf]); motion.advance(); frame(motion, [shelf]);
+  assert.equal(motion.stats.candidates, 0, 'a still mesh is no candidate'); motion.advance();
   // a carried chair moving 2 cm in a frame, 2 m away: a mover
   const chair = new T.Mesh(new T.BoxGeometry(0.5, 0.9, 0.5), new T.MeshStandardMaterial()); chair.position.set(0, 0.45, -2);
   frame(motion, [chair]); motion.advance(); chair.position.x += 0.02; assert.equal(frame(motion, [chair]), 1); motion.advance();

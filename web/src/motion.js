@@ -128,7 +128,7 @@ export function createMotion({ minPixels = MIN_PIXELS, minShaderPixels = MIN_SHA
   const seen = o => {
     if (!o.isMesh) return;
     let r = records.get(o);
-    if (!r) records.set(o, r = { last: new Float32Array(16), lastFrame: -2, frame: -1, known: false, material: null, spec: false });
+    if (!r) records.set(o, r = { last: new Float64Array(16), lastFrame: -2, frame: -1, known: false, material: null, spec: false });
     if (r.frame === frame) return;
     r.frame = frame; r.known = r.lastFrame === frame - 1; r.lastFrame = frame;
     if (r.material !== o.material) { r.material = o.material; r.spec = Array.isArray(o.material) ? o.material.some(m => m?.userData?.motion) : !!o.material?.userData?.motion; }

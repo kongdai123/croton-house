@@ -102,7 +102,7 @@ const prefilter = `${COMMON}
 uniform sampler2D tColor, tDepth, tFocus, tExposure;
 uniform vec2 uTexel;        // full-resolution texel
 uniform float uHalfTexel;   // half-resolution texel height
-uniform float uDofOn, uBloomOn, uExposureOn, uExposure, uThreshold, uIsolation, uRing, uGlareMax, uAspect;
+uniform float uDofOn, uBloomOn, uExposureOn, uExposure, uGain, uThreshold, uIsolation, uRing, uGlareMax, uAspect;
 in vec2 vUv;
 layout(location = 0) out vec4 dof;
 layout(location = 1) out vec4 bloom;
@@ -121,7 +121,7 @@ void main() {
   bloom = vec4(0.0);
   if (uBloomOn > 0.5) {
     // exposed as the output pass will (the auto exposure's state from the last frame: 2^EV in red)
-    float ex = uExposureOn > 0.5 ? texture(tExposure, vec2(0.5)).r : uExposure;
+    float ex = (uExposureOn > 0.5 ? texture(tExposure, vec2(0.5)).r : uExposure) * uGain;
     vec3 b = (c0 + c1 + c2 + c3) * 0.25; float l = peak(b) * ex;
     if (l > uThreshold) {
       float around = 0.0;
@@ -197,7 +197,7 @@ void main() {
 // uAxis, the frame's centre unless the camera's lens is shifted (lens_shift.js).
 const composite = `${COMMON}
 uniform sampler2D tColor, tDepth, tFocus, tDof, tBloom, tSource;
-uniform float uDof, uBloom, uVignette, uCA, uAspect, uTexelH;
+uniform float uDof, uBloom, uVignette, uCA, uAspect, uTexelH, uGain;
 uniform vec2 uAxis;
 varying vec2 vUv;
 vec3 lens(vec2 uv, float s) {
@@ -222,6 +222,7 @@ void main() {
     if (length(o) > 0.25 * uTexelH) c = vec3(lens(vUv + o, s).r, lens(vUv, s).g, lens(vUv - o, s).b);
     else c = lens(vUv, s);
   } else c = lens(vUv, s);
+  c *= uGain;   // exposure compensation (settings.exposure, EV)
   if (uVignette > 0.0) {
     // cos^4 of the field angle in shape (tan^2 = r^2 (sensor / focal)^2), scaled to uVignette EV at the frame's corners
     float k = (uSensor / uFocal) * (uSensor / uFocal);
@@ -253,7 +254,7 @@ export class LensPass extends Pass {
       uOmega: { value: 4.744 / this.settings.focusTime }, uLockCoc: { value: this.settings.lockCoc }, uLockTime: { value: this.settings.lockTime } });
     this.pre = material(prefilter, { ...lensUniforms(), tColor: { value: null }, tDepth: { value: null }, tFocus: { value: null }, uTexel: { value: new THREE.Vector2() }, uHalfTexel: { value: 0 }, uDofOn: { value: 1 },
       uBloomOn: { value: 1 }, tExposure: { value: null }, uExposureOn: { value: 0 }, uExposure: { value: 1 }, uThreshold: { value: this.settings.bloomThreshold }, uIsolation: { value: this.settings.bloomIsolation },
-      uRing: { value: this.settings.bloomRing }, uGlareMax: { value: this.settings.glareMax }, uAspect: { value: 1 } }, { glslVersion: THREE.GLSL3 });
+      uRing: { value: this.settings.bloomRing }, uGlareMax: { value: this.settings.glareMax }, uAspect: { value: 1 }, uGain: { value: 1 } }, { glslVersion: THREE.GLSL3 });
     const k = bokehKernel(this.settings.samples, this.settings.blades, this.settings.bladeRotation, this.settings.roundness), kernel = [];
     for (let i = 0; i < k.length; i += 2) kernel.push(new THREE.Vector2(k[i], k[i + 1]));
     this.gather = material(gather, { tDof: { value: null }, uKernel: { value: kernel }, uMaxCoc: { value: this.settings.maxCoc }, uAspect: { value: 1 }, uHalfTexel: { value: 0 } });
@@ -261,7 +262,7 @@ export class LensPass extends Pass {
     this.down = material(down, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() } });
     this.up = material(up, { tMap: { value: null }, tLevel: { value: null }, uTexel: { value: new THREE.Vector2() }, uScatter: { value: this.settings.bloomScatter } });
     this.out = material(composite, { ...lensUniforms(), tColor: { value: null }, tDepth: { value: null }, tFocus: { value: null }, tDof: { value: null }, tBloom: { value: null }, tSource: { value: null },
-      uDof: { value: 1 }, uBloom: { value: this.settings.bloom }, uVignette: { value: this.settings.vignette }, uCA: { value: this.settings.ca }, uAspect: { value: 1 }, uTexelH: { value: 0 }, uAxis: { value: new THREE.Vector2(0.5, 0.5) } });
+      uDof: { value: 1 }, uBloom: { value: this.settings.bloom }, uVignette: { value: this.settings.vignette }, uCA: { value: this.settings.ca }, uAspect: { value: 1 }, uTexelH: { value: 0 }, uAxis: { value: new THREE.Vector2(0.5, 0.5) }, uGain: { value: 1 } });
     this.quad = new FullScreenQuad(null);
     this.half = null; this.blur = null; this.smooth = null; this.downs = []; this.ups = [];
     this.probeNext = false; this.probed = null;   // tools: probe the next frame (probe())
@@ -320,7 +321,7 @@ export class LensPass extends Pass {
         u.tColor.value = readBuffer.texture; u.tDepth.value = depth; u.tFocus.value = focus;
         u.uTexel.value.set(1 / w, 1 / h); u.uHalfTexel.value = 1 / hh; u.uDofOn.value = +dof; u.uBloomOn.value = +bloom; u.uAspect.value = aspect;
         const exposure = this.exposure(); u.tExposure.value = exposure; u.uExposureOn.value = +!!exposure; u.uExposure.value = renderer.toneMappingExposure ?? 1;
-        u.uThreshold.value = s.bloomThreshold; u.uIsolation.value = s.bloomIsolation; u.uRing.value = s.bloomRing; u.uGlareMax.value = s.glareMax;
+        u.uThreshold.value = s.bloomThreshold; u.uIsolation.value = s.bloomIsolation; u.uRing.value = s.bloomRing; u.uGlareMax.value = s.glareMax; u.uGain.value = 2 ** (s.exposure ?? 0);
         this.draw(renderer, this.pre, this.half);
       }
       // ---- depth of field
@@ -345,7 +346,7 @@ export class LensPass extends Pass {
       o.tColor.value = readBuffer.texture; o.tDepth.value = depth; o.tFocus.value = focus; o.tDof.value = this.smooth.texture;
       o.tBloom.value = bloom && this.downs.length ? this.ups[0].texture : this.half.textures[1]; o.tSource.value = this.half.textures[1];
       o.uDof.value = +dof; o.uBloom.value = bloom ? s.bloom : 0; o.uAxis.value.set(0.5 - shift.x, 0.5 - shift.y);
-      o.uVignette.value = this.parts.vignette ? s.vignette : 0; o.uCA.value = this.parts.ca ? s.ca : 0; o.uAspect.value = aspect; o.uTexelH.value = 1 / h;
+      o.uVignette.value = this.parts.vignette ? s.vignette : 0; o.uCA.value = this.parts.ca ? s.ca : 0; o.uAspect.value = aspect; o.uTexelH.value = 1 / h; o.uGain.value = 2 ** (s.exposure ?? 0);
       this.draw(renderer, this.out, this.renderToScreen ? null : writeBuffer);
       // tools: the input is overwritten by the passes after this one, so it is read here
       if (this.probeNext) { this.probeNext = false; this.probed = this.probe(readBuffer, this.exposureGain?.() ?? renderer.toneMappingExposure ?? 1, renderer); }

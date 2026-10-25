@@ -159,5 +159,20 @@ const proxyOf = (motion, o) => motion.scene.children.find(p => p.visible && p.ge
     assert.ok(bound >= worst - 1e-9, `screen motion bound ${bound.toFixed(4)} under a point's ${worst.toFixed(4)} px`);
   }
 }
+{
+  // a pet that ends a turn (a called dog turns to the player and sits) eases its head out of it: the walk pose turns the
+  // spine, chest and head into the turn by the turn rate, which steps to 0 when the turn ends (in the film, a 20+ degree
+  // snap of the dog's head in one frame)
+  for (const [name, pet, headBone] of [['dog', W.createDog({ fresh: true }), p => p.bones.head], ['cat', W.createCat({ fresh: true }), p => p._internal.bones[p._internal.BI.head]]]) {
+    const q = new T.Quaternion(), last = new T.Quaternion();
+    const head = () => { pet.root.updateMatrixWorld(true); return headBone(pet).getWorldQuaternion(q); };
+    for (let i = 0; i < 90; i++) pet.update(1 / 60, { mode: 'walk', speed: 0, turn: 1.6 });
+    last.copy(head()); let worst = 0;
+    for (let i = 0; i < 90; i++) { pet.update(1 / 60, { mode: 'sit', speed: 0, turn: 0, attend: true }); worst = Math.max(worst, last.angleTo(head())); last.copy(q); }
+    // eased, the dog's 41 degree lean fades with the walk pose's weight over ~0.4 s: under 6 degrees in its fastest frame
+    // (a plain walk-to-sit moves its head under 1)
+    assert.ok(worst < THREE_DEG(8), `the ${name}'s head eases out of a turn: ${(worst * 180 / Math.PI).toFixed(2)} deg in one frame`);
+  }
+}
 function THREE_DEG(d) { return d * Math.PI / 180; }
 console.log(`motion vectors: double vertex shader (${specs.size} animated materials: ${[...kinds].slice(0, 6).join(', ')}), jitter and sign, previous matrices, bones, wind time and fur lag, movers OK`);

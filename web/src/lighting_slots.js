@@ -8,12 +8,17 @@
 // the median gate frame, 0.8 at most: the open garage door). Dusk 0.35 (~160/255): the lamp-lit rooms glow against the
 // blue outside without turning into day. maxEV moved with the key (+2.14 EV daylight, +1.22 dusk), so the same dark
 // spaces (the laundry, the hall closet) still meet it. test_auto_exposure.mjs holds the key against AgX and the photos.
+// Sunrise 0.47 (~175/255, half a stop under noon): the listing photos are midday shots, so they are noon's target, not the
+// morning's. At 0.66 a sunrise room metered to noon's 188 (the gate's 24 rooms, both 188/187): the low sun and the mist
+// lifted to midday, flat (p10 -> p90 1.6 stops against noon's 1.9; the default lamps carry ~0.5 EV of its light).
+// Exposed for its own light, a morning room sits about half a stop under the midday listing exposure, the windows and the
+// sun patches carrying the light: the rooms read 173 (p10 106, 2.0 stops; gate band 160..182), between noon and dusk.
 // outdoor: the visitor's exposure outdoors above ev (ev itself stays the fixed exposure the gate and the Cycles references
 // share). Dusk +3.5: the bake v4 dimmed the blue hour's sky 3.1 EV for physical lamps and raised ev 3.1, but the old
 // garden's brightness had come from the old lamps' spill (10-70x physical), so the patio at dusk read 4/255 against the
 // listing's twilight photos of it (69-121; the old site 20); +3.5 EV reads ~58 with the rooms glowing through the glass.
 export const SLOTS = {
-  sunrise: { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1, outdoor: 0 }, wet: 1, lamps: 1 },
+  sunrise: { az: 58, el: 8, strength: 20, color: [1, 0.68, 0.45], skyColor: [0.42, 0.52, 0.72], ev: -0.7, autoExposure: { key: 0.47, minEV: -0.5, maxEV: 6.65, outdoor: 0 }, wet: 1, lamps: 1 },
   noon: { az: 180, el: 57, strength: 36, color: [1, 0.95, 0.88], skyColor: [0.48, 0.65, 1], ev: -0.7, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 6.6, outdoor: 0 }, wet: 0, lamps: 0 },
   golden: { az: 255, el: 7, strength: 16, color: [1, 0.56, 0.28], skyColor: [0.55, 0.47, 0.65], ev: -0.55, autoExposure: { key: 0.66, minEV: -0.5, maxEV: 7.1, outdoor: 0 }, wet: 0, lamps: 1 },
   dusk: { az: 263, el: -4, strength: 0, color: [1, 0.42, 0.2], skyColor: [0.18, 0.3, 0.6], ev: 3.1, autoExposure: { key: 0.35, minEV: -0.5, maxEV: 4.7, outdoor: 3.5 }, wet: 0, lamps: 1 },

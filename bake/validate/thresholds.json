@@ -38,7 +38,7 @@
   "zeroCell": 0.3
  },
  "brightness": {
-  "note": "visitor sets only: the rooms' frames (cameras.json kind room; the garage left out, a dark annex whose listing photos read 63-66) against the listing photos (web/tools/golden/listing_brightness.json, web/tools/listing_brightness.py): the frame's median 8-bit luma within frame[state] (a broken frame; a room at the adaptation limit stays dim: the primary bath at noon, its lamps off by default, 107), the median over the rooms within set[state] and their median 10th-percentile luma within shadows[state] (contrast: the photos' darker tenth reads 104; a local adaptation that lifted every shadow read 145-157) (page-level failures). Daylight around the photos' 191, dusk lower: lamp-lit rooms, not day. test_auto_exposure.mjs keeps the daylight bands around the photos.",
+  "note": "visitor sets only: the rooms' frames (cameras.json kind room; the garage left out, a dark annex whose listing photos read 63-66) against the listing photos (web/tools/golden/listing_brightness.json, web/tools/listing_brightness.py): the frame's median 8-bit luma within frame[state] (a broken frame; a room at the adaptation limit stays dim: the primary bath at noon, its lamps off by default, 107), the median over the rooms within set[state] and their median 10th-percentile luma within shadows[state] (contrast: the photos' darker tenth reads 104; a local adaptation that lifted every shadow read 145-157) (page-level failures). Noon and golden hour around the photos' 191 (midday shots); sunrise half a stop under them (~172: a morning room metered for its light, lighting_slots.js), dusk lower: lamp-lit rooms, not day. test_auto_exposure.mjs keeps the daylight bands around the photos.",
   "photos": "31 interiors, median luma 191 (p10 185, p90 198)",
   "kinds": [
    "room"
@@ -48,8 +48,8 @@
   ],
   "frame": {
    "sunrise": [
-    100,
-    225
+    90,
+    215
    ],
    "noon": [
     100,
@@ -70,8 +70,8 @@
   },
   "set": {
    "sunrise": [
-    180,
-    202
+    160,
+    182
    ],
    "noon": [
     180,
@@ -92,8 +92,8 @@
   },
   "shadows": {
    "sunrise": [
-    80,
-    135
+    70,
+    125
    ],
    "noon": [
     80,
